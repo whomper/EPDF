@@ -1393,6 +1393,10 @@ static void show_text(IX *x, int from, int to)
 	int i;
 	CH *c;
 
+	if (from < 0)			/* an operator without its operand (damaged content) */
+		from = 0;
+	if (to > x->nops)
+		to = (int)x->nops;
 	if (!ch_room(x))
 		return;
 	mat_mul(x->tm, g->ctm, m);

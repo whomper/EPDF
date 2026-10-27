@@ -12,7 +12,7 @@ VERSION_STR := $(shell cat VERSION)
 BSSL   := common/third_party/bearssl
 CC     ?= cc
 CFLAGS ?= -O2 -g
-HCFLAGS = $(CFLAGS) -std=gnu99 -Wall -Wextra -Wno-sign-compare -Wno-unused-parameter -Wno-unused-function \
+HCFLAGS = $(CFLAGS) -fwrapv -std=gnu99 -Wall -Wextra -Wno-sign-compare -Wno-unused-parameter -Wno-unused-function \
           -Isrc -Icommon/src -I$(BSSL)/inc -I$(BSSL)/src
 
 PDF_SRC  = src/pdfobj.c src/pdfxref.c src/pdffilt.c src/pdfcrypt.c src/pdfdoc.c src/pdftext.c src/pdfmeas.c
@@ -38,6 +38,9 @@ build/imgdump: tools/imgdump.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_
 build/test_ccitt: tests/test_ccitt.c src/ccitt.c src/ccitt.h src/ccitt_tab.h | build
 	$(CC) $(HCFLAGS) -fsanitize=address,undefined -o $@ tests/test_ccitt.c src/ccitt.c
 
+build/pdfmeasure_asan: tools/pdfmeasure.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HDRS) | build
+	$(CC) $(HCFLAGS) -fsanitize=address,undefined -fno-sanitize-recover=undefined -o $@ tools/pdfmeasure.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC)
+
 test: build/test_ccitt
 	python3 tests/ccitt.py
 measure: build/pdfmeasure
@@ -55,7 +58,7 @@ GCCINC  := $(shell $(XCC) -print-file-name=include 2>/dev/null)
 XOPT    ?= -O2
 XFLAGS   = $(XCPU) $(XOPT) -fomit-frame-pointer -ffreestanding -fno-builtin -fno-pic -fno-pie \
            -fno-tree-loop-distribute-patterns -fno-store-merging -fno-asynchronous-unwind-tables \
-           -ffunction-sections -fdata-sections -Wall -Wextra -Werror=implicit-function-declaration \
+           -ffunction-sections -fdata-sections -fwrapv -Wall -Wextra -Werror=implicit-function-declaration \
            -Wno-sign-compare -Wno-unused-parameter -Wno-unused-function -std=gnu99 -DPDF_TOS \
            -nostdinc -isystem $(GCCINC) -Iatari/include -Icommon/atari/include -Icommon/atari -Isrc -Icommon/src \
            -I$(BSSL)/inc -I$(BSSL)/src
@@ -180,5 +183,10 @@ binary/IMGDSP.PRG: $(addprefix build/m68030lj/,$(IMGLJ_OBJ)) build/m68030lj/crt0
 	  build/m68030lj/crt0.o build/m68030lj/nf.o $(addprefix build/m68030lj/,$(IMGLJ_OBJ)) -lgcc
 	python3 common/tools/elf2tos.py build/m68030lj/imgdsp.elf $@
 imgbench: binary/IMGBENCH.PRG binary/IMGB30.PRG binary/IMGDSP.PRG
-atari: binary/MEASURE.PRG binary/MEAS30.PRG
+# the 68030 programs again with the TOS header flags 7: loaded and Malloc'd in TT RAM where there is some
+binary/MEAS30F.PRG: build/m68030/measure.elf | binary
+	PRGFLAGS=7 python3 common/tools/elf2tos.py $< $@
+binary/FTTEST30F.PRG: build/m68030/fttest.elf | binary
+	PRGFLAGS=7 python3 common/tools/elf2tos.py $< $@
+atari: binary/MEASURE.PRG binary/MEAS30.PRG binary/MEAS30F.PRG
 fttest: binary/FTTEST.PRG binary/FTTEST30.PRG

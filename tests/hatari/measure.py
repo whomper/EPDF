@@ -43,7 +43,7 @@ def main(argv):
     if len(args) < 3:
         sys.exit(__doc__)
     spec, cpu, docs = args[0], args[1], args[2:]
-    prg = {"68000": "MEASURE.PRG", "68030": "MEAS30.PRG"}[cpu]
+    prg = {"68000": "MEASURE.PRG", "68030": "MEAS30.PRG", "68030f": "MEAS30F.PRG"}[cpu]
     tag = "%s-%s" % (spec.replace(":", "_"), cpu) + ("-" + docs[0].partition("=")[0] if len(docs) == 1 else "")
     hd = os.path.join(TOP, "build", "hatari-measure", tag)
     shutil.rmtree(hd, ignore_errors=True)

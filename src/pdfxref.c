@@ -451,7 +451,8 @@ int xref_rebuild(PDOC *d)
 	buf = pdf_malloc(d, chunk + 64);
 	if (!buf)
 		return -1;
-	memset(d->xe, 0, (size_t)d->nxe * sizeof(PXE));
+	if (d->xe)
+		memset(d->xe, 0, (size_t)d->nxe * sizeof(PXE));
 	d->trailer = NULL;
 	while (pos < d->size) {
 		long got = pdf_rd(d, pos, buf, chunk + 32), lim, j;

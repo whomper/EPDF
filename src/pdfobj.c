@@ -44,13 +44,14 @@ void pdf_free(PDOC *d, void *p, long n)
 
 /* ------------------------------------------------------------------ arena */
 #define ACH_SIZE 4096
+#define AL ((long)sizeof(void *) > 4 ? 8 : 4)	/* the structs' alignment (a 68000 needs 2) */
 
 void *pa_alloc(PDOC *d, PARENA *a, long n)
 {
 	ACH *c;
 	void *p;
 
-	n = (n + 3) & ~3L;
+	n = (n + AL - 1) & ~(long)(AL - 1);
 	c = a->head;
 	if (!c || c->size - c->used < n) {
 		long sz = n + (long)sizeof(ACH) > ACH_SIZE ? n + (long)sizeof(ACH) : ACH_SIZE;

@@ -33,7 +33,7 @@ def main(argv):
         sys.exit(__doc__)
     spec, cpu, mode, hint, scale = argv[:5]
     items = argv[5:]
-    prg = {"68000": "FTTEST.PRG", "68030": "FTTEST30.PRG"}[cpu]
+    prg = {"68000": "FTTEST.PRG", "68030": "FTTEST30.PRG", "68030f": "FTTEST30F.PRG"}[cpu]
     tag = "ft-%s-%s-%s-%s-%s-%s" % (spec.replace(":", "_"), cpu, mode, hint, scale, items[0].split(":")[0])
     hd = os.path.join(TOP, "build", "hatari-measure", tag)
     shutil.rmtree(hd, ignore_errors=True)
