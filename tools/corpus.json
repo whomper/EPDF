@@ -1,0 +1,210 @@
+{
+ "_": "The measurement corpus: freely redistributable PDFs, fetched by fetch-corpus.py into build/pdfs and never committed. sha256 is pinned by 'fetch-corpus.py --pin' after a first look; licence says why each is free.",
+ "files": [
+  {
+   "name": "novel-twocities",
+   "kind": "plain text (novel)",
+   "licence": "Project Gutenberg, public domain",
+   "url": "https://archive.org/download/ataleoftwocities00098gut/old/2city12p.pdf",
+   "sha256": "88015c70f43475c09fb87aa99ddc807245d83cfa4b5cb7e370576517600fb517"
+  },
+  {
+   "name": "novel-boymechanic",
+   "kind": "plain text with drawings (book)",
+   "licence": "Project Gutenberg, public domain",
+   "url": "https://archive.org/download/theboymechanicvo12655gut/12655-pdf.pdf",
+   "sha256": "43d02252391c20307e17441c6905af03587467b16a6250953aa15114d31680de"
+  },
+  {
+   "name": "manual-compendium",
+   "kind": "manual (Atari Compendium)",
+   "licence": "Internet Archive item; Atari documentation, shared by the community",
+   "url": "https://archive.org/download/The_Atari_Compendium_CD-ROM_version_undated/The_Atari_Compendium_CD-ROM_version_undated.pdf",
+   "sha256": "9684dfab5dd872a385d8a82efe60ea24b759de213bac5582dd273792bcb4b266"
+  },
+  {
+   "name": "manual-stinternals-text",
+   "kind": "scanned book with a text layer",
+   "licence": "Internet Archive item (Atari ST Internals); read only here, never committed",
+   "url": "https://archive.org/download/Atari_ST-Internals/Atari_ST-Internals_text.pdf",
+   "sha256": "83cd092af520d351982f849bfa99d56766faf28a3ead2ecb37ed58528418cda5"
+  },
+  {
+   "name": "scan-stinternals",
+   "kind": "scanned pages (JPEG)",
+   "licence": "Internet Archive item (Atari ST Internals); read only here, never committed",
+   "url": "https://archive.org/download/Atari_ST-Internals/Atari_ST-Internals.pdf",
+   "sha256": "25eee9576a75165dab4c6f20493b37836c0412c134bed31da1760eeac23665db"
+  },
+  {
+   "name": "scan-gfabasic",
+   "kind": "scanned manual (big file)",
+   "licence": "Internet Archive item; read only here, never committed",
+   "url": "https://archive.org/download/GFA_BASIC_Quick_Reference_Guide_for_the_Atari_ST/GFA_BASIC_Quick_Reference_Guide_for_the_Atari_ST.pdf",
+   "sha256": "3f553f0c806fc240af6221fb3ccbfb8457ab7e4bcc9171a4a73b5677b650e8a3"
+  },
+  {
+   "name": "tech-rfc9110",
+   "kind": "technical text (RFC)",
+   "licence": "IETF Trust, BSD-licensed text",
+   "url": "https://www.rfc-editor.org/rfc/rfc9110.pdf",
+   "sha256": "60b30efa1048900833d1758440247fe8ac85a3134f2327388dcb24e07d814c89"
+  },
+  {
+   "name": "tech-rfc2616",
+   "kind": "technical text (older RFC)",
+   "licence": "IETF Trust, BSD-licensed text",
+   "url": "https://www.ietf.org/rfc/rfc2616.pdf",
+   "sha256": "4b992042e3a18f1bb8cebbd0916c66b89b4ab179d75d552a85f48f83a222e631"
+  },
+  {
+   "name": "datasheet-mc6850",
+   "kind": "datasheet (scan)",
+   "licence": "Internet Archive item; read only here, never committed",
+   "url": "https://archive.org/download/MC6850/MC6850.pdf",
+   "sha256": "8d2feedf490d2b3af59e1fba06cd513fb3995da77452518e7b596db1005fe88a"
+  },
+  {
+   "name": "datasheet-ym2151",
+   "kind": "datasheet",
+   "licence": "Internet Archive item; read only here, never committed",
+   "url": "https://archive.org/download/YM2151/YM2151_datasheet.pdf",
+   "sha256": "0f9f63262be0bb5136698f700b5111deb57ced416933adc1b2f5bf8bfec2746e"
+  },
+  {
+   "name": "magazine-nasa-ask",
+   "kind": "magazine with photos",
+   "licence": "NASA, public domain",
+   "url": "https://archive.org/download/nasa_techdoc_20020070473/20020070473.pdf",
+   "sha256": "9c47ff8ddb459ffeeb57338bd7380b57877107e5c9564a3ca6dc8b3dc48c25fd"
+  },
+  {
+   "name": "photo-nasa-sunda",
+   "kind": "photos and captions",
+   "licence": "NASA, public domain",
+   "url": "https://archive.org/download/sunda_trench_earthquake/sunda_trench_earthquake.pdf",
+   "sha256": "3b00e7f99ee1457f24dfb46176f254f62bdeb3fe25fadff981a0d0ec71eb6e80"
+  },
+  {
+   "name": "photo-shuttle",
+   "kind": "pamphlet with photos",
+   "licence": "NASA, public domain",
+   "url": "https://archive.org/download/SpaceShuttleEnterpriseTestFlightMaterials/Enterprise%20Test%20Flight%20pamphlet.pdf",
+   "sha256": "40f0d764552dc9387da7ae3e65635b1a61b9ab47a51e30cb6a2883c0c1145ffd"
+  },
+  {
+   "name": "map-europe",
+   "kind": "map (vectors)",
+   "licence": "Maps of the World, public domain",
+   "url": "https://archive.org/download/MapsOfTheWorldPdf/Europe.pdf",
+   "sha256": "a52f74c427a868a816d559d77cf9ca311cc8a353d9db74c0f375500ed6219211"
+  },
+  {
+   "name": "map-physical-world",
+   "kind": "map (vectors, big)",
+   "licence": "Maps of the World, public domain",
+   "url": "https://archive.org/download/MapsOfTheWorldPdf/PhysicalWorld.pdf",
+   "sha256": "fe01cd43c07b118be59a5123e44ee6766a75b961967c233b60c063c5f868570e"
+  },
+  {
+   "name": "map-timezones",
+   "kind": "map (vectors)",
+   "licence": "Maps of the World, public domain",
+   "url": "https://archive.org/download/MapsOfTheWorldPdf/TimeZones.pdf",
+   "sha256": "08bde1c65fd241a4b7d77d883670c8558ae8e081904d285b319bdb2aa6d40d8e"
+  },
+  {
+   "name": "hebrew-idf-guide",
+   "kind": "Hebrew text",
+   "licence": "CC0 (Internet Archive item)",
+   "url": "https://archive.org/download/FastIDFGuide/Fast%20IDF%20Guide.pdf",
+   "sha256": "decdc3e7275db7954d85be13391f0b89598f9fd3db6e3b911b154e221b2fd87e"
+  },
+  {
+   "name": "hebrew-hava",
+   "kind": "Hebrew text",
+   "licence": "CC0 (Internet Archive item)",
+   "url": "https://archive.org/download/HavaNischakmah/HavaNischakmah.pdf",
+   "sha256": "c4a8b426440652ee1d34b671d33fe6b5fe10c1f0175256554ee4139f9a98cbb8"
+  },
+  {
+   "name": "scan-patent-ccitt",
+   "kind": "scanned patent (CCITT)",
+   "licence": "US patent, public domain",
+   "url": "https://patentimages.storage.googleapis.com/pdfs/US2524034.pdf",
+   "sha256": "32ab1a75e7e866a7bc2015ed4ae92bd924d7d8f3ed22f41c9f3d68579e3e0212"
+  },
+  {
+   "name": "gen-hebrew",
+   "kind": "Hebrew text, embedded TrueType (generated)",
+   "licence": "generated here (Genesis 1, public domain; DejaVu Sans)",
+   "gen": "hebrew"
+  },
+  {
+   "name": "gen-charts",
+   "kind": "charts (vectors, generated)",
+   "licence": "generated here",
+   "gen": "charts"
+  },
+  {
+   "name": "enc-rc4-40",
+   "kind": "encrypted (RC4 40-bit, empty user password)",
+   "licence": "novel-twocities, encrypted here with qpdf",
+   "gen": "encrypt",
+   "from": "novel-twocities",
+   "args": [
+    "--allow-weak-crypto",
+    "--encrypt",
+    "",
+    "owner",
+    "40",
+    "--"
+   ]
+  },
+  {
+   "name": "enc-rc4-128",
+   "kind": "encrypted (RC4 128-bit)",
+   "licence": "novel-twocities, encrypted here with qpdf",
+   "gen": "encrypt",
+   "from": "novel-twocities",
+   "args": [
+    "--allow-weak-crypto",
+    "--encrypt",
+    "",
+    "owner",
+    "128",
+    "--use-aes=n",
+    "--"
+   ]
+  },
+  {
+   "name": "enc-aes-128",
+   "kind": "encrypted (AES 128-bit)",
+   "licence": "novel-twocities, encrypted here with qpdf",
+   "gen": "encrypt",
+   "from": "novel-twocities",
+   "args": [
+    "--encrypt",
+    "",
+    "owner",
+    "128",
+    "--use-aes=y",
+    "--"
+   ]
+  },
+  {
+   "name": "enc-aes-256",
+   "kind": "encrypted (AES 256-bit)",
+   "licence": "novel-twocities, encrypted here with qpdf",
+   "gen": "encrypt",
+   "from": "novel-twocities",
+   "args": [
+    "--encrypt",
+    "",
+    "owner",
+    "256",
+    "--"
+   ]
+  }
+ ]
+}
