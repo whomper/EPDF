@@ -38,10 +38,15 @@ def main(argv):
     src = os.path.join(TOP, "build", "img")
     cfg = []
     names = {}
+    only = os.environ.get("IMG_ONLY", "")	# e.g. JPG: only those pictures
     for n, doc in enumerate(sorted(os.listdir(src))):
+        if only and not any(f.endswith("." + only) for f in os.listdir(os.path.join(src, doc))):
+            continue
         folder = "D%02d" % n
         os.makedirs(os.path.join(hd, folder))
         for f in sorted(os.listdir(os.path.join(src, doc))):
+            if only and not f.endswith(("." + only, ".INF")):
+                continue
             shutil.copy(os.path.join(src, doc, f), os.path.join(hd, folder, f))
             if f.endswith(".INF"):
                 cfg.append("%s\\%s %s" % (folder, f[:-4], width))
