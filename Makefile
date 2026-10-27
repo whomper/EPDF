@@ -125,7 +125,7 @@ endef
 $(eval $(call FT_BUILD,m68000))
 $(eval $(call FT_BUILD,m68030))
 FT_OBJS = $(patsubst $(FT)/src/%.c,ft/%.o,$(filter $(FT)/src/%,$(FT_SRC))) ft/epdf/ftsystem.o ft/setjmp.o
-FTTEST_SRC = atari/fttest.c src/pdfio_tos.c $(COMMON_SRC) $(RT_C)
+FTTEST_SRC = atari/fttest.c atari/clz.c src/pdfio_tos.c $(COMMON_SRC) $(RT_C)
 build/m68000/atari/fttest.o build/m68030/atari/fttest.o: XFLAGS += $(FT_DEFS) $(FT_INC)
 
 binary/FTTEST.PRG: XCPU = -m68000 -mstrict-align -fdisable-tree-bswap
@@ -145,7 +145,7 @@ binary/FTTEST30.PRG: $(addprefix build/m68030/,$(FT_OBJS)) $(addprefix build/m68
 # the picture test: CCITT, the shrinker and common's pic.c (TJpgDec, PNG, GIF)
 T         := common/third_party
 PIC_SRC    = common/src/pic.c common/src/png.c common/src/jpegdc.c $(T)/tjpgd/tjpgd.c $(T)/nsgif/src/gif.c $(T)/nsgif/src/lzw.c
-IMG_SRC    = atari/imgbench.c src/ccitt.c src/rscale.c src/pdfio_tos.c $(PIC_SRC) $(COMMON_SRC) $(RT_C)
+IMG_SRC    = atari/imgbench.c atari/clz.c src/ccitt.c src/rscale.c src/pdfio_tos.c $(PIC_SRC) $(COMMON_SRC) $(RT_C)
 IMG_OBJ    = $(patsubst %.c,%.o,$(IMG_SRC))
 build/m68000/atari/imgbench.o build/m68030/atari/imgbench.o build/m68000/common/src/pic.o build/m68030/common/src/pic.o \
 build/m68000/common/src/png.o build/m68030/common/src/png.o build/m68000/common/src/jpegdc.o build/m68030/common/src/jpegdc.o \
