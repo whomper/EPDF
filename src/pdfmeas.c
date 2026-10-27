@@ -49,6 +49,7 @@ int pdf_measure(const PMEAS *m, const char *path, const char *name, const char *
 		free(d);
 		return rc;
 	}
+	d->clock = m->us ? m->us : m->ms;
 	{
 		long t2 = clock_now(m);
 
@@ -111,7 +112,7 @@ int pdf_measure(const PMEAS *m, const char *path, const char *name, const char *
 			 "\"streams\":%ld,\"raw_kb\":%ld,\"out_kb\":%ld,\"crypt_kb\":%ld,\"glyphs\":%ld,\"chunks\":%ld,\"chars\":%ld,\"lines\":%ld,"
 			 "\"unmapped\":%ld,\"nomap_fonts\":%ld,\"fonts_new\":%ld,\"fonts_used\":%d,\"prog_kb\":%ld,"
 			 "\"paths\":%ld,\"paints\":%ld,\"images\":%ld,\"img_px\":%ld,\"img_kb\":%ld,\"dct\":%ld,\"jpx\":%ld,\"ccitt\":%ld,\"jbig2\":%ld,\"flate\":%ld,"
-			 "\"forms\":%ld,\"tu_ent\":%ld,\"mem_kb\":%ld,\"heap_kb\":%ld}",
+			 "\"forms\":%ld,\"tu_ent\":%ld,\"t_stream\":%ld,\"t_font\":%ld,\"t_asm\":%ld,\"mem_kb\":%ld,\"heap_kb\":%ld}",
 			 nm, sel[i] + 1, rc == 0 && !t.failed, tb - ta, s.reads - base.reads, (s.bytes_read - base.bytes_read) / 1024,
 			 s.objs - base.objs, s.objstm_loaded - base.objstm_loaded, s.streams - base.streams, (s.raw_in - base.raw_in) / 1024,
 			 (s.out - base.out) / 1024, (s.crypt_bytes - base.crypt_bytes) / 1024, s.glyphs - base.glyphs, s.chunks - base.chunks,
@@ -120,6 +121,7 @@ int pdf_measure(const PMEAS *m, const char *path, const char *name, const char *
 			 s.ops_path - base.ops_path, s.ops_paint - base.ops_paint, s.images - base.images, s.image_px - base.image_px,
 			 (s.image_raw - base.image_raw) / 1024, s.img_dct - base.img_dct, s.img_jpx - base.img_jpx, s.img_ccitt - base.img_ccitt,
 			 s.img_jbig2 - base.img_jbig2, s.img_flate - base.img_flate, s.forms - base.forms, s.tounicode_ent - base.tounicode_ent,
+			 s.t_stream - base.t_stream, s.t_font - base.t_font, s.t_asm - base.t_asm,
 			 s.mem_peak / 1024, hp >= 0 ? hp / 1024 : -1);
 		m->emit(line);
 		if (m->text && t.text.s)

@@ -463,7 +463,19 @@ static int crypt_identity(PDOC *d, POBJ *filter, POBJ *parms)
 	return 0;
 }
 
+static int pdf_stream_in(PDOC *d, POBJ *o, long onum, SBUF *out, const char **terminal, long max);
+
 int pdf_stream(PDOC *d, POBJ *o, long onum, SBUF *out, const char **terminal, long max)
+{
+	long t0 = d->clock ? d->clock() : 0;
+	int r = pdf_stream_in(d, o, onum, out, terminal, max);
+
+	if (d->clock)
+		d->st.t_stream += d->clock() - t0;
+	return r;
+}
+
+static int pdf_stream_in(PDOC *d, POBJ *o, long onum, SBUF *out, const char **terminal, long max)
 {
 	long len = 0, nf, i;
 	unsigned char *raw;

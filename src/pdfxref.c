@@ -18,6 +18,8 @@ static int xe_room(PDOC *d, long n)
 		return 1;
 	if (n > 8000000)
 		return 0;
+	if (n < d->nxe * 2 && d->nxe * 2 <= 8000000)		/* grow by doubling, not an entry at a time */
+		n = d->nxe * 2;
 	q = pdf_realloc(d, d->xe, d->nxe * (long)sizeof(PXE), n * (long)sizeof(PXE));
 	if (!q)
 		return 0;
@@ -169,7 +171,9 @@ static int xref_table(PDOC *d, long off, long *next_pos_after)
 			count = b;
 			p = q;
 		}
-		if (count < 0 || count > 8000000 || start < 0)
+		if (count < 0 || count > 8000000 || start < 0 || count > d->size / 18 + 1)
+			goto bad;
+		if (!xe_room(d, start + count))	/* once, for the whole subsection */
 			goto bad;
 		pos += p - buf;
 		for (i = 0; i < count;) {
@@ -180,6 +184,43 @@ static int xref_table(PDOC *d, long off, long *next_pos_after)
 			e = buf + got;
 			for (k = 0; i < count && e - p >= 21; k++) {
 				const unsigned char *q;
+
+				while (p < e && is_white_c(*p))
+					p++;
+				if (e - p < 21)
+					break;
+				/* the usual entry: "oooooooooo ggggg n", then the end of line */
+				if (p[10] == ' ' && p[16] == ' ' && (p[17] == 'n' || p[17] == 'f')) {
+					uint32_t o2 = 0, g2 = 0;
+					int ok = 1, z;
+
+					for (z = 0; z < 10; z++) {
+						unsigned dg = (unsigned)(p[z] - '0');
+
+						if (dg > 9) { ok = 0; break; }
+						o2 = o2 * 10 + dg;
+					}
+					for (z = 11; ok && z < 16; z++) {
+						unsigned dg = (unsigned)(p[z] - '0');
+
+						if (dg > 9) { ok = 0; break; }
+						g2 = g2 * 10 + dg;
+					}
+					if (ok) {
+						long num = start + i;
+
+						if (num >= d->nxe && !xe_room(d, num + 1))
+							goto bad;
+						if (!d->xe[num].t) {
+							d->xe[num].t = p[17] == 'n' ? 1 : 3;
+							d->xe[num].a = o2;
+							d->xe[num].b = (uint16_t)g2;
+						}
+						p += 18;
+						i++;
+						continue;
+					}
+				}
 				uint32_t off2 = 0, gen = 0;
 				int n = 0;
 

@@ -42,6 +42,7 @@ typedef struct {
 	long mem, mem_peak;		/* bytes malloc'd now, the most */
 	long tounicode_ent;		/* ToUnicode entries read */
 	long font_prog, font_prog_bytes;	/* embedded font programs met (not loaded) */
+	long t_stream, t_font, t_asm;	/* clock ticks in pdf_stream, in font_load (its streams apart), in assemble */
 } PSTAT;
 
 /* ------------------------------------------------------------------ objects */
@@ -116,6 +117,7 @@ typedef struct pdoc {
 	PSTAT st;
 	int ver;			/* %PDF-1.x */
 	long npages;
+	long (*clock)(void);		/* a clock for the t_ counters, or NULL */
 	int32_t *pageidx;		/* object number of each page, built once */
 	void *fc;			/* the fonts kept from page to page (pdftext.c) */
 	char err[96];
@@ -159,7 +161,18 @@ typedef struct {
 } PFPROG;
 
 typedef struct {
+	int32_t x, y, size;		/* the glyph's origin and the font's size on the page (16.16, page points) */
+	uint32_t uni;			/* its character */
+	long prog;			/* the font program's object number; -1: a standard font; -2 (a gap): none */
+	int kind;			/* the program's kind, as PFPROG */
+	const char *base;		/* the font's name (static, for a standard font) */
+} PGLYPH;
+
+typedef struct {
 	SBUF text;			/* the page's text, UTF-8 */
+	PGLYPH *gl;			/* with rec set: every glyph shown, to draw them (tools/glyphjob) */
+	long ngl, capgl;
+	int rec;
 	PFPROG fp[24];			/* the font programs the page's fonts use */
 	int nfp;
 	long lines;
@@ -174,16 +187,36 @@ void ptext_free(PTEXT *t);
 int pdf_page_text(PDOC *d, long n, PTEXT *t);
 
 /* ------------------------------------------------------------------ fixed point */
+#if defined(__mc68000__) && !defined(__mc68020__)
+/* one mulu.w: 16 x 16 -> 32 bits (GCC would call the software multiply for 32-bit operands) */
+static inline uint32_t mulu16(uint32_t a, uint32_t b)
+{
+	__asm__("mulu.w %1,%0" : "+d"(a) : "d"(b));
+	return a;
+}
+#else
+static inline uint32_t mulu16(uint32_t a, uint32_t b)
+{
+	return (a & 0xFFFF) * (b & 0xFFFF);
+}
+#endif
+
 static inline fx fxmul(fx a, fx b)
 {
 	int neg = 0;
 	uint32_t ua, ub, ah, al, bh, bl, r;
 
+	/* most matrix entries are 0 or 1.0 */
+	if (a == FX_ONE)
+		return b;
+	if (b == FX_ONE)
+		return a;
+	if (!a || !b)
+		return 0;
 	if (a < 0) { ua = (uint32_t)-a; neg = 1; } else ua = (uint32_t)a;
 	if (b < 0) { ub = (uint32_t)-b; neg ^= 1; } else ub = (uint32_t)b;
 	ah = ua >> 16; al = ua & 0xFFFF; bh = ub >> 16; bl = ub & 0xFFFF;
-	/* 16x16 -> 32 products only: native on a 68000 */
-	r = ((ah * bh) << 16) + ah * bl + al * bh + ((al * bl) >> 16);
+	r = (mulu16(ah, bh) << 16) + mulu16(ah, bl) + mulu16(al, bh) + (mulu16(al, bl) >> 16);
 	return neg ? -(fx)r : (fx)r;
 }
 
@@ -198,5 +231,6 @@ long pdf_os_read(void *h, long off, void *buf, long n);
 void pdf_os_close(void *h);
 /* time in milliseconds, for the drivers */
 long pdf_ms(void);
+long pdf_us(void);				/* the Atari's finer clock (pdfio_tos.c) */
 
 #endif

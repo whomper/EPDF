@@ -34,6 +34,9 @@ typedef struct {
 	long nwr;
 	int dw;				/* composite: default width (1/1000) */
 	int ucs2;			/* the codes are Unicode (a Uni*-UCS2 / UTF16 encoding) */
+	long prog;			/* its font program's object number, -1: none embedded */
+	int pkind;			/* 1 Type 1, 2 TrueType, 3 CFF / OpenType, 4 none */
+	char base[40];		/* BaseFont */
 	long mem;
 } PFONT;
 
@@ -493,7 +496,7 @@ static int wr_add(PDOC *d, PFONT *f, long *cap, uint32_t lo, uint32_t hi, int w)
 	return 0;
 }
 
-static void note_prog(PDOC *d, PTEXT *t, POBJ *desc, const char *base)
+static void note_prog(PDOC *d, PTEXT *t, POBJ *desc, const char *base, PFONT *f)
 {
 	static const char *const keys[3] = { "FontFile", "FontFile2", "FontFile3" };
 	int k;
@@ -510,6 +513,8 @@ static void note_prog(PDOC *d, PTEXT *t, POBJ *desc, const char *base)
 		if (dup || t->nfp >= 24)
 			return;
 		so = pdf_get(d, r->a);
+		f->prog = r->a;
+		f->pkind = k == 0 ? 1 : k == 1 ? 2 : 3;
 		t->fp[t->nfp].obj = r->a;
 		t->fp[t->nfp].kind = k == 0 ? 1 : k == 1 ? 2 : 3;
 		t->fp[t->nfp].len = so ? pdf_stream_len(d, so) : 0;
@@ -518,6 +523,8 @@ static void note_prog(PDOC *d, PTEXT *t, POBJ *desc, const char *base)
 		d->st.font_prog_bytes += so ? pdf_stream_len(d, so) : 0;
 		return;
 	}
+	f->prog = -1;
+	f->pkind = 4;
 	if (t->nfp < 24) {
 		int i;
 
@@ -931,7 +938,19 @@ static int cff_builtin(PDOC *d, POBJ *desc, uint16_t *uni)
 	return ok;
 }
 
+static PFONT *font_load_in(PDOC *d, POBJ *fd, long objnum, PTEXT *t);
+
 static PFONT *font_load(PDOC *d, POBJ *fd, long objnum, PTEXT *t)
+{
+	long t0 = d->clock ? d->clock() : 0, s0 = d->st.t_stream;
+	PFONT *f = font_load_in(d, fd, objnum, t);
+
+	if (d->clock)
+		d->st.t_font += d->clock() - t0 - (d->st.t_stream - s0);
+	return f;
+}
+
+static PFONT *font_load_in(PDOC *d, POBJ *fd, long objnum, PTEXT *t)
 {
 	PFONT *f = pdf_malloc(d, (long)sizeof *f);
 	const char *sub = pd_name(d, fd, "Subtype"), *base = pd_name(d, fd, "BaseFont");
@@ -943,6 +962,10 @@ static PFONT *font_load(PDOC *d, POBJ *fd, long objnum, PTEXT *t)
 	memset(f, 0, sizeof *f);
 	d->st.fonts++;
 	f->objnum = objnum;
+	if (base)
+		strncpy(f->base, base, sizeof f->base - 1);
+	f->prog = -1;
+	f->pkind = 4;
 	f->composite = sub && !strcmp(sub, "Type0");
 	if (f->composite) {
 		POBJ *enc = pd_get(d, fd, "Encoding"), *dfs = pd_get(d, fd, "DescendantFonts"), *df, *w;
@@ -1052,13 +1075,13 @@ static PFONT *font_load(PDOC *d, POBJ *fd, long objnum, PTEXT *t)
 		f->dwfx = w2fx(miss ? miss : 500);
 	}
 	if (desc)
-		note_prog(d, t, desc, base);
+		note_prog(d, t, desc, base, f);
 	else if (!f->composite) {
 		/* no descriptor: one of the standard fonts */
 		POBJ none;
 
 		memset(&none, 0, sizeof none);
-		note_prog(d, t, &none, base);
+		note_prog(d, t, &none, base, f);
 	}
 	tu = pd_get(d, fd, "ToUnicode");
 	if (tu && tu->t == PO_DICT && tu->flag) {
@@ -1163,7 +1186,6 @@ typedef struct {
 	long n;
 } OP;
 
-#define NOPS 64
 typedef struct {
 	PDOC *d;
 	PTEXT *t;
@@ -1173,13 +1195,15 @@ typedef struct {
 	CH *ch;
 	long nch, capch;
 	SBUF txt;
-	OP ops[NOPS];
-	int nops;
+	OP *ops;			/* the operands of the operator being read: a TJ array can have thousands */
+	long nops, opcap;
 	unsigned char *sb;
 	long sbcap, sblen;
 	int depth;
 	POBJ *res;
 	long forms_run;
+	fx rm[4];			/* the chunk being shown: origin x, y and the advance direction */
+	fx rfs;
 } IX;
 
 static const fx IDENT[6] = { FX_ONE, 0, 0, FX_ONE, 0, 0 };
@@ -1304,6 +1328,30 @@ static fx show_run(IX *x, const unsigned char *s, long n, long *glyphs)
 			}
 		}
 		(*glyphs)++;
+		if (x->t->rec && m && f) {
+			PTEXT *pt = x->t;
+
+			if (pt->ngl == pt->capgl) {
+				long nc = pt->capgl ? pt->capgl * 2 : 1024;
+				PGLYPH *q = realloc(pt->gl, (size_t)nc * sizeof *q);
+
+				if (q) {
+					pt->gl = q;
+					pt->capgl = nc;
+				}
+			}
+			if (pt->ngl < pt->capgl) {
+				PGLYPH *gp = &pt->gl[pt->ngl++];
+
+				gp->x = x->rm[0] + fxmul(adv, x->rm[2]);
+				gp->y = x->rm[1] + fxmul(adv, x->rm[3]);
+				gp->size = x->rfs;
+				gp->uni = u[0];
+				gp->prog = f->prog;
+				gp->kind = f->pkind;
+				gp->base = f->base;
+			}
+		}
 		if (m)
 			put_units(&x->txt, u, m);
 		else
@@ -1354,6 +1402,11 @@ static void show_text(IX *x, int from, int to)
 
 		fsz = fxmul(g->fs < 0 ? -g->fs : g->fs, a > b ? a : b);
 	}
+	x->rm[0] = org_x;
+	x->rm[1] = org_y;
+	x->rm[2] = m[0];
+	x->rm[3] = m[1];
+	x->rfs = fsz;
 	for (i = from; i < to; i++) {
 		OP *o = &x->ops[i];
 
@@ -1399,7 +1452,9 @@ static void tm_translate(IX *x, fx tx, fx ty)
 	memcpy(x->tm, x->tlm, sizeof x->tm);
 }
 
+static int op_grow(IX *x);
 static int run_content(IX *x, const unsigned char *s, long n);
+static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigned char *p, const unsigned char *e, char *nm);
 
 static void do_xobject(IX *x, const char *name)
 {
@@ -1472,6 +1527,21 @@ static void do_xobject(IX *x, const char *name)
 	}
 }
 
+static int op_grow(IX *x)
+{
+	long nc = x->opcap ? x->opcap * 2 : 256;
+	OP *q;
+
+	if (nc > (1L << 20))
+		return 0;
+	q = pdf_realloc(x->d, x->ops, x->opcap * (long)sizeof(OP), nc * (long)sizeof(OP));
+	if (!q)
+		return 0;
+	x->ops = q;
+	x->opcap = nc;
+	return 1;
+}
+
 /* operand access */
 static fx opnum(IX *x, int i)
 {
@@ -1502,8 +1572,36 @@ static int run_content(IX *x, const unsigned char *s, long n)
 	const unsigned char *p = s, *e = s + n;
 	PDOC *d = x->d;
 	char nm[64];
+	unsigned char *save_sb = x->sb;
+	long save_cap = x->sbcap, save_len = x->sblen;
+	int rc;
 
+	/* the strings and names of one operator fit in the stream: one buffer for this stream, so that
+	   an operand never moves (a form run from here has its own) */
+	x->sb = pdf_malloc(d, n + 64);
+	x->sbcap = n + 64;
+	x->sblen = 0;
+	if (!x->sb) {
+		x->sb = save_sb;
+		x->sbcap = save_cap;
+		return -1;
+	}
 	x->nops = 0;
+	rc = run_content_in(x, s, n, p, e, nm);
+	pdf_free(d, x->sb, x->sbcap);
+	x->sb = save_sb;
+	x->sbcap = save_cap;
+	x->sblen = save_len;
+	x->nops = 0;
+	return rc;
+}
+
+static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigned char *p, const unsigned char *e, char *nm)
+{
+	PDOC *d = x->d;
+
+	(void)s0;
+	(void)n0;
 	while (p < e) {
 		unsigned char c = *p;
 
@@ -1528,7 +1626,7 @@ static int run_content(IX *x, const unsigned char *s, long n)
 				f = 0;
 			else if (!real && iv > 32767)
 				f = FX_INT(32767);
-			if (x->nops < NOPS) {
+			if (x->nops < x->opcap || op_grow(x)) {
 				x->ops[x->nops].k = K_NUM;
 				x->ops[x->nops].f = f;
 				x->nops++;
@@ -1541,18 +1639,6 @@ static int run_content(IX *x, const unsigned char *s, long n)
 			unsigned char *o;
 
 			p++;
-			if (x->sblen + (e - p) + 1 > x->sbcap) {
-				long nc = x->sbcap ? x->sbcap : 1024;
-				unsigned char *q;
-
-				while (nc < x->sblen + (e - p) + 1)
-					nc *= 2;
-				q = pdf_realloc(d, x->sb, x->sbcap, nc);
-				if (!q)
-					return -1;
-				x->sb = q;
-				x->sbcap = nc;
-			}
 			o = x->sb + x->sblen;
 			{
 				long len = 0;
@@ -1590,7 +1676,7 @@ static int run_content(IX *x, const unsigned char *s, long n)
 					} else
 						o[len++] = ch;
 				}
-				if (x->nops < NOPS) {
+				if (x->nops < x->opcap || op_grow(x)) {
 					x->ops[x->nops].k = K_STR;
 					x->ops[x->nops].s = o;
 					x->ops[x->nops].n = len;
@@ -1609,7 +1695,7 @@ static int run_content(IX *x, const unsigned char *s, long n)
 					else if (p[0] == '>' && p[1] == '>') { lvl--; p += 2; if (!lvl) break; }
 					else p++;
 				}
-				if (x->nops < NOPS) {
+				if (x->nops < x->opcap || op_grow(x)) {
 					x->ops[x->nops].k = K_DICT;
 					x->nops++;
 				}
@@ -1621,18 +1707,6 @@ static int run_content(IX *x, const unsigned char *s, long n)
 				long len = 0;
 				int hi = -1;
 
-				if (x->sblen + (e - p) / 2 + 2 > x->sbcap) {
-					long nc = x->sbcap ? x->sbcap : 1024;
-					unsigned char *q;
-
-					while (nc < x->sblen + (e - p) / 2 + 2)
-						nc *= 2;
-					q = pdf_realloc(d, x->sb, x->sbcap, nc);
-					if (!q)
-						return -1;
-					x->sb = q;
-					x->sbcap = nc;
-				}
 				o = x->sb + x->sblen;
 				while (p < e && *p != '>') {
 					int ch = *p++, v = ch >= '0' && ch <= '9' ? ch - '0' : ch >= 'a' && ch <= 'f' ? ch - 'a' + 10 :
@@ -1651,7 +1725,7 @@ static int run_content(IX *x, const unsigned char *s, long n)
 					o[len++] = (unsigned char)(hi << 4);
 				if (p < e)
 					p++;
-				if (x->nops < NOPS) {
+				if (x->nops < x->opcap || op_grow(x)) {
 					x->ops[x->nops].k = K_STR;
 					x->ops[x->nops].s = o;
 					x->ops[x->nops].n = len;
@@ -1663,13 +1737,13 @@ static int run_content(IX *x, const unsigned char *s, long n)
 		}
 		if (c == '[') {
 			p++;
-			if (x->nops < NOPS)
+			if (x->nops < x->opcap || op_grow(x))
 				x->ops[x->nops++].k = K_ARR0;
 			continue;
 		}
 		if (c == ']') {
 			p++;
-			if (x->nops < NOPS)
+			if (x->nops < x->opcap || op_grow(x))
 				x->ops[x->nops++].k = K_ARR1;
 			continue;
 		}
@@ -1688,19 +1762,10 @@ static int run_content(IX *x, const unsigned char *s, long n)
 			}
 			p = q;
 			nm[len] = 0;
-			if (x->nops < NOPS) {
+			if (x->nops < x->opcap || op_grow(x)) {
 				/* keep the name in the scratch (only Tf and Do read it) */
 				unsigned char *o;
 
-				if (x->sblen + len + 1 > x->sbcap) {
-					long nc = x->sbcap ? x->sbcap * 2 : 1024;
-					unsigned char *q2 = pdf_realloc(d, x->sb, x->sbcap, nc);
-
-					if (!q2)
-						return -1;
-					x->sb = q2;
-					x->sbcap = nc;
-				}
 				o = x->sb + x->sblen;
 				memcpy(o, nm, (size_t)len + 1);
 				x->sblen += len + 1;
@@ -1874,7 +1939,31 @@ void ptext_init(PTEXT *t)
 
 void ptext_free(PTEXT *t)
 {
+	free(t->gl);
 	sb_free(&t->text);
+}
+
+/* Chunks come in nearly the order they are read: an insertion sort takes them in a pass, and
+   gives up for qsort when the order is far from it. */
+static void ch_sort(CH *c, long n, int (*cmp)(const void *, const void *))
+{
+	long i, moves = 0, limit = n * 6 + 64;
+
+	for (i = 1; i < n; i++) {
+		CH t = c[i];
+		long j = i;
+
+		while (j > 0 && cmp(&c[j - 1], &t) > 0) {
+			c[j] = c[j - 1];
+			j--;
+			if (++moves > limit) {
+				c[j] = t;
+				qsort(c, (size_t)n, sizeof(CH), cmp);
+				return;
+			}
+		}
+		c[j] = t;
+	}
 }
 
 static int ch_cmp_y(const void *a, const void *b)
@@ -1981,7 +2070,7 @@ static void assemble(IX *x, PTEXT *t)
 
 	if (x->nch == 0)
 		return;
-	qsort(x->ch, (size_t)x->nch, sizeof(CH), ch_cmp_y);
+	ch_sort(x->ch, x->nch, ch_cmp_y);
 	for (i = 0; i < x->nch;) {
 		fx y0 = x->ch[i].y, fsm = x->ch[i].fs;
 
@@ -1992,7 +2081,7 @@ static void assemble(IX *x, PTEXT *t)
 			j++;
 		}
 		if (j - i > 1)
-			qsort(x->ch + i, (size_t)(j - i), sizeof(CH), ch_cmp_x);
+			ch_sort(x->ch + i, j - i, ch_cmp_x);
 		if (have_prev) {
 			/* a word cut by a hyphen at the end of the line is joined to its rest */
 			SBUF *o = &t->text;
@@ -2072,9 +2161,16 @@ int pdf_page_text(PDOC *d, long n, PTEXT *t)
 		run_content(&x, (const unsigned char *)all.s, all.len);
 		sb_free(&all);
 	}
-	assemble(&x, t);
+	{
+		long t0 = d->clock ? d->clock() : 0;
+
+		assemble(&x, t);
+		if (d->clock)
+			d->st.t_asm += d->clock() - t0;
+	}
 	pdf_free(d, x.ch, x.capch * (long)sizeof(CH));
 	pdf_free(d, x.sb, x.sbcap);
+	pdf_free(d, x.ops, x.opcap * (long)sizeof(OP));
 	sb_free(&x.txt);
 	return 0;
 }

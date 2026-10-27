@@ -450,12 +450,66 @@ static void set_null(POBJ *o)
 	memset(o, 0, sizeof *o);
 }
 
+/* An integer, or a reference "n g R", straight from the bytes: arrays of references (/Kids) and of
+   numbers (/Widths) are most of what is parsed in a big file. 1 when taken. */
+static int fast_int_or_ref(LEX *x, POBJ *out)
+{
+	const unsigned char *p = x->p, *e = x->e, *q;
+	uint32_t n1 = 0, n2 = 0;
+	int d1 = 0, d2 = 0;
+
+	while (p < e && is_white_c(*p))
+		p++;
+	if (p >= e || *p < '0' || *p > '9')
+		return 0;
+	q = p;
+	while (q < e && *q >= '0' && *q <= '9' && d1 < 9) {
+		n1 = n1 * 10 + (uint32_t)(*q++ - '0');
+		d1++;
+	}
+	if (q >= e || !(is_white_c(*q) || *q == ']' || *q == '/' || *q == '>' || *q == '<' || *q == '[' || *q == '(')) {
+		if (q >= e && !x->final)
+			x->trunc = 1;
+		return 0;				/* a real, a long number, a keyword: the general way */
+	}
+	if (is_white_c(*q)) {
+		const unsigned char *r = q;
+
+		while (r < e && is_white_c(*r))
+			r++;
+		if (r < e && *r >= '0' && *r <= '9') {
+			const unsigned char *s = r;
+
+			while (s < e && *s >= '0' && *s <= '9' && d2 < 6) {
+				n2 = n2 * 10 + (uint32_t)(*s++ - '0');
+				d2++;
+			}
+			while (s < e && is_white_c(*s))
+				s++;
+			if (d2 < 6 && s + 1 <= e && s < e && *s == 'R' && (s + 1 >= e || !(*(s + 1) >= '!' && *(s + 1) <= '~') ||
+			    *(s + 1) == '/' || *(s + 1) == ']' || *(s + 1) == '>' || *(s + 1) == '<' || *(s + 1) == '[')) {
+				out->t = PO_REF;
+				out->a = (int32_t)n1;
+				out->gen = (uint16_t)n2;
+				x->p = s + 1;
+				return 1;
+			}
+		}
+	}
+	out->t = PO_INT;
+	out->a = (int32_t)n1;
+	x->p = q;
+	return 1;
+}
+
 int parse_obj(LEX *x, POBJ *out)
 {
 	TOK t;
 	int k;
 
 	set_null(out);
+	if (fast_int_or_ref(x, out))
+		return 1;
 	k = lex_token(x, &t);
 	switch (k) {
 	case T_INT: {
