@@ -66,6 +66,38 @@ def atari(machine, cpu, pages, jobs, timeout=2400):
                 o.write(open(p).read())
 
 
+def text(pages):
+    """the pages' words against pdftotext's (poppler is a reference here, nothing of it is used)"""
+    import collections
+    import re
+    import tempfile
+
+    def words(t):
+        return collections.Counter(re.findall(r"\w+", t.lower()))
+
+    print("| document | pages compared | words (ours / pdftotext) | F1 of the words |")
+    print("|---|---|---|---|")
+    for d in docs():
+        pdf = os.path.join(PDFS, d + ".pdf")
+        with tempfile.TemporaryDirectory() as td:
+            subprocess.run([os.path.join(TOP, "build", "pdfmeasure"), pdf, pages, td], capture_output=True, timeout=600)
+            tot_o = tot_r = inter = n = 0
+            for fn in sorted(os.listdir(td)):
+                pg = int(re.search(r"\.p(\d+)\.txt$", fn).group(1))
+                ours = words(open(os.path.join(td, fn), encoding="utf-8", errors="replace").read())
+                ref = words(subprocess.run(["pdftotext", "-f", str(pg), "-l", str(pg), "-enc", "UTF-8", pdf, "-"],
+                                           capture_output=True).stdout.decode("utf-8", "replace"))
+                tot_o += sum(ours.values())
+                tot_r += sum(ref.values())
+                inter += sum((ours & ref).values())
+                n += 1
+        if tot_o + tot_r == 0:
+            print("| %s | %d | 0 / 0 | (no text) |" % (d, n))
+            continue
+        p, r = inter / max(tot_o, 1), inter / max(tot_r, 1)
+        print("| %s | %d | %d / %d | %.3f |" % (d, n, tot_o, tot_r, 2 * p * r / (p + r) if p + r else 0))
+
+
 def main(argv):
     if not argv:
         sys.exit(__doc__)
@@ -76,6 +108,8 @@ def main(argv):
         del argv[i:i + 2]
     if argv[0] == "host":
         host(argv[1] if len(argv) > 1 else "sample:8")
+    elif argv[0] == "text":
+        text(argv[1] if len(argv) > 1 else "sample:6")
     elif argv[0] == "atari":
         atari(argv[1], argv[2], argv[3] if len(argv) > 3 else "sample:8", jobs)
     else:

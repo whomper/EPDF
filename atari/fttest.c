@@ -29,6 +29,7 @@ long nf_call2(long id, long arg);
 extern long heap_use, heap_peak;
 
 static long out_h = -1;
+static int profiling;
 
 static void emit(const char *line)
 {
@@ -48,6 +49,7 @@ static struct {
 	unsigned char *data;
 	FT_Face face;
 	int ok;
+	int by_gid;			/* a Type 0 font: the code is the glyph index */
 	long cur_size;
 	long open_us;
 } faces[MAXF];
@@ -73,7 +75,7 @@ static long file_load(const char *path, unsigned char **buf)
 	return n;
 }
 
-static int face_get(const char *folder, const char *name, long *open_us)
+static int face_get(const char *folder, const char *name, int kind, long *open_us)
 {
 	char path[64];
 	int i;
@@ -86,6 +88,7 @@ static int face_get(const char *folder, const char *name, long *open_us)
 	if (nfaces == MAXF)
 		return -1;
 	i = nfaces++;
+	faces[i].by_gid = (kind & 0x100) != 0;
 	strncpy(faces[i].path, path, sizeof faces[i].path - 1);
 	t0 = pdf_us();
 	n = file_load(path, &faces[i].data);
@@ -271,7 +274,7 @@ static int run_line(const char *job, int gray, int hint, int scale)
 	hfx = be32(g + 16);
 	p = g + 20;
 	for (i = 0; i < nfonts && i < 32; i++, p += 16)
-		fidx[i] = face_get(folder, (const char *)p + 2, &open_us);
+		fidx[i] = face_get(folder, (const char *)p + 2, (int)be16(p), &open_us);
 	{
 		long gw = ((wfx >> 16) * scale + 99) / 100 + 1, gh = ((hfx >> 16) * scale + 99) / 100 + 1;
 
@@ -331,8 +334,8 @@ static int run_line(const char *job, int gray, int hint, int scale)
 						faces[fi].cur_size = (long)sizeq;
 						set_us += pdf_us() - ts;
 					}
-					gid = FT_Get_Char_Index(face, uni);
-					if (!gid)
+					gid = faces[fi].by_gid ? uni : FT_Get_Char_Index(face, uni);
+					if (!gid && !faces[fi].by_gid)
 						gid = FT_Get_Char_Index(face, 0xF000u + (uni & 255u));
 					if (!gid || FT_Load_Glyph(face, gid, flags) || FT_Render_Glyph(face->glyph, rm)) {
 						failed++;
@@ -415,6 +418,11 @@ int main(void)
 		n = Fread((short)h, (long)sizeof cfg - 1, cfg);
 		Fclose((short)h);
 		cfg[n < 0 ? 0 : n] = 0;
+		if (cfg[0] == '!') {			/* a profiling run: Hatari's debugger takes over at the end */
+			profiling = 1;
+			while (cfg[0] && cfg[0] != '\n')
+				memmove(cfg, cfg + 1, strlen(cfg));
+		}
 		t0 = pdf_us();
 		e = FT_Init_FreeType(&lib);
 		snprintf(line, sizeof line, "{\"sys\":true,\"ft_init\":%d,\"ft_init_us\":%ld,\"st_free_kb\":%ld,\"tt_free_kb\":%ld}", (int)e,
@@ -451,6 +459,8 @@ int main(void)
 	}
 	if (out_h >= 0)
 		Fclose((short)out_h);
+	if (profiling)
+		__asm__ volatile("illegal");
 	nf_name = "NF_EXIT";
 	Supexec(sup_find);
 	if (nf_found > 0)

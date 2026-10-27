@@ -643,7 +643,17 @@ int parse_obj(LEX *x, POBJ *out)
 				x->p += 2;		/* a key with no value: dropped */
 				break;
 			}
-			if (!parse_obj(x, &val))
+			if (x->d->skip_kids && t2.n == 4 && memcmp(t2.s, "Kids", 4) == 0 && x->p < x->e && *x->p == '[') {
+				/* the list of a big page tree's pages is read once (pdf_pages), not for each page */
+				while (x->p < x->e && *x->p != ']')
+					x->p++;
+				if (x->p >= x->e) {
+					x->trunc = !x->final;
+					goto dbad;
+				}
+				x->p++;
+				memset(&val, 0, sizeof val);
+			} else if (!parse_obj(x, &val))
 				goto dbad;
 			if (!tmp_push(x, &key) || !tmp_push(x, &val))
 				goto dbad;

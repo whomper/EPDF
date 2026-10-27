@@ -120,6 +120,7 @@ typedef struct pdoc {
 	long (*clock)(void);		/* a clock for the t_ counters, or NULL */
 	int32_t *pageidx;		/* object number of each page, built once */
 	void *fc;			/* the fonts kept from page to page (pdftext.c) */
+	int skip_kids;			/* while a page's inherited attributes are read: leave /Kids arrays unparsed */
 	char err[96];
 } PDOC;
 
@@ -162,14 +163,24 @@ typedef struct {
 
 typedef struct {
 	int32_t x, y, size;		/* the glyph's origin and the font's size on the page (16.16, page points) */
-	uint32_t uni;			/* its character */
+	uint32_t uni;			/* its character; for a Type 0 font its code (the glyph index) */
+	int comp;			/* a Type 0 font */
 	long prog;			/* the font program's object number; -1: a standard font; -2 (a gap): none */
 	int kind;			/* the program's kind, as PFPROG */
 	const char *base;		/* the font's name (static, for a standard font) */
 } PGLYPH;
 
 typedef struct {
+	long obj;			/* the image XObject */
+	long w, h;			/* pixels */
+	fx dw, dh;			/* the size it is drawn at, page points */
+	char filter[16];
+} PIMG;
+
+typedef struct {
 	SBUF text;			/* the page's text, UTF-8 */
+	PIMG img[64];			/* with rec set: the pictures drawn */
+	int nimg;
 	PGLYPH *gl;			/* with rec set: every glyph shown, to draw them (tools/glyphjob) */
 	long ngl, capgl;
 	int rec;

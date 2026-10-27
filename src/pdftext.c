@@ -1346,7 +1346,8 @@ static fx show_run(IX *x, const unsigned char *s, long n, long *glyphs)
 				gp->x = x->rm[0] + fxmul(adv, x->rm[2]);
 				gp->y = x->rm[1] + fxmul(adv, x->rm[3]);
 				gp->size = x->rfs;
-				gp->uni = u[0];
+				gp->uni = f->composite ? code : u[0];
+				gp->comp = f->composite;
 				gp->prog = f->prog;
 				gp->kind = f->pkind;
 				gp->base = f->base;
@@ -1482,6 +1483,18 @@ static void do_xobject(IX *x, const char *name)
 				fl = pdf_res(d, &fl->u.v[fl->a - 1]);
 			if (fl && fl->t == PO_NAME)
 				fn = fl->u.p;
+			if (x->t->rec && x->t->nimg < 64) {
+				PIMG *im = &x->t->img[x->t->nimg++];
+				const fx *c = x->gs.ctm;
+
+				im->obj = onum;
+				im->w = w;
+				im->h = h;
+				im->dw = fxabs(c[0]) + fxabs(c[1]);
+				im->dh = fxabs(c[2]) + fxabs(c[3]);
+				strncpy(im->filter, fn ? fn : "", sizeof im->filter - 1);
+				im->filter[sizeof im->filter - 1] = 0;
+			}
 			d->st.images++;
 			d->st.image_px += w * h;
 			d->st.image_raw += len > 0 ? len : 0;

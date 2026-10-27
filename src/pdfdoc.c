@@ -196,9 +196,12 @@ POBJ *pdf_page(PDOC *d, long n, POBJ **res, POBJ **box, long *rot)
 
 	if (pdf_pages(d) < 0 || n < 0 || n >= d->npages)
 		return NULL;
+	d->skip_kids = 1;
 	pg = pdf_get(d, d->pageidx[n]);
-	if (!pg || pg->t != PO_DICT)
+	if (!pg || pg->t != PO_DICT) {
+		d->skip_kids = 0;
 		return NULL;
+	}
 	*res = NULL;
 	*box = NULL;
 	*rot = 0;
@@ -224,5 +227,6 @@ POBJ *pdf_page(PDOC *d, long n, POBJ **res, POBJ **box, long *rot)
 			p = par;
 		}
 	}
+	d->skip_kids = 0;
 	return pg;
 }

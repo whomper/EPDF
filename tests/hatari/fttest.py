@@ -22,6 +22,9 @@ import machines  # noqa: E402
 
 def main(argv):
     out = None
+    profile = "--profile" in argv
+    if profile:
+        argv.remove("--profile")
     if "--out" in argv:
         i = argv.index("--out")
         out = argv[i + 1]
@@ -50,7 +53,20 @@ def main(argv):
                 continue
             cfg.append("%s\\P%s.GLJ %s %s %s" % (folder, pg, mode, hint, scale))
     with open(os.path.join(hd, "FTJOB.CFG"), "w", newline="") as f:
-        f.write("\r\n".join(cfg) + "\r\n")
+        f.write(("!\r\n" if profile else "") + "\r\n".join(cfg) + "\r\n")
+    if profile:
+        elf = os.path.join(TOP, "build", "m68000" if cpu == "68000" else "m68030", "fttest.elf")
+        subprocess.run([sys.executable, os.path.join(TOP, "tools", "prgsyms.py"), elf, os.path.join(hd, "FTTEST.PRG"),
+                        os.path.join(hd, "FTTEST.PRG.sym")], check=True, stdout=subprocess.DEVNULL)
+        os.replace(os.path.join(hd, "FTTEST.PRG.sym"), os.path.join(hd, "FTTEST.PRG"))
+        open(os.path.join(hd, "start.txt"), "w").write("profile on\n")
+        cmd = ["hatari"] + m.args() + ["--natfeats", "yes", "--fast-forward", "yes", "--statusbar", "no", "--log-level", "warn",
+                                       "-D", "--debug-except", "illegal", "--parse", os.path.join(hd, "start.txt"), "--auto", "C:\\FTTEST.PRG"]
+        r = subprocess.run(cmd, env=m.env(), input="symbols prg\nprofile cycles 12000\nq\n", stdout=subprocess.PIPE,
+                           stderr=subprocess.STDOUT, text=True, timeout=7200)
+        open(hd + ".prof.txt", "w").write(r.stdout)
+        subprocess.run([sys.executable, os.path.join(TOP, "tools", "profsum.py"), hd + ".prof.txt", elf, "1dfc4", "40"])
+        return
     cmd = ["hatari"] + m.args() + ["--natfeats", "yes", "--fast-forward", "yes", "--statusbar", "no", "--log-level", "fatal",
                                    "--auto", "C:\\FTTEST.PRG"]
     with open(hd + ".log", "w") as lf:
@@ -65,7 +81,7 @@ def main(argv):
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(res, "rb") as f, open(out, "w") as o:
         o.write(json.dumps({"machine": m.describe(), "cpu": cpu}) + "\n")
-        o.write(f.read().replace(b"\r\n", b"\n").decode("utf-8", "replace"))
+        o.write(f.read().replace(b"\r\n", b"\n").replace(b"\\", b"/").decode("utf-8", "replace"))
     print(out)
 
 

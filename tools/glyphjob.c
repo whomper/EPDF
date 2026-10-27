@@ -71,7 +71,7 @@ int main(int argc, char **argv)
 	POBJ *pg, *res, *box;
 	long rot, n, i, nfonts = 0;
 	long keys[32];
-	int kinds[32];
+	int kinds[32], comps[32];
 	const char *bases[32];
 	char name[600], nm_i[16];
 	FILE *f;
@@ -110,6 +110,7 @@ int main(int argc, char **argv)
 		if (k == nfonts && nfonts < 32) {
 			keys[nfonts] = t.gl[i].prog;
 			kinds[nfonts] = t.gl[i].kind;
+			comps[nfonts] = t.gl[i].comp;
 			bases[nfonts] = t.gl[i].base;
 			nfonts++;
 		}
@@ -150,7 +151,7 @@ int main(int argc, char **argv)
 	for (i = 0; i < nfonts; i++) {
 		char nm[14];
 
-		be16(f, (unsigned)kinds[i]);
+		be16(f, (unsigned)kinds[i] | (comps[i] ? 0x100u : 0));
 		memset(nm, 0, sizeof nm);
 		fontname(nm_i, i, keys[i], bases[i]);
 		memcpy(nm, nm_i, strlen(nm_i));
@@ -164,7 +165,7 @@ int main(int argc, char **argv)
 			if (keys[k] == g->prog && (g->prog >= 0 || bases[k] == g->base))
 				break;
 		be16(f, (unsigned)k);
-		be16(f, g->uni > 0xFFFF ? 0 : g->uni);
+		be16(f, g->uni > 0xFFFF ? 0 : (unsigned)g->uni);
 		be32(f, (uint32_t)(g->x - llx));
 		be32(f, (uint32_t)(ury - g->y));
 		be32(f, (uint32_t)g->size);
