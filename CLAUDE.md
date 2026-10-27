@@ -84,8 +84,8 @@ A PDF viewer: full pages on the Falcon and TT (the stock 4 MB Falcon, `Falcon-4`
 text view (reflowed text, search, copy, pictures) that also runs on a 68000 ST. A program (PRG) only,
 at first. This section is kept up to date: the build, the tests, what a release carries, the decisions.
 
-- **Where it stands:** the measurement run (stage 0), before any application. Nothing here is the
-  viewer yet. The plan after it, if Erez agrees: stage 1 the text view on every machine; stage 2 page
+- **Where it stands:** the measurement run (stage 0) is done and reported (`docs/MEASUREMENT.md`, hub told 27 Oct 2026); waiting for Erez's decision on stage 1 and stage 2 before any application is started. Hub's rules from the report: keep `-msoft-float` on every `-m68030` build and check the PRG with objdump (no `f…` mnemonics) in `make test`; drop `atari/clz.c` when `common/` is synced (the hub put `__clzsi2` in `tos.c`); decode streams with `inflate_open`/`inflate_read` so a page needn't fit in memory; reuse `common/atari/dspjpeg.c` with `PIC_LIBJPEG` for JPEG on the Falcon; a progressive JPEG on a 68000 shows its 1/8 preview with a note, never 24 s without a turn; the Liberation (OFL 1.1) licence is cleared before a release carries it; the first GEM stage gets the speed rig and `acc_all` with EPDF in front.
+  Nothing here is the viewer yet. The plan after it, if Erez agrees: stage 1 the text view on every machine; stage 2 page
   rendering on the Falcon and TT, with zoom and a cache of drawn pages; stage 3 (only if needed) forms,
   annotations, CJK fonts, JBIG2, JPEG 2000.
 - **Governance:** the hub owns AERA-Atari and `common/`. Never change `common/` here: pull it with
