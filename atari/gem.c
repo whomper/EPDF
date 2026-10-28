@@ -253,6 +253,26 @@ short graf_rubberbox(short x, short y, short minw, short minh, short *w, short *
 	return r;
 }
 
+/* drag a w x h box from x,y within the bounds bx,by,bw,bh while the
+   button is held (the AES draws its outline); where it was let go */
+short graf_dragbox(short w, short h, short x, short y, short bx, short by, short bw, short bh,
+		   short *nx, short *ny)
+{
+	short r;
+	aintin[0] = w;
+	aintin[1] = h;
+	aintin[2] = x;
+	aintin[3] = y;
+	aintin[4] = bx;
+	aintin[5] = by;
+	aintin[6] = bw;
+	aintin[7] = bh;
+	r = aes(71, 8, 3, 0, 0);
+	*nx = aintout[1];
+	*ny = aintout[2];
+	return r;
+}
+
 /* rectangle for MU_M1: leave=0 waits for entering it, 1 for leaving */
 static short m1[5];
 
@@ -473,9 +493,15 @@ short evnt_timer_(unsigned long ms)
 	return aes(24, 2, 1, 0, 0);
 }
 
+/* asked only where the AES has it (AES 4.0 and later, the ?AGI cookie,
+   MagiC): TOS 4.04's AES 3.40 answers with "Illegal AES function call"
+   (EMail, 28 Oct 2026). 0 elsewhere, as for a question it can't answer */
 short appl_getinfo(short type, short *o1, short *o2, short *o3, short *o4)
 {
 	short r;
+	*o1 = *o2 = *o3 = *o4 = 0;
+	if (global[0] < 0x0400 && !get_cookie(0x3F414749L) && !get_cookie(0x4D616758L))	/* ?AGI, MagX */
+		return 0;
 	aintin[0] = type;
 	r = aes(130, 1, 5, 0, 0);
 	*o1 = aintout[1];
@@ -506,6 +532,55 @@ short shel_write(short mode, short wisgr, short wiscr, const void *cmd, const vo
 	addrin[0] = (void *)cmd;
 	addrin[1] = (void *)tail;
 	return aes(121, 3, 1, 2, 0);
+}
+
+short shel_read(char *cmd, char *tail)
+{
+	addrin[0] = cmd;
+	addrin[1] = tail;
+	return aes(120, 0, 1, 2, 0);
+}
+
+/* the program's own folder, X:\PATH\ with its backslash, from the command the AES
+   started it with (shel_read), where its own files are. Not the current
+   folder: a program started by another one with shel_write gets the
+   desktop's on TOS 1.04 and 4.04, whatever folder the caller set (EMail
+   starting EWeb, which then missed its fonts: Erez, 28 Oct 2026; EmuTOS
+   and the multitasking AESes do set it). A command without a folder (a
+   name alone, the desktop starting it from its own window, which makes
+   that folder current) gives the current folder. For a program only: an
+   accessory's command is the program's in front */
+const char *app_dir(void)
+{
+	static char dir[256];
+	static char cmd[256], tail[256];
+	short i, end = -1, drv;
+	cmd[0] = 0;
+	if (shel_read(cmd, tail) == 0)
+		cmd[0] = 0;
+	cmd[sizeof(cmd) - 1] = 0;
+	for (i = 0; cmd[i]; i++)
+		if (cmd[i] == '\\' || cmd[i] == ':')
+			end = i;
+	if (end > 1 && cmd[end] == '\\' && cmd[1] == ':') {
+		for (i = 0; i <= end; i++)	/* the command's own X:\...\ */
+			dir[i] = cmd[i];
+		dir[i] = 0;
+		return dir;
+	}
+	/* no drive and folder of its own: the current ones */
+	drv = (short)Dgetdrv();
+	dir[0] = (char)('A' + drv);
+	dir[1] = ':';
+	if (Dgetpath(dir + 2, drv + 1) < 0)
+		dir[2] = 0;
+	for (i = 2; dir[i] && i < (short)sizeof(dir) - 2; i++)
+		;
+	if (i == 2 || dir[i - 1] != '\\') {
+		dir[i++] = '\\';
+		dir[i] = 0;
+	}
+	return dir;
 }
 
 /* the AES's environment: *value points after "NAME=" (name given with
