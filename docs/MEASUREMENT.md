@@ -256,3 +256,14 @@ The hub can rerun on Erez's TOS with the same commands (the images in `~/.aera/t
 | enc-rc4-128 | 8 | 3040 / 2969 | 0.976 |
 | enc-aes-128 | 8 | 3040 / 2969 | 0.976 |
 | enc-aes-256 | 8 | 3040 / 2969 | 0.976 |
+
+## After the faster inflate (AERA-Atari 0029b1d, 28 October 2026)
+
+The same 163 pages, same rig, 68000 build, before and after syncing `common/` (d6c18bd's `inflate.c`):
+
+| machine | all pages | inflate-heavy pages (maps, photo page) | ordinary text pages |
+|---|---|---|---|
+| ST (8 MHz) | 795 s -> 744 s (6 %) | 5-14 % (map 151 -> 130 s) | 0-4 % |
+| Falcon-4 | 240 s -> 238 s (1 %) | none (map 40 s -> 40 s) | noise |
+
+The new inflate helps the 8 MHz ST on Flate-heavy pages only; the 68030 at 16 MHz does not gain.
