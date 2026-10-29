@@ -41,8 +41,13 @@ build/test_ccitt: tests/test_ccitt.c src/ccitt.c src/ccitt.h src/ccitt_tab.h | b
 build/pdfmeasure_asan: tools/pdfmeasure.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HDRS) | build
 	$(CC) $(HCFLAGS) -fsanitize=address,undefined -fno-sanitize-recover=undefined -o $@ tools/pdfmeasure.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC)
 
-test: build/test_ccitt
+build/test_textview: tests/test_textview.c src/view/textview.c src/view/textview.h | build
+	$(CC) -Isrc/view -Wall -Wextra -O2 -o $@ tests/test_textview.c src/view/textview.c
+
+test: build/test_ccitt build/test_textview
 	python3 tests/ccitt.py
+	build/test_textview
+	tools/nofpu.sh build/m68000/epdf.elf build/m68030/measure.elf build/m68030/fttest.elf
 measure: build/pdfmeasure
 	@echo "see tools/measure.py"
 dist help:
@@ -188,5 +193,37 @@ binary/MEAS30F.PRG: build/m68030/measure.elf | binary
 	PRGFLAGS=7 python3 common/tools/elf2tos.py $< $@
 binary/FTTEST30F.PRG: build/m68030/fttest.elf | binary
 	PRGFLAGS=7 python3 common/tools/elf2tos.py $< $@
-atari: binary/MEASURE.PRG binary/MEAS30.PRG binary/MEAS30F.PRG
+atari: binary/MEASURE.PRG binary/MEAS30.PRG binary/MEAS30F.PRG binary/EPDF.PRG binary/LAUNCH.PRG
 fttest: binary/FTTEST.PRG binary/FTTEST30.PRG
+
+# ---------------------------------------------------------------- EPDF.PRG (the GEM program)
+# one build for every machine (68000); the text view of the pages
+VERSION_STR := $(shell cat VERSION)
+build/m68000/version.c: FORCE | build/m68000
+	@printf '/* written by the Makefile: do not edit */\nconst char app_version[] = "%s";\n' "$(VERSION_STR)" > $@.new
+	@if cmp -s $@.new $@; then rm $@.new; else mv $@.new $@; fi
+FORCE:
+.PHONY: FORCE
+GEM_SRC = src/gem/epdf.c src/gem/gemui.c src/gem/menu.c src/gem/about.c src/view/textview.c \
+          common/atari/gem.c common/atari/crash.c common/ui/mbar.c common/ui/aboutbox.c common/ui/aboutline.c \
+          common/ui/alert.c common/ui/dialog.c common/ui/field.c common/ui/av.c common/ui/text.c common/ui/clip.c \
+          common/src/charset.c common/src/bidi.c common/ui/accmem.c common/atari/bigbuf.c
+GEM_OBJ = $(patsubst %.c,build/m68000/%.o,$(GEM_SRC)) build/m68000/version.o
+$(patsubst %.c,build/m68000/%.o,$(GEM_SRC)): XFLAGS += -Isrc/gem -Isrc/view -Icommon/ui
+build/m68000/version.o: build/m68000/version.c
+	$(XCC) $(XFLAGS) -c -o $@ $<
+build/m68000/crash_s.o: common/atari/crash.S | build/m68000
+	$(XCC) $(XCPU) -c -o $@ $<
+binary/EPDF.PRG: XCPU = -m68000 -mstrict-align -fdisable-tree-bswap
+binary/EPDF.PRG: $(GEM_OBJ) $(addprefix build/m68000/,$(patsubst %.c,%.o,$(RT_C))) $(addprefix build/m68000/,$(patsubst %.c,%.o,$(PDF_SRC) src/pdfio_tos.c $(COMMON_SRC))) $(addprefix build/m68000/,$(patsubst %.c,%.o,$(BSSL_SRC))) build/m68000/crt0.o build/m68000/nf.o build/m68000/crash_s.o common/atari/link.ld | binary
+	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
+	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68000/epdf.elf \
+	  build/m68000/crt0.o build/m68000/nf.o build/m68000/crash_s.o $(filter-out %/crt0.o %/nf.o %/crash_s.o %/link.ld,$(filter build/%,$^)) -lgcc
+	PRGFLAGS=7 python3 common/tools/elf2tos.py build/m68000/epdf.elf $@
+
+# starts a program with a command line, for the rigs (atari/launch.c)
+binary/LAUNCH.PRG: build/m68000/atari/launch.o build/m68000/common/atari/gem.o build/m68000/common/atari/tos.o build/m68000/common/atari/libc.o build/m68000/crt0.o build/m68000/nf.o common/atari/link.ld | binary
+	$(XCC) -m68000 -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
+	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68000/launch.elf \
+	  build/m68000/crt0.o build/m68000/nf.o build/m68000/atari/launch.o build/m68000/common/atari/gem.o build/m68000/common/atari/tos.o build/m68000/common/atari/libc.o -lgcc
+	python3 common/tools/elf2tos.py build/m68000/launch.elf $@
