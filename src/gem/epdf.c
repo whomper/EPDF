@@ -122,7 +122,7 @@ static void load_page(long n)
 {
 	PTEXT t;
 	long len = 0;
-	char num[16];
+	char num[16], title2[16];
 
 	free(atext);
 	atext = NULL;
@@ -136,12 +136,15 @@ static void load_page(long n)
 	if (t.text.s && t.text.len > 0)
 		atext = cs_to_atari(t.text.s, t.text.len, CS_UTF8, &len);
 	atext_len = atext ? len : 0;
+	snprintf(num, sizeof num, "%ld", (long)t.text.len);
+	log_event("extracted", num, t.failed ? "failed" : "");
 	ptext_free(&t);
 	graf_mouse(ARROW, NULL);
 	page = n;
 	top = 0;
 	snprintf(num, sizeof num, "%ld", n + 1);
-	log_event("page", num, NULL);
+	snprintf(title2, sizeof title2, "%ld", atext_len);
+	log_event("page", num, title2);
 	layout();
 	set_title();
 	redraw_all();
@@ -233,7 +236,7 @@ static void redraw(const GRECT *area)
 			vs_clip(vdi_h, 1, clip);
 			fill(&c, 0);
 			text_clip(vdi_h, clip);
-			for (i = 0; i < work_rows + 1; i++) {
+			for (i = 0; i < work_rows; i++) {
 				long n;
 				const char *p = tv_line(&tv, top + i, &n);
 				short y = wk.y + (short)i * ch;
@@ -255,6 +258,7 @@ static void redraw(const GRECT *area)
 		}
 		wind_get(win, WF_NEXTXYWH, &r.x, &r.y, &r.w, &r.h);
 	}
+	log_event("drawn", NULL, NULL);
 }
 
 static void open_window(void)
@@ -324,16 +328,22 @@ static void command(int c)
 static int key(short kstate, short k)
 {
 	short scan = KEY_SCAN(k);
+	char kb[24];
 
+	snprintf(kb, sizeof kb, "%02x %x %02x", scan, kstate, KEY_ASCII(k));
+	log_event("key", kb, NULL);
+	/* the AES makes these three itself from Control with the arrows and Home */
+	if (KEY_ASCII(k) == 0) {
+		if (scan == 0x73) { command(CMD_PREV); return 1; }
+		if (scan == 0x74) { command(CMD_NEXT); return 1; }
+		if (scan == 0x77) { command((kstate & (K_LSHIFT | K_RSHIFT)) ? CMD_LAST : CMD_FIRST); return 1; }
+	}
 	if (key_ctrl(kstate, k)) {
 		switch (scan) {
 		case 0x18: command(CMD_OPEN); return 1;		/* ^O */
 		case 0x16: command(CMD_CLOSE); return 1;	/* ^U */
 		case 0x11: command(CMD_CLOSE); return 1;	/* ^W */
 		case 0x10: command(CMD_QUIT); return 1;		/* ^Q */
-		case 0x73: command(CMD_PREV); return 1;		/* ^Left */
-		case 0x74: command(CMD_NEXT); return 1;		/* ^Right */
-		case 0x77: command((kstate & (K_LSHIFT | K_RSHIFT)) ? CMD_LAST : CMD_FIRST); return 1;	/* ^Home */
 		}
 		return 0;
 	}

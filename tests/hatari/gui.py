@@ -108,8 +108,21 @@ def main(argv):
         for k in mods:
             send("hatari-event keyup 0x%x" % k)
 
+    def drawn():
+        return sum("EPDF drawn" in e for e in events())
+
+    def settle():
+        """the redraw's last event, then a pause with nothing more coming"""
+        n = -1
+        for _ in range(100):
+            time.sleep(1.0)
+            if drawn() == n:
+                return
+            n = drawn()
+
     def shot(name):
-        time.sleep(1.5)
+        settle()
+        time.sleep(4)               # Hatari shows the last row of a redraw late
         send("hatari-debug screenshot %s" % os.path.join(out, "%s-%s.png" % (spec.replace(":", "_"), name)))
         time.sleep(1.0)
 
