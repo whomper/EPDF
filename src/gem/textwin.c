@@ -201,11 +201,15 @@ static void draw_head(short x, short y, short w, long page)
 	text_n(vdi_h, tx, y, s, n);
 }
 
-/* rows [r0, r1) of the view, within clip c (the AES's rectangle) */
+/* the fill's attributes are white, solid, MD_REPLACE: set once a draw,
+   not five VDI calls a blank (draw_rows clears it, and so does whatever
+   may change them between: a picture's frame, an inversion) */
+static int fill_set;
+
 /* white over x1..x2-1 (screen x) of the row at y, cut to the clip c */
 static void blank(const GRECT *c, short x1, short x2, short y, short h)
 {
-	GRECT r;
+	short p[4];
 
 	if (x1 < c->x)
 		x1 = c->x;
@@ -219,11 +223,18 @@ static void blank(const GRECT *c, short x1, short x2, short y, short h)
 		h = (short)(c->y + c->h - y);
 	if (x2 <= x1 || h <= 0)
 		return;
-	r.x = x1;
-	r.y = y;
-	r.w = (short)(x2 - x1);
-	r.h = h;
-	fill(&r, 0);
+	if (!fill_set) {
+		vswr_mode(vdi_h, MD_REPLACE);
+		vsf_interior(vdi_h, FIS_SOLID);
+		vsf_color(vdi_h, 0);
+		vsf_perimeter(vdi_h, 0);
+		fill_set = 1;
+	}
+	p[0] = x1;
+	p[1] = y;
+	p[2] = (short)(x2 - 1);
+	p[3] = (short)(y + h - 1);
+	vr_recfl(vdi_h, p);
 }
 
 /*
@@ -333,6 +344,7 @@ static void invert(const GRECT *c, short x1, short x2, short y)
 	p[1] = y < c->y ? c->y : y;
 	p[2] = (short)(x2 - 1);
 	p[3] = (short)(y + ch - 1 > c->y + c->h - 1 ? c->y + c->h - 1 : y + ch - 1);
+	fill_set = 0;			/* the fill black now: the next blank sets it again */
 	vswr_mode(vdi_h, MD_XOR);
 	vsf_interior(vdi_h, FIS_SOLID);
 	vsf_color(vdi_h, 1);
@@ -359,6 +371,7 @@ static void draw_rows(const GRECT *c, long r0, long r1)
 	clip[3] = (short)(c->y + c->h - 1);
 	text_clip(vdi_h, clip);
 	T_START();
+	fill_set = 0;				/* others may have changed the fill since */
 	blank(c, c->x, tx, c->y, c->h);		/* the left margin */
 	vswr_mode(vdi_h, MD_REPLACE);		/* once for the rows of text */
 	vst_color(vdi_h, 1);
