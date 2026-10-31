@@ -188,18 +188,27 @@ static char find_text[65];
 static long find_page, find_from;	/* where it goes on */
 static long find_left;			/* pages it may still look at */
 
-/* Copy and Find next greyed where they can't be used (the guidelines, 4.4) */
+/* Copy and Find next greyed where they can't be used (the guidelines, 4.4);
+   an item's menu_ienable only when its state changes (an AES call each, on
+   every step of a selection dragged) */
 static void menu_states(void)
 {
+	static const short cmd[5] = { CMD_COPY, CMD_SELALL, CMD_FIND, CMD_FINDNEXT, CMD_FINDPREV };
+	static signed char was[5] = { -1, -1, -1, -1, -1 };
 	DOCVIEW *v = doc_view();
+	signed char now[5];
+	int i;
 
 	if (!has_menu)
 		return;
-	menu_ienable(menu.tree, mbar_object(&menu, CMD_COPY), v && v->sel_p0 >= 0);
-	menu_ienable(menu.tree, mbar_object(&menu, CMD_SELALL), v != NULL);
-	menu_ienable(menu.tree, mbar_object(&menu, CMD_FIND), v != NULL);
-	menu_ienable(menu.tree, mbar_object(&menu, CMD_FINDNEXT), v && find_text[0]);
-	menu_ienable(menu.tree, mbar_object(&menu, CMD_FINDPREV), v && find_text[0]);
+	now[0] = v && v->sel_p0 >= 0;
+	now[1] = now[2] = v != NULL;
+	now[3] = now[4] = v && find_text[0];
+	for (i = 0; i < 5; i++)
+		if (now[i] != was[i]) {
+			menu_ienable(menu.tree, mbar_object(&menu, cmd[i]), now[i]);
+			was[i] = now[i];
+		}
 }
 
 static void select_span(long p0, long o0, long p1, long o1)
@@ -210,6 +219,14 @@ static void select_span(long p0, long o0, long p1, long o1)
 	if (!v)
 		return;
 	q0 = v->sel_p0, r0 = v->sel_o0, q1 = v->sel_p1, r1 = v->sel_o1;
+	if (p0 >= 0 && (p1 < p0 || (p1 == p0 && o1 < o0))) {
+		long t;		/* in order, as dv_select keeps it */
+
+		t = p0, p0 = p1, p1 = t;
+		t = o0, o0 = o1, o1 = t;
+	}
+	if (q0 == p0 && r0 == o0 && q1 == p1 && r1 == o1)
+		return;			/* the same again (^A twice): nothing to turn over */
 	dv_select(v, p0, o0, p1, o1);
 	/* inverted as they stand: the old selection back, the new one on */
 	if (q0 >= 0)
