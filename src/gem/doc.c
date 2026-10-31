@@ -363,6 +363,12 @@ const char *doc_page_text(long n, long *len)
 	return doc ? ts_get(&store, n, len) : NULL;
 }
 
+/* page n's text's length as stored, without reading it; -1 when not read */
+long doc_page_len(long n)
+{
+	return doc && ts_have(&store, n) ? store.pg[n].len : -1;
+}
+
 const char *doc_status(void)
 {
 	static char s[96];

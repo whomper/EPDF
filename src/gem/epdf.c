@@ -324,6 +324,19 @@ static void copy(void)
 	cp.o1 = v->sel_o1;
 	cp.p = cp.p0;
 	cp.at = cp.o0;
+	/* the buffer at its size at once, from the pages' lengths (a buffer
+	   doubled as it fills is copied each time: 100 ms at 128 KB on an ST);
+	   an eighth more for line ends made CR LF */
+	{
+		long p, n = 0, l;
+
+		for (p = cp.p0; p <= cp.p1; p++)
+			if ((l = doc_page_len(p)) > 0)
+				n += l + 2;
+		n += n / 8 + 64;
+		if ((cp.buf = malloc((size_t)n)) != NULL)
+			cp.cap = n;
+	}
 	win_status("copying...");
 }
 

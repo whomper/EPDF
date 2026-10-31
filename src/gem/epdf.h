@@ -36,6 +36,7 @@ int doc_pic_slice(unsigned long ms, long *obj);	/* 1 when it is done: *obj */
 int doc_pic_busy(void);
 const char *doc_status(void);		/* the About box's line */
 const char *doc_page_text(long n, long *len);	/* NULL when not read yet */
+long doc_page_len(long n);		/* -1 when not read yet; nothing read */
 #include "docview.h"
 DOCVIEW *doc_view(void);		/* NULL without a document */
 
