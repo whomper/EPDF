@@ -38,8 +38,12 @@ page at a time while you read, starting with the page you are on; a page it hasn
 gives way to you at once.
 
 - **File:** Open... (^O), Quit (^Q).
-- **Edit:** Copy (^C), for the text you select (to come in this stage).
-- **View:** **The page's lines**: ticked, each line is as it is on the page; not ticked (as EPDF
+- **Edit:** Copy (^C) puts the text you selected on the clipboard; Select all (^A); Find... (^F)
+  looks for a word or a phrase, whatever its case, across the lines it was set on; Find next (^G)
+  and Find previous (⇧^G) look again. A search goes round the whole document, reading pages it
+  hasn't read yet first, and says on the line under the title where it found the text.
+- **View:** Font... (⇧^F): the system font in its two sizes, or a fixed-width GDOS font, kept in
+  `EPDF.INF`. **The page's lines**: ticked, each line is as it is on the page; not ticked (as EPDF
   starts), the lines of a paragraph are joined and wrapped to the window, so the text reads at any
   window width.
 - **Page:** the previous and the next page (^Left, ^Right), the first and the last (^Clr/Home,
@@ -57,6 +61,12 @@ say so.
 that starts in Hebrew is set at the right. A letter the Atari's character set doesn't have shows as
 "?".
 
+**Selecting text:** drag over it with the mouse; ⇧-click takes the selection on to where you click; a
+double-click takes a word; a click alone lets the selection go. The right mouse button, or Insert,
+opens a menu of what you can do there.
+
+Two columns side by side are read one after the other, the left one first.
+
 The window can be moved, sized, sent to the back and iconified (where the AES can iconify); the
 icon shows the page you are on.
 
@@ -71,6 +81,10 @@ icon shows the page you are on.
 | ^Clr/Home | the first page |
 | ⇧^Clr/Home, ^End | the last page |
 | ^O | open a document |
+| ^C, ^A | copy the selection, select everything |
+| ^F, ^G, ⇧^G | find, find next, find previous |
+| ⇧^F | the font |
+| Insert | the menu for the selection (as the right mouse button) |
 | ^U, ^Q | quit (EPDF has one window, so ^U closes it and quits) |
 | Help | this guide |
 
@@ -94,8 +108,8 @@ A line EPDF doesn't know is kept as it is.
   documents whose user password is empty).
 - **A page shows no text, or letters that make no sense.** The page is a scanned picture with no
   text in it, or its fonts don't say which letters they draw. EPDF can't read such text.
-- **Two columns run into each other.** EPDF reads a page line by line across its whole width;
-  columns are not separated yet.
+- **Columns run into each other.** EPDF finds two columns side by side by the gap between them;
+  three or more, or columns that don't line up, are read line by line across the page.
 - **EPDF stopped with an alert about a crash.** What happened is in `CRASH.LOG` beside
   `EPDF.PRG`; EPDF offers to show it the next time it starts. Please send it with a bug report.
 - **The machine halts with "OUT OF INTERNAL MEMORY".** Put `FOLDR400.PRG` first in `AUTO` (see
