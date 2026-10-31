@@ -324,20 +324,31 @@ shots: binary/EPDF.PRG binary/LAUNCH.PRG
 
 # the speed rig (the guidelines' Speed): EPDF.PRG with common/atari/gem.c built
 # -DAES_PROFILE=20, each stretch of 20 ms or more between event calls on the
-# emulator's console (AESGAP); tests/hatari/speed.py checks them on the stock machines
+# emulator's console (AESGAP); tests/hatari/speed.py checks them on the stock
+# machines. EPDF's own code as it is released: textwin.c's timing marks
+# (EPDF_TIMES, a line logged through NatFeats at each) cost a page 25 ms on an
+# ST, so they are in build/times only, for breaking a stretch down
+AES_LINK = $(XCC) -m68000 -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
+	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments
 build/aprof/gem.o: common/atari/gem.c $(HDRS) | build
 	mkdir -p build/aprof
 	$(XCC) $(XFLAGS) -m68000 -mstrict-align -fdisable-tree-bswap -DAES_PROFILE=20 -c -o $@ $<
-build/aprof/textwin.o: src/gem/textwin.c $(HDRS) | build
-	mkdir -p build/aprof
+build/aprof/EPDF.PRG: binary/EPDF.PRG build/aprof/gem.o
+	$(AES_LINK) -o build/aprof/epdf.elf \
+	  build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o \
+	  $(filter-out build/m68000/common/atari/gem.o,$(filter build/%.o,$(EPDF_OBJS))) \
+	  build/aprof/gem.o -lgcc
+	PRGFLAGS=7 python3 common/tools/elf2tos.py build/aprof/epdf.elf $@
+# the same with textwin.c's marks ("EPDF t copy 35", "t rows 15"...), for a breakdown
+build/times/textwin.o: src/gem/textwin.c $(HDRS) | build
+	mkdir -p build/times
 	$(XCC) $(XFLAGS) -m68000 -mstrict-align -fdisable-tree-bswap -Isrc/gem -Isrc/view -Icommon/ui -DEPDF_TIMES -c -o $@ $<
-build/aprof/EPDF.PRG: binary/EPDF.PRG build/aprof/gem.o build/aprof/textwin.o
-	$(XCC) -m68000 -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
-	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/aprof/epdf.elf \
+build/times/EPDF.PRG: binary/EPDF.PRG build/aprof/gem.o build/times/textwin.o
+	$(AES_LINK) -o build/times/epdf.elf \
 	  build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o \
 	  $(filter-out build/m68000/common/atari/gem.o build/m68000/src/gem/textwin.o,$(filter build/%.o,$(EPDF_OBJS))) \
-	  build/aprof/gem.o build/aprof/textwin.o -lgcc
-	PRGFLAGS=7 python3 common/tools/elf2tos.py build/aprof/epdf.elf $@
+	  build/aprof/gem.o build/times/textwin.o -lgcc
+	PRGFLAGS=7 python3 common/tools/elf2tos.py build/times/epdf.elf $@
 speed-test: build/aprof/EPDF.PRG binary/LAUNCH.PRG
 	python3 tests/hatari/speed.py build/speed
 .PHONY: speed-test
