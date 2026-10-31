@@ -10,11 +10,11 @@ static int bad;
 static void rows(DOCVIEW *v, long nrows, const char *want)
 {
 	char got[1024] = "", one[128];
-	long r, n, page;
+	long r, n, page, off;
 	int kind;
 	const char *s;
 
-	for (r = 0; r < nrows && dv_row(v, r, &kind, &s, &n, &page); r++) {
+	for (r = 0; r < nrows && dv_row(v, r, &kind, &s, &n, &page, &off); r++) {
 		if (kind == DV_HEAD)
 			snprintf(one, sizeof one, "#%ld", page + 1);
 		else if (kind == DV_WAIT)
@@ -78,6 +78,26 @@ int main(void)
 	eq("and goes back up", dv_scroll(&v, -1, 5), -1);
 	dv_set_top_abs(&v, 0, 2);
 	rows(&v, 1, "#1");
+	/* where an offset is: page 1 at 15 columns is "One two three|four.|Next" */
+	eq("row of 0", dv_row_of(&v, 0, 0), 1);
+	eq("row of 'four'", dv_row_of(&v, 0, 14), 2);
+	eq("row of 'Next'", dv_row_of(&v, 0, 20), 3);
+	eq("row of a page not read", dv_row_of(&v, 2, 0), 0);
+	dv_show_row(&v, 1, 2, 1, 2);
+	rows(&v, 2, "a|b");
+	/* the selection, given either way round */
+	{
+		long a, b;
+
+		dv_select(&v, 0, 14, 0, 4);
+		eq("selected in row 1", dv_sel_cols(&v, 0, 0, 13, &a, &b) && a == 4 && b == 13, 1);
+		eq("selected in row 2", dv_sel_cols(&v, 0, 14, 5, &a, &b) && a == 0 && b == 0, 0);
+		dv_select(&v, 0, 8, 1, 2);
+		eq("to the next page", dv_sel_cols(&v, 1, 0, 1, &a, &b) && a == 0 && b == 1, 1);
+		eq("not on page 3", dv_sel_cols(&v, 2, 0, 3, &a, &b), 0);
+		dv_select(&v, -1, 0, 0, 0);
+		eq("none", dv_sel_cols(&v, 0, 0, 13, &a, &b), 0);
+	}
 	dv_free(&v);
 	ts_close(&ts);
 	puts(bad ? "docview: FAILED" : "docview: ok");

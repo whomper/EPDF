@@ -48,7 +48,7 @@ def run(work, machine):
         r.act("a line scrolled, pages being read", speed.LINE, lambda: r.key("Down"))
         r.act("a page scrolled, pages being read", speed.PAGE, lambda: r.key("shift+Down"))
         r.act("next page", speed.WINDOW, lambda: r.key("ctrl+Right"))
-        time.sleep(60 if machine.startswith("ST") else 30)     # the reading done
+        time.sleep(120 if machine.startswith("ST") else 60)    # the reading done
         r.act("a line scrolled", speed.LINE, lambda: r.key("Down"))
         r.act("a line scrolled up", speed.LINE, lambda: r.key("Up"))
         r.act("a page scrolled", speed.PAGE, lambda: r.key("shift+Down"))

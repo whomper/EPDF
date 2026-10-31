@@ -245,6 +245,13 @@ long doc_slice(unsigned long ms)
 	return n;
 }
 
+/* page n's text as it is stored (soft breaks as CR), or NULL when it
+   isn't read yet; valid until the store is next used */
+const char *doc_page_text(long n, long *len)
+{
+	return doc ? ts_get(&store, n, len) : NULL;
+}
+
 const char *doc_status(void)
 {
 	static char s[96];

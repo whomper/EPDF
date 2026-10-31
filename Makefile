@@ -53,18 +53,21 @@ build/pdfmeasure_asan: tools/pdfmeasure.c src/pdfio_host.c $(PDF_SRC) $(COMMON_S
 build/test_textview: tests/test_textview.c src/view/textview.c src/view/textview.h | build
 	$(CC) -Isrc/view -Wall -Wextra -O2 -o $@ tests/test_textview.c src/view/textview.c
 
+build/test_search: tests/test_search.c src/view/search.c src/view/search.h | build
+	$(CC) -Isrc/view -Wall -Wextra -O2 -o $@ tests/test_search.c src/view/search.c
 build/test_inf: tests/test_inf.c src/view/inf.c src/view/inf.h | build
 	$(CC) -Isrc/view -Wall -Wextra -O2 -o $@ tests/test_inf.c src/view/inf.c
 VIEW_TEST_SRC = src/view/docview.c src/view/textview.c src/view/tstore.c src/pdfio_host.c
 build/test_tstore build/test_docview: build/test_%: tests/test_%.c $(VIEW_TEST_SRC) $(wildcard src/view/*.h) src/plat.h | build
 	$(CC) -Isrc -Isrc/view -Icommon/src -Wall -Wextra -O2 -o $@ $< $(VIEW_TEST_SRC)
 
-test: build/test_ccitt build/test_textview build/test_inf build/test_tstore build/test_docview
+test: build/test_ccitt build/test_textview build/test_inf build/test_tstore build/test_docview build/test_search
 	python3 tests/ccitt.py
 	build/test_textview
 	build/test_inf
 	build/test_tstore build
 	build/test_docview
+	build/test_search
 	@if [ -f build/m68000/epdf.elf ]; then python3 common/tools/oddaccess.py build/m68000/epdf.elf; fi
 	tools/nofpu.sh build/m68000/epdf.elf build/m68030/measure.elf build/m68030/fttest.elf
 measure: build/pdfmeasure
@@ -230,8 +233,8 @@ build/m68000/version.c: FORCE | build/m68000
 	@if cmp -s $@.new $@; then rm $@.new; else mv $@.new $@; fi
 FORCE:
 .PHONY: FORCE
-GEM_SRC = src/gem/epdf.c src/gem/doc.c src/gem/textwin.c src/gem/gemui.c src/gem/menu.c src/gem/about.c \
-          src/view/textview.c src/view/docview.c src/view/tstore.c src/view/inf.c common/ui/bgwork.c common/ui/twin.c \
+GEM_SRC = src/gem/epdf.c src/gem/doc.c src/gem/textwin.c src/gem/find.c src/gem/gemui.c src/gem/menu.c src/gem/about.c \
+          src/view/textview.c src/view/docview.c src/view/tstore.c src/view/inf.c src/view/search.c common/ui/bgwork.c common/ui/twin.c \
           common/atari/gem.c common/atari/crash.c common/ui/mbar.c common/ui/aboutbox.c common/ui/aboutline.c \
           common/ui/alert.c common/ui/dialog.c common/ui/field.c common/ui/av.c common/ui/text.c common/ui/clip.c common/ui/iconify.c common/ui/help.c common/ui/dd.c \
           common/src/charset.c common/src/bidi.c common/ui/accmem.c common/atari/bigbuf.c

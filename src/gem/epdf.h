@@ -31,6 +31,7 @@ int doc_pending(void);			/* pages still to read */
 void doc_want(long page);		/* read from this page on next */
 long doc_slice(unsigned long ms);	/* the reading on for ms: the page it finished, or -1 */
 const char *doc_status(void);		/* the About box's line */
+const char *doc_page_text(long n, long *len);	/* NULL when not read yet */
 #include "docview.h"
 DOCVIEW *doc_view(void);		/* NULL without a document */
 
@@ -55,5 +56,12 @@ int win_sliders_due(void);
 void win_sliders(void);
 void win_where(short *x, short *y, short *w, short *h);
 int win_message(const short *msg);
+void win_status(const char *s);		/* after the info line's page, until cleared (NULL) */
+int win_hit(short mx, short my, long *page, long *off);
+void win_draw_span(long p0, long o0, long p1, long o1);
+void win_show(long page, long off);		/* that place in view */
+
+/* find.c */
+int find_dialog(char *text);		/* text: 65 bytes; 1 when Find was chosen */
 
 #endif

@@ -63,6 +63,7 @@ int dv_init(DOCVIEW *v, TSTORE *ts, long npages, int cols, int lines_mode)
 	v->lines_mode = lines_mode;
 	for (i = 0; i < DV_LAID; i++)
 		v->lay[i].page = -1;
+	v->sel_p0 = -1;
 	v->rows = malloc((size_t)(npages > 0 ? npages : 1) * sizeof *v->rows);
 	v->stale = calloc((size_t)(npages > 0 ? npages : 1), 1);
 	if (!v->rows || !v->stale) {
@@ -167,7 +168,7 @@ int dv_recount(DOCVIEW *v, int max)
 	return v->nstale > 0;
 }
 
-int dv_row(DOCVIEW *v, long r, int *kind, const char **s, long *n, long *page)
+int dv_row(DOCVIEW *v, long r, int *kind, const char **s, long *n, long *page, long *off)
 {
 	long p = v->top_page, row = v->top_row + r;
 	TV *tv;
@@ -179,6 +180,7 @@ int dv_row(DOCVIEW *v, long r, int *kind, const char **s, long *n, long *page)
 	if (p >= v->npages)
 		return 0;
 	*page = p;
+	*off = -1;
 	if (row == 0) {
 		*kind = DV_HEAD;
 		*s = "";
@@ -197,7 +199,74 @@ int dv_row(DOCVIEW *v, long r, int *kind, const char **s, long *n, long *page)
 	if (!*s) {
 		*s = "";
 		*n = 0;
+	} else {
+		*off = (long)(*s - (const char *)tv->text);
 	}
+	return 1;
+}
+
+long dv_row_of(DOCVIEW *v, long n, long off)
+{
+	TV *tv = n >= 0 && n < v->npages && ts_have(v->ts, n) ? laid(v, n) : NULL;
+	long lo = 0, hi;
+
+	if (!tv || tv->nlines == 0)
+		return tv ? 1 : 0;
+	/* the last line that starts at or before off */
+	hi = tv->nlines - 1;
+	while (lo < hi) {
+		long mid = (lo + hi + 1) / 2;
+
+		if ((long)tv->start[mid] <= off)
+			lo = mid;
+		else
+			hi = mid - 1;
+	}
+	return lo + 1;
+}
+
+void dv_show_row(DOCVIEW *v, long n, long row, long above, long window)
+{
+	long r = 0, i;
+
+	for (i = 0; i < n && i < v->npages; i++)
+		r += v->rows[i];
+	r += row - above;
+	if (r < 0)
+		r = 0;
+	dv_set_top_abs(v, r, window);
+}
+
+void dv_select(DOCVIEW *v, long p0, long o0, long p1, long o1)
+{
+	if (p0 >= 0 && (p1 < p0 || (p1 == p0 && o1 < o0))) {
+		long t;
+
+		t = p0, p0 = p1, p1 = t;
+		t = o0, o0 = o1, o1 = t;
+	}
+	v->sel_p0 = p0;
+	v->sel_o0 = o0;
+	v->sel_p1 = p1;
+	v->sel_o1 = o1;
+}
+
+int dv_sel_cols(const DOCVIEW *v, long page, long off, long n, long *a, long *b)
+{
+	long s, e;
+
+	if (v->sel_p0 < 0 || off < 0 || page < v->sel_p0 || page > v->sel_p1)
+		return 0;
+	s = page == v->sel_p0 ? v->sel_o0 - off : 0;
+	e = page == v->sel_p1 ? v->sel_o1 - off : n;
+	if (s < 0)
+		s = 0;
+	if (e > n)
+		e = n;
+	if (e <= s)
+		return 0;
+	*a = s;
+	*b = e;
 	return 1;
 }
 

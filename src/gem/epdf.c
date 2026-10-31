@@ -27,6 +27,8 @@
 #include "plat.h"
 #include "util.h"
 #include "inf.h"
+#include "search.h"
+#include "clip.h"
 #include "menu.h"
 #include "epdf.h"
 
@@ -42,6 +44,13 @@ static char inf_path[180], cache_path[180];
 static INF inf;
 static int lines_mode;
 static char open_dir[160] = "";		/* where Open looks first (FOLDER=) */
+static int find_dir;			/* a search runs: 1 forwards, -1 back; 0 none */
+static void menu_states(void);
+
+#ifndef BEG_MCTRL
+#define BEG_MCTRL 3			/* wind_update: the mouse is ours while a selection is dragged */
+#define END_MCTRL 2
+#endif
 
 void log_event(const char *what, const char *a, const char *b)
 {
@@ -130,8 +139,11 @@ static void open_doc(const char *p)
 		return;
 	}
 	graf_mouse(ARROW, NULL);
+	find_dir = 0;
+	win_status(NULL);
 	bg_opened();
 	win_title();
+	menu_states();
 	win_layout();
 	win_draw_all();
 }
@@ -160,6 +172,196 @@ static void open_dialog(void)
 	strcat(full, "\\");
 	strcat(full, name);
 	open_doc(full);
+}
+
+/* ---------------------------------------------------------------- the selection, Find, Copy */
+
+static char find_text[65];
+static long find_page, find_from;	/* where it goes on */
+static long find_left;			/* pages it may still look at */
+
+/* Copy and Find next greyed where they can't be used (the guidelines, 4.4) */
+static void menu_states(void)
+{
+	DOCVIEW *v = doc_view();
+
+	if (!has_menu)
+		return;
+	menu_ienable(menu.tree, mbar_object(&menu, CMD_COPY), v && v->sel_p0 >= 0);
+	menu_ienable(menu.tree, mbar_object(&menu, CMD_SELALL), v != NULL);
+	menu_ienable(menu.tree, mbar_object(&menu, CMD_FIND), v != NULL);
+	menu_ienable(menu.tree, mbar_object(&menu, CMD_FINDNEXT), v && find_text[0]);
+	menu_ienable(menu.tree, mbar_object(&menu, CMD_FINDPREV), v && find_text[0]);
+}
+
+static void select_span(long p0, long o0, long p1, long o1)
+{
+	DOCVIEW *v = doc_view();
+	long q0, r0, q1, r1;
+
+	if (!v)
+		return;
+	q0 = v->sel_p0, r0 = v->sel_o0, q1 = v->sel_p1, r1 = v->sel_o1;
+	dv_select(v, p0, o0, p1, o1);
+	if (q0 >= 0)
+		win_draw_span(q0, r0, q1, r1);		/* the old one off */
+	if (p0 >= 0)
+		win_draw_span(p0, o0, p1, o1);
+	menu_states();
+}
+
+/* the search starts after the selection (before it, going back), or at the
+   top of the window */
+static void find_start(int dir)
+{
+	DOCVIEW *v = doc_view();
+
+	if (!v || !find_text[0])
+		return;
+	if (v->sel_p0 >= 0) {
+		find_page = dir > 0 ? v->sel_p1 : v->sel_p0;
+		find_from = dir > 0 ? v->sel_o1 : v->sel_o0;
+	} else {
+		find_page = dv_page_at_top(v);
+		find_from = dir > 0 ? 0 : 0x7fffffffL;
+	}
+	find_dir = dir;
+	find_left = doc_pages() + 1;
+	win_status("finding...");
+	log_event("find", find_text, dir > 0 ? "next" : "previous");
+}
+
+/* the search on through the pages read, a page a step; a page not read yet
+   is read first. 1 while it goes on */
+static int find_step(void)
+{
+	long len, at, n;
+	const char *t;
+	char msg[96];
+
+	if (!find_dir)
+		return 0;
+	if (find_left-- <= 0) {
+		find_dir = 0;
+		snprintf(msg, sizeof msg, "\"%.30s\" isn't in the document", find_text);
+		win_status(msg);
+		log_event("find-none", find_text, NULL);
+		return 0;
+	}
+	t = doc_page_text(find_page, &len);
+	if (!t) {
+		find_left++;			/* that page doesn't count yet */
+		doc_want(find_page);
+		return 1;
+	}
+	if (find_dir > 0 ? search_text(t, len, find_text, find_from, &at, &n)
+			 : search_text_back(t, len, find_text, find_from, &at, &n)) {
+		char p[16];
+
+		find_dir = 0;
+		select_span(find_page, at, find_page, at + n);
+		win_show(find_page, at);
+		snprintf(p, sizeof p, "%ld", find_page + 1);
+		snprintf(msg, sizeof msg, "found on page %s", p);
+		win_status(msg);
+		log_event("found", p, NULL);
+		return 0;
+	}
+	/* the next page round, from its start (its end, going back) */
+	if (find_dir > 0) {
+		find_page = find_page + 1 < doc_pages() ? find_page + 1 : 0;
+		find_from = 0;
+	} else {
+		find_page = find_page > 0 ? find_page - 1 : doc_pages() - 1;
+		find_from = 0x7fffffffL;
+	}
+	return 1;
+}
+
+/* the selection's text to the clipboard, lines ending CR LF; the soft
+   breaks as spaces (or line ends, showing the page's lines) */
+static void copy(void)
+{
+	DOCVIEW *v = doc_view();
+	SBUF b;
+	long p, missing = 0;
+
+	if (!v || v->sel_p0 < 0)
+		return;
+	sb_init(&b);
+	for (p = v->sel_p0; p <= v->sel_p1; p++) {
+		long len, a, e, i;
+		const char *t = doc_page_text(p, &len);
+
+		if (!t) {
+			missing++;
+			continue;
+		}
+		a = p == v->sel_p0 ? v->sel_o0 : 0;
+		e = p == v->sel_p1 && v->sel_o1 < len ? v->sel_o1 : len;
+		if (p > v->sel_p0 && b.len)
+			sb_adds(&b, "\r\n");
+		for (i = a; i < e; i++) {
+			if (t[i] == '\n')
+				sb_adds(&b, "\r\n");
+			else if (t[i] == '\r')
+				sb_adds(&b, lines_mode ? "\r\n" : " ");
+			else
+				sb_addc(&b, t[i]);
+		}
+	}
+	if (b.len && clip_put(b.s, b.len)) {
+		char n[16];
+
+		snprintf(n, sizeof n, "%ld", b.len);
+		log_event("copied", n, NULL);
+		win_status(missing ? "copied; pages not read yet left out" : "copied");
+	} else {
+		win_status("nothing copied");
+	}
+	sb_free(&b);
+}
+
+/* a click in the text: the selection made by dragging; with Shift, the
+   selection there is taken on to where the button is let go */
+static void click(short mx, short my, short kstate)
+{
+	DOCVIEW *v = doc_view();
+	long ap, ao, p, o, lp, lo;
+	short mb, ks;
+
+	if (!v || !win_hit(mx, my, &p, &o)) {
+		if (v && v->sel_p0 >= 0)
+			select_span(-1, 0, 0, 0);
+		return;
+	}
+	if ((kstate & (K_LSHIFT | K_RSHIFT)) && v->sel_p0 >= 0) {
+		ap = v->sel_p0;
+		ao = v->sel_o0;
+	} else {
+		ap = p;
+		ao = o;
+	}
+	select_span(ap, ao, p, o);
+	lp = p;
+	lo = o;
+	wind_update(BEG_MCTRL);
+	for (;;) {
+		graf_mkstate(&mx, &my, &mb, &ks);
+		if (!(mb & 1))
+			break;
+		if (win_hit(mx, my, &p, &o) && (p != lp || o != lo)) {
+			dv_select(v, ap, ao, p, o);
+			win_draw_span(lp, lo, p, o);
+			lp = p;
+			lo = o;
+		}
+		evnt_timer_(20);
+	}
+	wind_update(END_MCTRL);
+	if (v->sel_p0 == v->sel_p1 && v->sel_o0 == v->sel_o1)
+		select_span(-1, 0, 0, 0);	/* a click alone: nothing selected */
+	menu_states();
 }
 
 /* ---------------------------------------------------------------- commands and keys */
@@ -217,6 +419,25 @@ static void command(int c)
 	case CMD_LAST:
 		page_step(doc_pages());
 		break;
+	case CMD_COPY:
+		copy();
+		break;
+	case CMD_SELALL:
+		if (doc_view())
+			select_span(0, 0, doc_pages() - 1, 0x7fffffffL);
+		break;
+	case CMD_FIND:
+		if (doc_view() && find_dialog(find_text))
+			find_start(1);
+		menu_states();
+		break;
+	case CMD_FINDNEXT:
+	case CMD_FINDPREV:
+		if (find_text[0])
+			find_start(c == CMD_FINDNEXT ? 1 : -1);
+		else if (doc_view() && find_dialog(find_text))
+			find_start(1);
+		break;
 	case CMD_LINES:
 		lines_mode = !lines_mode;
 		if (has_menu)
@@ -259,9 +480,14 @@ static void key(short kstate, short k)
 		case 0x16: command(CMD_CLOSE); return;		/* ^U: one window, so quit (3.2) */
 		case 0x11: return;				/* ^W: one window, so nothing */
 		case 0x10: command(CMD_QUIT); return;		/* ^Q */
+		case 0x2e: command(CMD_COPY); return;		/* ^C */
+		case 0x1e: command(CMD_SELALL); return;		/* ^A */
+		case 0x21: command(CMD_FIND); return;		/* ^F */
+		case 0x22: command(shift(kstate) ? CMD_FINDPREV : CMD_FINDNEXT); return;	/* ^G, Shift+^G */
 		}
 		return;
 	}
+	win_status(NULL);		/* a key: the last message has been read */
 	switch (scan) {
 	case 0x62:			/* Help: EPDF.HYP in the viewer that runs (4.3) */
 		command(CMD_GUIDE);
@@ -423,6 +649,7 @@ int main(void)
 		has_menu = menu_bar(menu.tree, 1) != 0;
 		if (has_menu)
 			menu_icheck(menu.tree, mbar_object(&menu, CMD_LINES), lines_mode);
+		menu_states();
 	}
 	if (win_open(x, y, w, h) != 0) {
 		alert(1, "[3][No window is free.|Close one and start EPDF again.][ OK ]");
@@ -438,19 +665,21 @@ int main(void)
 	crash_offer("EPDF", "next to EPDF.PRG");
 	log_event("started", app_version, NULL);
 	while (!quit_now) {
-		short which, flags = MU_MESAG | MU_KEYBD;
+		short which, flags = MU_MESAG | MU_KEYBD | MU_BUTTON;
 		unsigned long t;
-		int pending = doc_pending();
+		int pending = doc_pending() || find_dir;
 
 		/* the sliders after a scroll, once no key waits; the reading
 		   on while nothing else does */
 		if (win_sliders_due() || pending)
 			flags |= MU_TIMER;
 		t = win_sliders_due() ? 0 : bg_timer(pending, 1000);
-		which = evnt_multi_(flags, 0, 0, 0, t, msg, &ev);
+		which = evnt_multi_(flags, 1, 1, 1, t, msg, &ev);
 		bg_tick();
 		if (which & MU_KEYBD)
 			key(ev.kstate, ev.kreturn);
+		if ((which & MU_BUTTON) && !win_iconified() && wind_find(ev.mx, ev.my) == win_handle())
+			click(ev.mx, ev.my, ev.kstate);
 		if (which & MU_MESAG)
 			message(msg);
 		if (which == MU_TIMER) {
@@ -458,9 +687,17 @@ int main(void)
 				win_sliders();
 			else if (pending && bg_may_work()) {
 				bg_begin();
-				do
-					read_on();
-				while (doc_pending() && bg_more());
+				/* a search first: the user waits for it; the reading after */
+				while (find_dir && find_step() && bg_more()) {
+					long len;
+
+					if (!doc_page_text(find_page, &len))
+						read_on();	/* the page it waits for */
+				}
+				if (!find_dir)
+					do
+						read_on();
+					while (doc_pending() && bg_more());
 			}
 		}
 	}

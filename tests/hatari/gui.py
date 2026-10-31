@@ -26,6 +26,7 @@ from pdfgen import make_pdf  # noqa: E402
 
 DOWN, UP, HOME, SPACE, CTRL = 0x50, 0x48, 0x47, 0x39, 0x1D
 RIGHT, LEFT, Q = 0x4D, 0x4B, 0x10
+F, G, A, C, RETURN, UNDO, ESC, SHIFT = 0x21, 0x22, 0x1E, 0x2E, 0x1C, 0x61, 0x01, 0x2A
 
 
 def main(argv):
@@ -93,6 +94,14 @@ def main(argv):
                 return
             n = drawn()
 
+    def typed(text):
+        for ch in text:
+            send("hatari-event keypress %s" % ("0x39" if ch == " " else ch))
+            time.sleep(0.25)
+
+    def count(what):
+        return sum(what in e for e in events())
+
     def shot(name):
         settle()
         time.sleep(4)               # Hatari shows the last row of a redraw late
@@ -110,6 +119,30 @@ def main(argv):
         key(RIGHT, [CTRL])
         wait("EPDF top 2")
         shot("page2")
+        # Find: Undo cancels the dialog; the text found on page 2, and again
+        # with ^G (round the document); then everything copied
+        key(F, [CTRL])
+        time.sleep(3)
+        key(UNDO)
+        wait("EPDF dialog-closed find cancel")
+        key(F, [CTRL])
+        time.sleep(3)
+        typed("second page")
+        shot("typed")
+        key(RETURN)
+        wait("EPDF dialog-closed find find")
+        wait("EPDF found 2")
+        shot("found")
+        n = count("EPDF found 2")
+        key(G, [CTRL])
+        end = time.time() + 60
+        while count("EPDF found 2") <= n and time.time() < end:
+            time.sleep(0.5)
+        if count("EPDF found 2") <= n:
+            bad.append("^G found nothing")
+        key(A, [CTRL])
+        key(C, [CTRL])
+        wait("EPDF copied")
     finally:
         h.kill()
         h.wait()

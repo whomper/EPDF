@@ -19,8 +19,15 @@ static const MBAR_ITEM file_items[] = {
 	{ NULL, NULL, CMD_NONE }
 };
 
+/* Find next and previous: the Mac's keys (the guidelines, 3.2: an app
+   that copies a Mac app takes its Command key as Control) */
 static const MBAR_ITEM edit_items[] = {
 	{ "Copy", "^C", CMD_COPY },
+	{ "Select all", "^A", CMD_SELALL },
+	{ "-", NULL, CMD_NONE },
+	{ "Find...", "^F", CMD_FIND },
+	{ "Find next", "^G", CMD_FINDNEXT },
+	{ "Find previous", "\x01^G", CMD_FINDPREV },
 	{ NULL, NULL, CMD_NONE }
 };
 

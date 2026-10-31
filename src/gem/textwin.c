@@ -100,6 +100,18 @@ void win_title(void)
 
 /* the info line: the page at the top, and how the reading goes */
 static long info_page = -1, info_read = -1;	/* what the info line says */
+static char status[64];				/* and after it, until the next key */
+
+void win_status(const char *st)
+{
+	const char *now = st ? st : "";
+
+	if (!strcmp(now, status))
+		return;
+	strncpy(status, now, sizeof status - 1);
+	info_page = -1;				/* the line set again */
+	win_info();
+}
 
 void win_info(void)
 {
@@ -116,10 +128,11 @@ void win_info(void)
 	if (!v)
 		snprintf(winfo, sizeof winfo, " Open a PDF with File > Open (^O), or drop one here.");
 	else if (doc_read() < doc_pages())
-		snprintf(winfo, sizeof winfo, " Page %ld of %ld  \xF9  reading the text: %ld of %ld",
-			 dv_page_at_top(v) + 1, doc_pages(), doc_read(), doc_pages());
+		snprintf(winfo, sizeof winfo, " Page %ld of %ld  \xF9  reading the text: %ld of %ld%s%s",
+			 dv_page_at_top(v) + 1, doc_pages(), doc_read(), doc_pages(), status[0] ? "  \xF9  " : "", status);
 	else
-		snprintf(winfo, sizeof winfo, " Page %ld of %ld", dv_page_at_top(v) + 1, doc_pages());
+		snprintf(winfo, sizeof winfo, " Page %ld of %ld%s%s", dv_page_at_top(v) + 1, doc_pages(),
+			 status[0] ? "  \xF9  " : "", status);
 	wind_set_str(win, WF_INFO, winfo);
 }
 
@@ -185,52 +198,113 @@ static void draw_head(short x, short y, short w, long page)
 }
 
 /* rows [r0, r1) of the view, within clip c (the AES's rectangle) */
+/* white over x1..x2-1 (screen x) of the row at y, cut to the clip c */
+static void blank(const GRECT *c, short x1, short x2, short y, short h)
+{
+	GRECT r;
+
+	if (x1 < c->x)
+		x1 = c->x;
+	if (x2 > c->x + c->w)
+		x2 = (short)(c->x + c->w);
+	if (y < c->y) {
+		h = (short)(h - (c->y - y));
+		y = c->y;
+	}
+	if (y + h > c->y + c->h)
+		h = (short)(c->y + c->h - y);
+	if (x2 <= x1 || h <= 0)
+		return;
+	r.x = x1;
+	r.y = y;
+	r.w = (short)(x2 - x1);
+	r.h = h;
+	fill(&r, 0);
+}
+
+/* the selected part of a row shown inverted (XOR), within the clip c */
+static void invert(const GRECT *c, short x1, short x2, short y)
+{
+	short p[4];
+
+	if (x1 < c->x)
+		x1 = c->x;
+	if (x2 > c->x + c->w)
+		x2 = (short)(c->x + c->w);
+	if (x2 <= x1)
+		return;
+	p[0] = x1;
+	p[1] = y < c->y ? c->y : y;
+	p[2] = (short)(x2 - 1);
+	p[3] = (short)(y + ch - 1 > c->y + c->h - 1 ? c->y + c->h - 1 : y + ch - 1);
+	vswr_mode(vdi_h, MD_XOR);
+	vsf_interior(vdi_h, FIS_SOLID);
+	vsf_color(vdi_h, 1);
+	vr_recfl(vdi_h, p);
+	vswr_mode(vdi_h, MD_REPLACE);
+}
+
+/*
+ * Rows [r0, r1) of the view, within clip c (the AES's rectangle). Text is
+ * drawn in MD_REPLACE, which paints its own cells white: only what no
+ * text covers is filled (the margin, a row's end, empty rows), not the
+ * whole area first (a whole window's fill took EmuTOS 60 ms on an ST).
+ */
 static void draw_rows(const GRECT *c, long r0, long r1)
 {
 	DOCVIEW *v = doc_view();
-	short clip[4];
-	GRECT area;
+	short clip[4], tx = (short)(work.x + MARGIN), right = (short)(c->x + c->w);
+	short y = (short)(work.y + r0 * ch);
 	long r;
 
-	area.x = c->x;
-	area.y = c->y;
-	area.w = c->w;
-	area.h = c->h;
 	clip[0] = c->x;
 	clip[1] = c->y;
 	clip[2] = (short)(c->x + c->w - 1);
 	clip[3] = (short)(c->y + c->h - 1);
 	text_clip(vdi_h, clip);
 	T_START();
-	fill(&area, 0);
-	T_MARK("fill");
-	if (v) {
-		for (r = r0; r < r1; r++) {
-			int kind;
-			const char *s;
-			long n, page;
-			short y = (short)(work.y + r * ch);
+	blank(c, c->x, tx, c->y, c->h);		/* the left margin */
+	vswr_mode(vdi_h, MD_REPLACE);		/* once for the rows of text */
+	vst_color(vdi_h, 1);
+	for (r = r0; v && r < r1; r++, y = (short)(y + ch)) {
+		int kind;
+		const char *s;
+		long n, page, off;
 
-			if (y + ch <= c->y || y >= c->y + c->h)
-				continue;
-			if (!dv_row(v, r, &kind, &s, &n, &page))
-				break;
-			if (kind == DV_HEAD) {
+		if (y + ch <= c->y || y >= c->y + c->h)
+			continue;
+		if (!dv_row(v, r, &kind, &s, &n, &page, &off))
+			break;
+		if (n > cols)
+			n = cols;
+		if (kind == DV_HEAD || n <= 0 || kind == DV_WAIT) {
+			blank(c, tx, right, y, ch);
+			if (kind == DV_HEAD)
 				draw_head(work.x, y, work.w, page);
-				continue;
+			else if (n > 0) {
+				vswr_mode(vdi_h, MD_TRANS);
+				vst_color(vdi_h, 1);
+				vst_effects(vdi_h, 2);
+				text_n(vdi_h, tx, y, s, n);
+				vst_effects(vdi_h, 0);
 			}
-			if (n > cols)
-				n = cols;
-			if (n <= 0)
-				continue;
-			vswr_mode(vdi_h, MD_TRANS);
+			vswr_mode(vdi_h, MD_REPLACE);	/* back for the rows of text */
 			vst_color(vdi_h, 1);
-			vst_effects(vdi_h, kind == DV_WAIT ? 2 : 0);
-			text_n(vdi_h, (short)(work.x + MARGIN), y, s, n);
-			vst_effects(vdi_h, 0);
+			continue;
 		}
-		T_MARK("text");
+		text_n(vdi_h, tx, y, s, n);
+		blank(c, (short)(tx + n * cw), right, y, ch);
+		{
+			long a, b;
+
+			if (dv_sel_cols(v, page, off, n, &a, &b))
+				invert(c, (short)(tx + a * cw), (short)(tx + b * cw), y);
+		}
 	}
+	/* below the last row */
+	if (y < c->y + c->h)
+		blank(c, tx, right, y, (short)(c->y + c->h - y));
+	T_MARK("rows");
 	text_noclip(vdi_h);
 }
 
@@ -436,9 +510,9 @@ void win_page_ready(long n)
 	for (r = 0; r <= rows; r++) {
 		int kind;
 		const char *s;
-		long len, page;
+		long len, page, off;
 
-		if (!dv_row(v, r, &kind, &s, &len, &page))
+		if (!dv_row(v, r, &kind, &s, &len, &page, &off))
 			break;
 		if (page == n && first < 0)
 			first = r;
@@ -447,6 +521,75 @@ void win_page_ready(long n)
 	}
 	if (first >= 0)
 		win_draw_rows(first, rows + 1);	/* the rows after it moved too */
+}
+
+/* the place in the text at screen point (mx, my): its page and offset in
+   the page's text (a row's end past its last letter); 0 outside the text */
+int win_hit(short mx, short my, long *page, long *off)
+{
+	DOCVIEW *v = doc_view();
+	long r, n, col;
+	int kind;
+	const char *s;
+
+	if (!v || win < 0 || iconified || mx < work.x || my < work.y || mx >= work.x + work.w || my >= work.y + work.h)
+		return 0;
+	r = (my - work.y) / ch;
+	if (!dv_row(v, r, &kind, &s, &n, page, off) || *off < 0)
+		return 0;
+	col = (mx - (work.x + MARGIN) + cw / 2) / cw;
+	if (col < 0)
+		col = 0;
+	if (col > n)
+		col = n;
+	*off += col;
+	return 1;
+}
+
+/* the rows from the top that show page p0 offset o0 to p1 o1 drawn again */
+void win_draw_span(long p0, long o0, long p1, long o1)
+{
+	DOCVIEW *v = doc_view();
+	long r, first = -1, last = -1, n, page, off;
+	int kind;
+	const char *s;
+
+	if (!v || win < 0 || iconified)
+		return;
+	if (p1 < p0 || (p1 == p0 && o1 < o0)) {
+		long t;
+
+		t = p0, p0 = p1, p1 = t;
+		t = o0, o0 = o1, o1 = t;
+	}
+	for (r = 0; r <= rows && dv_row(v, r, &kind, &s, &n, &page, &off); r++) {
+		if (off < 0)
+			continue;
+		if ((page > p0 || (page == p0 && off + n >= o0)) && (page < p1 || (page == p1 && off <= o1))) {
+			if (first < 0)
+				first = r;
+			last = r;
+		}
+	}
+	if (first >= 0)
+		win_draw_rows(first, last + 1);
+}
+
+/* the selection's start shown in the window, a few rows under the top */
+void win_show(long page, long off)
+{
+	DOCVIEW *v = doc_view();
+	long row;
+
+	if (!v || win < 0)
+		return;
+	row = dv_row_of(v, page, off);
+	if (row <= 0)
+		return;
+	dv_show_row(v, page, row, rows / 3, rows);
+	sliders();
+	win_info();
+	win_draw_all();
 }
 
 int win_open(short x, short y, short w, short h)

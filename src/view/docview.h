@@ -36,6 +36,9 @@ typedef struct {
 	long top_page, top_row;		/* the first row shown */
 	struct { long page; char *text; long len; TV tv; unsigned long used; } lay[DV_LAID];
 	unsigned long tick;
+	/* the selection: from page p0, offset o0 in its text, to p1, o1
+	   (o1 not taken); none while p0 < 0 */
+	long sel_p0, sel_o0, sel_p1, sel_o1;
 } DOCVIEW;
 
 int dv_init(DOCVIEW *v, TSTORE *ts, long npages, int cols, int lines_mode);
@@ -49,9 +52,21 @@ void dv_set_cols(DOCVIEW *v, int cols, int lines_mode);
    more are to count */
 int dv_recount(DOCVIEW *v, int max);
 
-/* the row r rows after the top (r >= 0): its kind, text and length; 0
-   past the end */
-int dv_row(DOCVIEW *v, long r, int *kind, const char **s, long *n, long *page);
+/* the row r rows after the top (r >= 0): its kind, text and length, the
+   page it is in and where its text starts in the page's (-1 for a head or
+   a page to come); 0 past the end */
+int dv_row(DOCVIEW *v, long r, int *kind, const char **s, long *n, long *page, long *off);
+/* the row of page n that holds offset off of its text (1: the first
+   after its head), or 0 when the page isn't read */
+long dv_row_of(DOCVIEW *v, long n, long off);
+/* the top put so that page n's row `row` shows, `above` rows under the top
+   where there is room */
+void dv_show_row(DOCVIEW *v, long n, long row, long above, long window);
+/* the selection: from page p0 offset o0 to p1 o1 (either way round); none
+   with p0 < 0. dv_sel_cols: the columns [a, b) of a row (page, its text's
+   start off, n characters) that are selected; 0 when none */
+void dv_select(DOCVIEW *v, long p0, long o0, long p1, long o1);
+int dv_sel_cols(const DOCVIEW *v, long page, long off, long n, long *a, long *b);
 /* the first row shown, moved by d rows: down no further than a full
    window from the end (a page jump may have put a later page at the top:
    then not down at all); the rows it really moved */
