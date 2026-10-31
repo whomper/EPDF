@@ -116,8 +116,10 @@ at first. This section is kept up to date: the build, the tests, what a release 
   pieces, pictures made a row at a time into the screen's bitmap (common's pic_dither_row), the
   reader's memory cut (pieces joined, big objects kept, a 4-byte object table), the text store's pool
   given back and the page or picture tried again when memory is refused. On ST-1 (big.py) 22 of the
-  corpus's 25 pass; the 3 fail on JPEGs too big for a 68000 (0.4). Next: the 0.3 release through the
-  hub, then 0.4. Still to do on the ST's speed: a line (80), next page (310), a page scrolled with
+  corpus's 25 pass; the 3 fail on JPEGs too big for a 68000 (0.4). The hub cleared cc798ec3 on Erez's
+  TOS (gui and acc_all; ST 1.04: a line 80, next page 320, Select all 60, About 250) and 0.3 went out
+  (v0.3 on b58255c5, 31 Oct); the hub's big.py on ST-1 with TOS 1.04 was still running (a loss there:
+  0.3.x). Phase report sent through the hub; 0.4 (pictures) proposed, waiting for Erez's word. Still to do on the ST's speed: a line (80), next page (310), a page scrolled with
   everything selected (~205), the About box (265 on EmuTOS); the interpreter's per-glyph cost (a map's
   or photo-nasa-sunda's one page isn't read in 200 s on a 68000).
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
