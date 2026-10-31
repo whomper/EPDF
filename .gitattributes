@@ -11,3 +11,7 @@
 
 # GitHub language stats: the vendored libraries (BearSSL, TJpgDec) aren't ours
 **/third_party/** linguist-vendored
+*.IMG  binary
+*.PDF  binary
+*.pdf  binary
+*.ICN  binary

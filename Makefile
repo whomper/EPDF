@@ -1,11 +1,17 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
 #
-#   make            build/ (host tools)
-#   make test       host unit tests
+#   make            binary/EPDF.PRG (one program for every ST, TT and Falcon); host tools in build/
+#   make test       host unit tests, and no FPU instruction in the Atari programs
+#   make help       binary/EPDF.HYP and .REF from docs/GUIDE.md (HCP=path to hcp:
+#                   common/tools/build-hcp.sh DIR builds it)
+#   make dist       a release's files in dist/: each file, and EPDF-x.y.zip
+#   make icons      icons/ and src/gem/icon*.h from common/icons/EPDF.txt, EPDFDOC.txt
+#   make gui-test   EPDF.PRG driven in Hatari (tests/hatari/gui.py)
+#   make measure-atari  the stage 0 measuring programs (MEASURE.PRG and the others)
 #   make measure    the measurement run on this computer (corpus: tools/fetch-corpus.py)
-#   make dist       not yet: EPDF has no program to release
 #
+# binary/ is what make builds, never committed: releases carry the program.
 # The version is read from VERSION and never written by the build.
 
 VERSION_STR := $(shell cat VERSION)
@@ -20,10 +26,10 @@ COMMON_SRC = common/src/inflate.c common/src/util.c
 BSSL_SRC = $(addprefix $(BSSL)/src/, hash/md5.c hash/sha2small.c hash/sha2big.c \
            symcipher/aes_big_cbcdec.c symcipher/aes_big_cbcenc.c symcipher/aes_big_dec.c symcipher/aes_big_enc.c symcipher/aes_common.c \
            codec/dec32be.c codec/enc32be.c codec/dec32le.c codec/enc32le.c codec/dec64be.c codec/enc64be.c)
-HDRS     = $(wildcard src/*.h common/src/*.h)
+HDRS     = $(wildcard src/*.h src/gem/*.h src/view/*.h common/src/*.h common/ui/*.h common/atari/*.h common/atari/include/*.h)
 
-.PHONY: all test measure dist help clean atari fttest imgbench
-all: build/pdfmeasure build/glyphjob build/imgdump atari
+.PHONY: all test measure dist help clean atari measure-atari fttest imgbench gui-test
+all: build/pdfmeasure build/glyphjob build/imgdump binary/EPDF.PRG
 build:
 	mkdir -p build
 build/pdfmeasure: tools/pdfmeasure.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HDRS) | build
@@ -47,11 +53,10 @@ build/test_textview: tests/test_textview.c src/view/textview.c src/view/textview
 test: build/test_ccitt build/test_textview
 	python3 tests/ccitt.py
 	build/test_textview
+	@if [ -f build/m68000/epdf.elf ]; then python3 common/tools/oddaccess.py build/m68000/epdf.elf; fi
 	tools/nofpu.sh build/m68000/epdf.elf build/m68030/measure.elf build/m68030/fttest.elf
 measure: build/pdfmeasure
 	@echo "see tools/measure.py"
-dist help:
-	@echo "EPDF has no program to release yet"; exit 1
 clean:
 	rm -rf build/pdfmeasure
 
@@ -86,6 +91,15 @@ build/$(1)/nf.o: common/atari/nf.S | build/$(1)
 build/$(1):
 	mkdir -p $$@
 endef
+# the CPU follows the folder, whichever program asks for an object first
+build/m68000/%: XCPU = -m68000 -mstrict-align -fdisable-tree-bswap
+build/m68030/%: XCPU = -m68030 -msoft-float
+build/m68030lj/%: XCPU = -m68030 -msoft-float
+binary/LAUNCH.PRG: XCPU = -m68000 -mstrict-align -fdisable-tree-bswap
+# the GEM building blocks as the family builds them, for size: at -O2 GCC 13
+# initialises dd.c's char name[] with long moves at an odd stack offset, an
+# address error on a 68000 (common/tools/oddaccess.py; reported to the hub)
+build/m68000/common/ui/%: XOPT = -Os
 $(eval $(call ATARI_BUILD,m68000))
 $(eval $(call ATARI_BUILD,m68030))
 $(eval $(call ATARI_BUILD,m68030lj))
@@ -193,12 +207,12 @@ binary/MEAS30F.PRG: build/m68030/measure.elf | binary
 	PRGFLAGS=7 python3 common/tools/elf2tos.py $< $@
 binary/FTTEST30F.PRG: build/m68030/fttest.elf | binary
 	PRGFLAGS=7 python3 common/tools/elf2tos.py $< $@
-atari: binary/MEASURE.PRG binary/MEAS30.PRG binary/MEAS30F.PRG binary/EPDF.PRG binary/LAUNCH.PRG
+atari: binary/EPDF.PRG binary/LAUNCH.PRG
+measure-atari: binary/MEASURE.PRG binary/MEAS30.PRG binary/MEAS30F.PRG
 fttest: binary/FTTEST.PRG binary/FTTEST30.PRG
 
 # ---------------------------------------------------------------- EPDF.PRG (the GEM program)
 # one build for every machine (68000); the text view of the pages
-VERSION_STR := $(shell cat VERSION)
 build/m68000/version.c: FORCE | build/m68000
 	@printf '/* written by the Makefile: do not edit */\nconst char app_version[] = "%s";\n' "$(VERSION_STR)" > $@.new
 	@if cmp -s $@.new $@; then rm $@.new; else mv $@.new $@; fi
@@ -237,3 +251,31 @@ icons: common/icons/EPDF.txt common/icons/EPDFDOC.txt common/tools/appicon.py
 		--icn icons/EPDF.ICN --mask icons/EPDFMK.ICN --headers src/gem --docs docs
 	python3 common/tools/appicon.py EPDFDOC --rsc icons/EPDFDOC.RSC --rscnv icons/EPDFDNV.RSC --label PDF
 .PHONY: icons
+
+# ---------------------------------------------------------------- the guide and the release
+# EPDF.HYP from docs/GUIDE.md with the family's front page (docs/front.json,
+# common/tools/helpfront.py), and EPDF.REF, its pages' names for ST-Guide's index
+HCP ?= hcp
+help: binary/EPDF.HYP
+binary/EPDF.HYP: docs/GUIDE.md tools/mkhelp.py VERSION docs/front.json docs/help/WINDOW.IMG \
+                 common/help/EPDF.IMG common/tools/helpfront.py common/tools/gemimg.py | binary
+	mkdir -p build/help
+	python3 tools/mkhelp.py docs/GUIDE.md VERSION build/help/EPDF.STG
+	python3 common/tools/helpfront.py page docs/front.json build/help/EPDF.STG build/help/EPDF.STG
+	$(HCP) -q -o $@ build/help/EPDF.STG >/dev/null
+	test -s binary/EPDF.REF
+
+# what a user needs, by name: the program, its guide, the licences and the icons
+DIST  := binary/EPDF.PRG binary/EPDF.HYP binary/EPDF.REF NOTICES.TXT
+ICONS := icons/EPDF.RSC icons/EPDFNV.RSC icons/EPDF.ICN icons/EPDFMK.ICN icons/EPDFDOC.RSC icons/EPDFDNV.RSC
+dist: binary/EPDF.PRG help
+	rm -rf dist
+	mkdir -p dist/zip/icons
+	cp $(DIST) $(ICONS) dist/
+	cp $(DIST) dist/zip/
+	cp $(ICONS) dist/zip/icons/
+	cd dist/zip && zip -q -9 -r ../EPDF-$(VERSION_STR).zip .
+	rm -rf dist/zip
+
+gui-test: binary/EPDF.PRG binary/LAUNCH.PRG
+	python3 tests/hatari/gui.py ST:mono build/gui
