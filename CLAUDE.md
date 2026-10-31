@@ -84,10 +84,27 @@ A PDF viewer: full pages on the Falcon and TT (the stock 4 MB Falcon, `Falcon-4`
 text view (reflowed text, search, copy, pictures) that also runs on a 68000 ST. A program (PRG) only,
 at first. This section is kept up to date: the build, the tests, what a release carries, the decisions.
 
-- **Where it stands:** the measurement run (stage 0) is done and reported (`docs/MEASUREMENT.md`, hub told 27 Oct 2026); waiting for Erez's decision on stage 1 and stage 2 before any application is started. Hub's rules from the report: keep `-msoft-float` on every `-m68030` build and check the PRG with objdump (no `f…` mnemonics) in `make test`; drop `atari/clz.c` when `common/` is synced (the hub put `__clzsi2` in `tos.c`); decode streams with `inflate_open`/`inflate_read` so a page needn't fit in memory; reuse `common/atari/dspjpeg.c` with `PIC_LIBJPEG` for JPEG on the Falcon; a progressive JPEG on a 68000 shows its 1/8 preview with a note, never 24 s without a turn; the Liberation (OFL 1.1) licence is cleared before a release carries it; the first GEM stage gets the speed rig and `acc_all` with EPDF in front.
-  Nothing here is the viewer yet. The plan after it, if Erez agrees: stage 1 the text view on every machine; stage 2 page
-  rendering on the Falcon and TT, with zoom and a cache of drawn pages; stage 3 (only if needed) forms,
-  annotations, CJK fonts, JBIG2, JPEG 2000.
+- **Where it stands (31 Oct 2026):** stage 1, the text view, approved by Erez ("time stage 1 work to
+  then", 29 Oct) and under way; stage 2 (page rendering) is not started and waits for his answer. Done:
+  the window with every page one after another (`src/view/docview.c`), reflow (the extractor's soft
+  break, `PTEXT.soft`), reading in slices on a second stack (`src/gem/coro.S`), the text store with
+  `EPDF.TXC` (`src/view/tstore.c`), Find/^G/Shift+^G, selection, Copy, Select all, the context menu,
+  `EPDF.INF` beside the program, the icon, iconify, Help, drops, the guide, README, NOTICES.TXT. To
+  do: Hebrew (common's bidi), the Font dialog, pictures, the drawing cost on an ST, the interpreter's
+  per-glyph cost (a 4000-glyph page reads in 1.6 s on an ST), columns, streaming content for ST-1;
+  then a candidate to the hub for its TOS runs, then 0.1.
+  Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
+  checks: `tools/nofpu.sh`); decode streams with `inflate_open`/`inflate_read` so a page needn't fit
+  in memory; reuse `common/atari/dspjpeg.c` with `PIC_LIBJPEG` for JPEG on the Falcon; a progressive
+  JPEG on a 68000 shows its 1/8 preview with a note, never 24 s without a turn; the Liberation (OFL
+  1.1) licence is cleared before a release carries it; the first GEM release gets the speed rig and
+  `acc_all` with EPDF in front.
+- **Decisions in the code:** a program only, so `EPDF.INF` is beside it (6.1), not in the boot root.
+  One window: ^U quits, ^W does nothing (3.2). Find next is ^G and Find previous Shift+^G (the Mac's
+  keys, 3.2). The extractor's text is UTF-8; the view's is the Atari character set with the soft
+  break as CR (`cs_to_atari` keeps only CR, LF, Tab). The page's text is read a page at a time on its
+  own stack; the reader's hook (`PDOC.stop`, every 8 tokens and 32 glyphs) hands the machine back when
+  the slice is up; nothing on that stack may call the AES.
 - **Governance:** the hub owns AERA-Atari and `common/`. Never change `common/` here: pull it with
   `tools/sync-common.sh`; a needed change goes to the hub as a patch (`git format-patch`, plain text)
   with its reason and tests. Before every release send the hub the candidate commit and the checks
@@ -113,6 +130,12 @@ at first. This section is kept up to date: the build, the tests, what a release 
   Falcon-4), on Erez's TOS 1.04 and 4.04 where present (`~/.aera/tos`), else EmuTOS. A report names the
   machine and the TOS (`describe()`). The cloud session that made the measurement run had no TOS
   images: its numbers are on EmuTOS 1.4 (CPU-bound work is TOS-independent; file and GEM calls are not).
-- **Build and test:** see the Makefile's header. `make` builds `binary/` (host tools under `build/`),
-  `make test` runs the host tests; the measurement run is `make measure` (host) and
-  `tests/hatari/measure.py` (Hatari).
+- **Build and test:** see the Makefile's header. `make` builds `binary/EPDF.PRG` (host tools under
+  `build/`); `make test` runs the host tests (layout, store, view, INF, search, CCITT) and checks the
+  programs (`tools/nofpu.sh`, `common/tools/oddaccess.py`). Before a push that touches the GEM side:
+  `make gui-test` (`tests/hatari/gui.py`, ST:mono; also Falcon:16). A change to drawing, a loop over
+  the data or the start: `make speed-test` (`tests/hatari/speed.py`, build/aprof with `gem.c`
+  `-DAES_PROFILE=20` and `textwin.c` `-DEPDF_TIMES`), its stretches on ST and Falcon-4 in the commit.
+  `make shots` takes docs/screenshot.png and docs/help/WINDOW.IMG again. `make help HCP=...`, `make
+  dist`. The stage 0 tools: `make measure-atari`, `make measure`, `tests/hatari/measure.py`.
+  `build/pdftext FILE PAGE [marks]` shows a page's reflowed text on the host.
