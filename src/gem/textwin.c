@@ -344,12 +344,8 @@ static void invert(const GRECT *c, short x1, short x2, short y)
 	p[1] = y < c->y ? c->y : y;
 	p[2] = (short)(x2 - 1);
 	p[3] = (short)(y + ch - 1 > c->y + c->h - 1 ? c->y + c->h - 1 : y + ch - 1);
-	fill_set = 0;			/* the fill black now: the next blank sets it again */
-	vswr_mode(vdi_h, MD_XOR);
-	vsf_interior(vdi_h, FIS_SOLID);
-	vsf_color(vdi_h, 1);
-	vr_recfl(vdi_h, p);
-	vswr_mode(vdi_h, MD_REPLACE);
+	fill_set = 0;			/* the VDI's way leaves the fill black: set it again */
+	scr_xor(vdi_h, p);		/* TOS's screen by the CPU, else MD_XOR's vr_recfl */
 }
 
 /*
@@ -413,7 +409,7 @@ static void draw_rows(const GRECT *c, long r0, long r1)
 
 			if (x > tx)
 				blank(c, tx, x, y, ch);
-			text_n(vdi_h, x, y, vis, n);
+			text_plain(vdi_h, x, y, vis, n);	/* MD_REPLACE, pen 1, no effects: set above */
 			blank(c, (short)(x + n * cw), right, y, ch);
 			if (dv_sel_cols(v, page, off, n, &a, &b)) {
 				if (!bi)
@@ -544,11 +540,9 @@ static void moved(long d)
 		return;
 	}
 	{
-		MFDB scr;
 		short pxy[8], clip[4];
 		short ad = (short)((d < 0 ? -d : d) * ch);
 
-		memset(&scr, 0, sizeof scr);
 		pxy[0] = pxy[4] = cx;
 		pxy[2] = pxy[6] = (short)(cx + cwid - 1);
 		pxy[1] = (short)(work.y + (d > 0 ? ad : 0));
@@ -568,7 +562,7 @@ static void moved(long d)
 		wind_update(BEG_UPDATE);
 		graf_mouse(M_OFF, NULL);
 		text_clip(vdi_h, clip);		/* the VDI clips raster copies too */
-		vro_cpyfm(vdi_h, 3, pxy, &scr, &scr);
+		scr_rows(vdi_h, pxy);		/* TOS's screen by the CPU, else vro_cpyfm */
 		text_noclip(vdi_h);
 		T_MARK("copy");
 		{
@@ -787,7 +781,7 @@ void win_xor_span(long p0, long o0, long p1, long o1)
 			clip[1] = c.y;
 			clip[2] = (short)(c.x + c.w - 1);
 			clip[3] = (short)(c.y + c.h - 1);
-			vs_clip(vdi_h, 1, clip);
+			text_clip(vdi_h, clip);		/* scr_xor cuts to it */
 			for (row = 0; row <= rows && dv_row(v, row, &kind, &s, &n, &page, &off); row++) {
 				long a, b, i;
 				const char *vis;
@@ -813,7 +807,7 @@ void win_xor_span(long p0, long o0, long p1, long o1)
 					for (i = a; i < b; i++)
 						invert(&c, (short)(x + vpos[i] * cw), (short)(x + (vpos[i] + 1) * cw), y);
 			}
-			vs_clip(vdi_h, 0, clip);
+			text_noclip(vdi_h);
 		}
 		wind_get(win, WF_NEXTXYWH, &r.x, &r.y, &r.w, &r.h);
 	}

@@ -55,7 +55,7 @@ def run(work, machine):
         r.act("the last page", speed.WINDOW, lambda: r.key("shift+ctrl+Home"))
         r.act("the start", speed.WINDOW, lambda: r.key("Home"))
         r.act("Select all", speed.KEY, lambda: r.key("ctrl+a"))
-        r.act("Copy", speed.KEY, lambda: r.key("ctrl+c"))
+        r.act("Copy", speed.KEY, lambda: r.key("ctrl+c"), job=True)    # its turns: a sliced job (2.2)
         r.act("View > The page's lines", speed.WINDOW, lambda: r.menu(150, 60))
         r.act("About box", speed.DIALOG, lambda: r.menu(36, 28))
         r.act("About box closed", speed.WINDOW, lambda: r.key("Escape"))
