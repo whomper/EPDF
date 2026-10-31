@@ -2097,6 +2097,25 @@ static void emit_line(IX *x, CH *c, long a, long b, PTEXT *t)
 	}
 }
 
+/* the line just written (it ends at text[len]) ends in a number after a
+   row of dots: a contents line, which never goes on in the next */
+static int leader_line(const char *text, long len)
+{
+	long i = len, dots = 0;
+
+	while (i > 0 && text[i - 1] == ' ')
+		i--;
+	if (i == 0 || text[i - 1] < '0' || text[i - 1] > '9')
+		return 0;
+	while (i > 0 && text[i - 1] != '\n' && text[i - 1] != '\v') {
+		dots = text[i - 1] == '.' ? dots + 1 : 0;
+		if (dots >= 4)
+			return 1;
+		i--;
+	}
+	return 0;
+}
+
 /* a line of the page: chunks [a, b), its baseline, size and extent */
 typedef struct {
 	long a, b;
@@ -2105,9 +2124,10 @@ typedef struct {
 
 /*
  * The lines in reading order. Between two lines comes '\n', or with
- * t->soft '\v' where the paragraph goes on: the line before reaches the
- * right edge of the text (within 4 em), the next starts where it did
- * (within 1 em) and is in the same size. A gap of more than 1.875 lines
+ * t->soft '\v' where the paragraph goes on: the next line's first word
+ * would not have fitted at the end of the line before (half an em a
+ * letter), the next starts where it did (within 1 em, or up to 3 em left
+ * of an indented first line) and is in the same size. A gap of more than 1.875 lines
  * is a paragraph's end and gets an empty line. A word cut by a hyphen at a
  * soft break, or at any break without t->soft, is joined to its rest.
  */
@@ -2115,7 +2135,6 @@ static void assemble(IX *x, PTEXT *t)
 {
 	long i, j, nl = 0, k;
 	LN *ln;
-	fx right = 0;
 	int pstart = 1;		/* the line before began a paragraph */
 
 	if (x->nch == 0)
@@ -2141,8 +2160,6 @@ static void assemble(IX *x, PTEXT *t)
 		ln[nl].fs = fsm;
 		ln[nl].x0 = x->ch[i].x;
 		ln[nl].x1 = x->ch[j - 1].x + x->ch[j - 1].dx;
-		if (ln[nl].x1 > right)
-			right = ln[nl].x1;
 		nl++;
 	}
 	for (k = 0; k < nl; k++) {
@@ -2153,14 +2170,29 @@ static void assemble(IX *x, PTEXT *t)
 			/* where the next line may start: where this one did, or up to
 			   3 em left of a paragraph's first line (its indent) */
 			fx left = p->x0 - (pstart ? 3 * fs : fs);
-			int soft = t->soft && !para && p->x1 > right - 4 * fs && c->x0 >= left && c->x0 <= p->x0 + fs &&
-				   fxabs(c->fs - p->fs) <= (fs >> 3);
+			const char *w = x->txt.s + x->ch[c->a].off;
+			int wl = 0, wmax = x->ch[c->a].len, soft;
 			SBUF *o = &t->text;
-			long l = o->len;
+			long l = o->len, j;
+			fx edge = 0;
 
+			/* the right edge of this text block: the widest of the lines
+			   near it that start where it does (not of the whole page) */
+			for (j = k - 7 < 0 ? 0 : k - 7; j < nl && j <= k + 6; j++)
+				if (fxabs(ln[j].x0 - p->x0) <= 3 * fs && ln[j].x1 > edge)
+					edge = ln[j].x1;
+
+			/* the line ended where it did because the next line's first word
+			   wouldn't fit after it (5/8 em a letter and a space: generous, so
+			   ragged lines join and a paragraph's short last line still ends it) */
+			while (wl < wmax && w[wl] != ' ')
+				wl++;
+			soft = t->soft && !para && p->x1 + ((fs >> 1) + (fs >> 3)) * (wl + 1) > edge &&
+			       c->x0 >= left && c->x0 <= p->x0 + fs && fxabs(c->fs - p->fs) <= (fs >> 3) &&
+			       !leader_line(o->s, l);
 			if ((soft || !t->soft) && l >= 2 && o->s[l - 1] == '-' &&
 			    ((o->s[l - 2] >= 'a' && o->s[l - 2] <= 'z') || (unsigned char)o->s[l - 2] >= 0x80) &&
-			    x->txt.s[x->ch[c->a].off] >= 'a' && x->txt.s[x->ch[c->a].off] <= 'z')
+			    w[0] >= 'a' && w[0] <= 'z')
 				o->len--;
 			else
 				sb_addc(o, soft ? '\v' : '\n');

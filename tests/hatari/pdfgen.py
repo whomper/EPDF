@@ -35,9 +35,20 @@ def make_pdf(path, pages, size=11, lead=13.5):
     open(path, "wb").write(out)
 
 
+# Helvetica's widths (1/1000 em) for the letters the book uses
+HELV = dict(zip("abcdefghijklmnopqrstuvwxyz .", [556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833,
+                                                   556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 278, 278]))
+
+
+def text_width(s):
+    return sum(HELV.get(c, 556) for c in s)
+
+
 def book(npages, lines=50, width=88):
-    """pages of paragraphs, lines cut as a typesetter would: a paragraph's
+    """pages of paragraphs, lines cut as a typesetter would, by Helvetica's
+    widths (width: the line's measure in average letters): a paragraph's
     last line short, the next one indented"""
+    measure = width * 500
     pages, n = [], 0
     for p in range(npages):
         page = []
@@ -48,7 +59,7 @@ def book(npages, lines=50, width=88):
             n += 1
             line = "    "
             for w in words:
-                if len(line) + len(w) + 1 > width:
+                if text_width(line + " " + w) > measure:
                     para.append(line)
                     line = ""
                 line += (" " if line.strip() else "") + w

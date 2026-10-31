@@ -108,9 +108,9 @@ build/m68000/%: XCPU = -m68000 -mstrict-align -fdisable-tree-bswap
 build/m68030/%: XCPU = -m68030 -msoft-float
 build/m68030lj/%: XCPU = -m68030 -msoft-float
 binary/LAUNCH.PRG: XCPU = -m68000 -mstrict-align -fdisable-tree-bswap
-# the GEM building blocks as the family builds them, for size: at -O2 GCC 13
-# initialises dd.c's char name[] with long moves at an odd stack offset, an
-# address error on a 68000 (common/tools/oddaccess.py; reported to the hub)
+# the GEM building blocks as the family builds them, for size (at -O2 GCC 13
+# once filled dd.c's char name[] with long moves at an odd stack offset:
+# common c80905c copies it now; oddaccess.py in make test watches for more)
 build/m68000/common/ui/%: XOPT = -Os
 $(eval $(call ATARI_BUILD,m68000))
 $(eval $(call ATARI_BUILD,m68030))
@@ -295,6 +295,11 @@ dist: binary/EPDF.PRG help
 
 gui-test: binary/EPDF.PRG binary/LAUNCH.PRG
 	python3 tests/hatari/gui.py ST:mono build/gui
+
+# docs/screenshot.png and docs/help/WINDOW.IMG again, from Hatari (commit them)
+shots: binary/EPDF.PRG binary/LAUNCH.PRG
+	python3 tests/hatari/shots.py build/shots
+.PHONY: shots
 
 # the speed rig (the guidelines' Speed): EPDF.PRG with common/atari/gem.c built
 # -DAES_PROFILE=20, each stretch of 20 ms or more between event calls on the
