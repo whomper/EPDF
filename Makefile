@@ -239,13 +239,16 @@ GEM_OBJ = $(patsubst %.c,build/m68000/%.o,$(GEM_SRC)) build/m68000/version.o
 $(patsubst %.c,build/m68000/%.o,$(GEM_SRC)): XFLAGS += -Isrc/gem -Isrc/view -Icommon/ui
 build/m68000/version.o: build/m68000/version.c
 	$(XCC) $(XFLAGS) -c -o $@ $<
+build/m68000/coro.o: src/gem/coro.S | build/m68000
+	$(XCC) -m68000 -c -o $@ $<
 build/m68000/crash_s.o: common/atari/crash.S | build/m68000
 	$(XCC) $(XCPU) -c -o $@ $<
 binary/EPDF.PRG: XCPU = -m68000 -mstrict-align -fdisable-tree-bswap
-binary/EPDF.PRG: $(GEM_OBJ) $(addprefix build/m68000/,$(patsubst %.c,%.o,$(RT_C))) $(addprefix build/m68000/,$(patsubst %.c,%.o,$(PDF_SRC) src/pdfio_tos.c $(COMMON_SRC))) $(addprefix build/m68000/,$(patsubst %.c,%.o,$(BSSL_SRC))) build/m68000/crt0.o build/m68000/nf.o build/m68000/crash_s.o common/atari/link.ld | binary
+EPDF_OBJS = $(GEM_OBJ) $(addprefix build/m68000/,$(patsubst %.c,%.o,$(RT_C))) $(addprefix build/m68000/,$(patsubst %.c,%.o,$(PDF_SRC) src/pdfio_tos.c $(COMMON_SRC))) $(addprefix build/m68000/,$(patsubst %.c,%.o,$(BSSL_SRC)))
+binary/EPDF.PRG: $(EPDF_OBJS) build/m68000/crt0.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o common/atari/link.ld | binary
 	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68000/epdf.elf \
-	  build/m68000/crt0.o build/m68000/nf.o build/m68000/crash_s.o $(filter-out %/crt0.o %/nf.o %/crash_s.o %/link.ld,$(filter build/%,$^)) -lgcc
+	  build/m68000/crt0.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o $(filter-out %/crt0.o %/nf.o %/crash_s.o %/coro.o %/link.ld,$(filter build/%,$^)) -lgcc
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/m68000/epdf.elf $@
 
 # starts a program with a command line, for the rigs (atari/launch.c)
@@ -292,3 +295,23 @@ dist: binary/EPDF.PRG help
 
 gui-test: binary/EPDF.PRG binary/LAUNCH.PRG
 	python3 tests/hatari/gui.py ST:mono build/gui
+
+# the speed rig (the guidelines' Speed): EPDF.PRG with common/atari/gem.c built
+# -DAES_PROFILE=20, each stretch of 20 ms or more between event calls on the
+# emulator's console (AESGAP); tests/hatari/speed.py checks them on the stock machines
+build/aprof/gem.o: common/atari/gem.c $(HDRS) | build
+	mkdir -p build/aprof
+	$(XCC) $(XFLAGS) -m68000 -mstrict-align -fdisable-tree-bswap -DAES_PROFILE=20 -c -o $@ $<
+build/aprof/textwin.o: src/gem/textwin.c $(HDRS) | build
+	mkdir -p build/aprof
+	$(XCC) $(XFLAGS) -m68000 -mstrict-align -fdisable-tree-bswap -Isrc/gem -Isrc/view -Icommon/ui -DEPDF_TIMES -c -o $@ $<
+build/aprof/EPDF.PRG: binary/EPDF.PRG build/aprof/gem.o build/aprof/textwin.o
+	$(XCC) -m68000 -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
+	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/aprof/epdf.elf \
+	  build/m68000/crt0.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o \
+	  $(filter-out build/m68000/common/atari/gem.o build/m68000/src/gem/textwin.o,$(filter build/%.o,$(EPDF_OBJS))) \
+	  build/aprof/gem.o build/aprof/textwin.o -lgcc
+	PRGFLAGS=7 python3 common/tools/elf2tos.py build/aprof/epdf.elf $@
+speed-test: build/aprof/EPDF.PRG binary/LAUNCH.PRG
+	python3 tests/hatari/speed.py build/speed
+.PHONY: speed-test

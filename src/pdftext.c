@@ -1277,6 +1277,15 @@ static int wr_lookup(const PFONT *f, uint32_t code)
 
 /* show the bytes s[0..n) in the current font; tj: the adjustments of a TJ array are applied
    by the caller between calls. Returns the advance in text space. */
+/* the caller's hook (PDOC.stop), every few operators and glyphs: it may
+   hand the machine back for a while (EPDF's reading on its own stack), or
+   say stop; then the page is given up as soon as the interpreter sees it */
+static void pause_point(PDOC *d)
+{
+	if (d->stop && !d->stopping && d->stop(d->stop_ctx))
+		d->stopping = 1;
+}
+
 static fx show_run(IX *x, const unsigned char *s, long n, long *glyphs)
 {
 	GS *g = &x->gs;
@@ -1286,6 +1295,8 @@ static fx show_run(IX *x, const unsigned char *s, long n, long *glyphs)
 	uint16_t u[8];
 
 	while (i < n) {
+		if ((++x->d->pause_tick & 31) == 0)
+			pause_point(x->d);
 		uint32_t code;
 		fx w;
 		int m;
@@ -1624,12 +1635,10 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 	while (p < e) {
 		unsigned char c = *p;
 
+		if ((++tick & 7) == 0)
+			pause_point(d);
 		if (d->stopping)
 			return -1;
-		if ((++tick & 255) == 0 && d->stop && d->stop(d->stop_ctx)) {
-			d->stopping = 1;
-			return -1;
-		}
 
 		if (is_white_c(c)) {
 			p++;

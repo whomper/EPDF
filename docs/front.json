@@ -1,0 +1,8 @@
+{
+ "name": "EPDF",
+ "banner": "EPDF",
+ "address": "github.com/whomper/EPDF",
+ "welcome": ["Welcome to **EPDF**, the PDF viewer for the Atari ST, STE, TT and Falcon. Its text view shows the text of every page of a document, one after another, on any machine down to a 1 MB ST: the paragraphs joined and wrapped to the window, or each line as it is on the page."],
+ "window": {"title": "The window", "picture": "docs/help/WINDOW.IMG", "intro": "A document open:", "items": ["The document's name.", "The page at the top, and how far EPDF has read.", "A page's head: every page follows the one before.", "The text: scroll it with the arrows, Space and the slider; ^Left and ^Right turn the pages."], "more": "More in [[Windows and menus]] and [[Keyboard]]."},
+ "contents": [["Getting started", ["Getting started", "Settings"]], ["Every day", ["Windows and menus", "Keyboard"]], ["When things go wrong", ["Troubleshooting", "About"]]]
+}

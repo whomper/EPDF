@@ -20,6 +20,17 @@
 #include "docview.h"
 #include "epdf.h"
 
+/* the speed build (make speed-test) times a scroll's parts */
+#ifdef EPDF_TIMES
+static unsigned long t_mark;
+#define T_START() (t_mark = tos_ms())
+#define T_MARK(what) do { char t_[24]; unsigned long n_ = tos_ms(); \
+	snprintf(t_, sizeof t_, "%lu", n_ - t_mark); log_event("t", what, t_); t_mark = tos_ms(); } while (0)
+#else
+#define T_START() ((void)0)
+#define T_MARK(what) ((void)0)
+#endif
+
 #define WKIND (NAME | CLOSER | FULLER | MOVER | SIZER | INFO | UPARROW | DNARROW | VSLIDE)
 #define MARGIN 8
 
@@ -88,12 +99,20 @@ void win_title(void)
 }
 
 /* the info line: the page at the top, and how the reading goes */
+static long info_page = -1, info_read = -1;	/* what the info line says */
+
 void win_info(void)
 {
 	DOCVIEW *v = doc_view();
+	long p = v ? dv_page_at_top(v) : -1, r = v ? doc_read() : -1;
 
 	if (win < 0)
 		return;
+	/* the AES draws the line again at each wind_set: only when it changed */
+	if (p == info_page && r == info_read && winfo[0])
+		return;
+	info_page = p;
+	info_read = r;
 	if (!v)
 		snprintf(winfo, sizeof winfo, " Open a PDF with File > Open (^O), or drop one here.");
 	else if (doc_read() < doc_pages())
@@ -182,7 +201,9 @@ static void draw_rows(const GRECT *c, long r0, long r1)
 	clip[2] = (short)(c->x + c->w - 1);
 	clip[3] = (short)(c->y + c->h - 1);
 	text_clip(vdi_h, clip);
+	T_START();
 	fill(&area, 0);
+	T_MARK("fill");
 	if (v) {
 		for (r = r0; r < r1; r++) {
 			int kind;
@@ -208,6 +229,7 @@ static void draw_rows(const GRECT *c, long r0, long r1)
 			text_n(vdi_h, (short)(work.x + MARGIN), y, s, n);
 			vst_effects(vdi_h, 0);
 		}
+		T_MARK("text");
 	}
 	text_noclip(vdi_h);
 }
@@ -297,13 +319,27 @@ void win_draw_rows(long r0, long r1)
 static void moved(long d)
 {
 	GRECT r;
-	short keep;
+	short keep, cx, cwid;
 
 	if (d == 0)
 		return;
+	T_START();
 	sliders_due = 1;
 	win_info();
+	T_MARK("info");
 	keep = (short)(rows - (d < 0 ? -d : d));
+	/* the block copied starts on a word (TOS 1.04 copies one that starts
+	   inside a word a bit at a time, the guidelines' Speed): the text
+	   starts 8 pixels in, and the margin needs no copy */
+	{
+		short x0 = (work.x & 15) ? work.x + MARGIN : work.x;
+		short x1 = (short)(work.x + MARGIN + cols * cw);
+
+		cx = (short)(x0 & ~15) < work.x ? x0 : (short)(x0 & ~15);
+		cwid = (short)(((x1 - cx) + 15) & ~15);
+		if (cx + cwid > work.x + work.w)
+			cwid = (short)(work.x + work.w - cx);
+	}
 	wind_get(win, WF_FIRSTXYWH, &r.x, &r.y, &r.w, &r.h);
 	if (keep <= 0 || r.x > work.x || r.y > work.y || r.x + r.w < work.x + work.w || r.y + r.h < work.y + work.h ||
 	    work.x < desk_x || work.y < desk_y || work.x + work.w > desk_x + desk_w || work.y + work.h > desk_y + desk_h) {
@@ -316,8 +352,8 @@ static void moved(long d)
 		short ad = (short)((d < 0 ? -d : d) * ch);
 
 		memset(&scr, 0, sizeof scr);
-		pxy[0] = pxy[4] = work.x;
-		pxy[2] = pxy[6] = (short)(work.x + work.w - 1);
+		pxy[0] = pxy[4] = cx;
+		pxy[2] = pxy[6] = (short)(cx + cwid - 1);
 		pxy[1] = (short)(work.y + (d > 0 ? ad : 0));
 		pxy[3] = (short)(pxy[1] + keep * ch - 1);
 		pxy[5] = (short)(work.y + (d > 0 ? 0 : ad));
@@ -333,6 +369,7 @@ static void moved(long d)
 		text_noclip(vdi_h);
 		graf_mouse(M_ON, NULL);
 		wind_update(END_UPDATE);
+		T_MARK("copy");
 	}
 	if (d > 0)
 		win_draw_rows(keep, rows + 1);
@@ -341,6 +378,7 @@ static void moved(long d)
 	/* the row cut at the foot shows the row after the last whole one */
 	if (d < 0 && keep < rows + 1)
 		win_draw_rows(rows, rows + 1);
+	T_MARK("rows");
 }
 
 void win_scroll(long d)

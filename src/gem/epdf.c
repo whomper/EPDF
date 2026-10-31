@@ -129,8 +129,6 @@ static void open_doc(const char *p)
 		win_draw_all();
 		return;
 	}
-	/* the first page now: it is what the user waits for */
-	doc_step();
 	graf_mouse(ARROW, NULL);
 	bg_opened();
 	win_title();
@@ -343,14 +341,15 @@ static void crash_quit(const char *what)
 	appl_exit();
 }
 
-/* a page read in the background: the window told */
+/* the reading on for a piece of the slice; a page it finished shown */
 static void read_on(void)
 {
-	long n = doc_step();
+	long n = doc_slice(40);
 
-	if (n >= 0)
+	if (n >= 0) {
 		win_page_ready(n);
-	win_info();
+		win_info();
+	}
 }
 
 int main(void)

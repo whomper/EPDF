@@ -29,7 +29,7 @@ long doc_pages(void);
 long doc_read(void);			/* pages whose text is read */
 int doc_pending(void);			/* pages still to read */
 void doc_want(long page);		/* read from this page on next */
-long doc_step(void);			/* one page read: it, or -1 */
+long doc_slice(unsigned long ms);	/* the reading on for ms: the page it finished, or -1 */
 const char *doc_status(void);		/* the About box's line */
 #include "docview.h"
 DOCVIEW *doc_view(void);		/* NULL without a document */

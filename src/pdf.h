@@ -121,11 +121,13 @@ typedef struct pdoc {
 	int32_t *pageidx;		/* object number of each page, built once */
 	void *fc;			/* the fonts kept from page to page (pdftext.c) */
 	int skip_kids;			/* while a page's inherited attributes are read: leave /Kids arrays unparsed */
-	/* asked every few hundred operators while a page's text is read: 1 stops
-	   it (the page then has stopped set; read it again later) */
+	/* asked every 8 tokens and 32 glyphs while a page's text is read: it may
+	   take its time (hand the machine back); 1 stops the page (the page then
+	   has stopped set; read it again later) */
 	int (*stop)(void *ctx);
 	void *stop_ctx;
 	int stopping;
+	unsigned pause_tick;
 	char err[96];
 } PDOC;
 

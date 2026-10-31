@@ -5,11 +5,11 @@
  * the store (src/view/tstore.c: memory, then EPDF.TXC beside the program)
  * and the view of them (src/view/docview.c).
  *
- * The text is read a page at a time between event calls (the guidelines'
- * Speed: longer jobs never run as one stretch), the pages from the one
- * shown onwards first. A page's reading stops as soon as a key or a
- * button waits (d->stop), and is done again later: the user is answered
- * first.
+ * The text is read a page at a time, the pages from the one shown
+ * onwards first, and never as one stretch (the guidelines' Speed): the
+ * reading runs on a stack of its own (coro.h), and the reader's hook
+ * (d->stop, every 256 operators) hands the machine back to the event
+ * loop when the slice is up; the next slice goes on where it was.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,6 +22,7 @@
 #include "tstore.h"
 #include "docview.h"
 #include "epdf.h"
+#include "coro.h"
 
 static PDOC *doc;
 static TSTORE store;
@@ -32,16 +33,56 @@ static long next;			/* where the reading goes on */
 static long done;			/* pages read */
 static long cache_kb;			/* the store's memory */
 
-/* a key or a button waiting: the page being read is given up */
-static int user_waits(void *ctx)
-{
-	short mx, my, mb, ks;
+/* the reading's own stack: a page's text is read there, a slice at a time */
+#define READ_STACK 32768L
+static CORO main_co, read_co;
+static char *read_stack;
+static int read_started;		/* read_co is set up */
+static long rpage = -1;			/* the page being read, -1 none */
+static int rdone;			/* the reader has finished rpage */
+static int abandon;			/* the document closes: stop the page */
+static unsigned long slice_end;		/* tos_ms() when the slice is up */
+static PTEXT rt;			/* the page read */
 
+/* the reader's hook: the machine back to the event loop when the slice
+   is up; 1 (stop the page) when the document is closing */
+static int slice_up(void *ctx)
+{
 	(void)ctx;
-	if (Bconstat(2))
+	if (abandon)
 		return 1;
-	graf_mkstate(&mx, &my, &mb, &ks);
-	return mb != 0;
+	if (tos_ms() >= slice_end) {
+		coro_switch(&read_co, &main_co);
+		if (abandon)
+			return 1;
+	}
+	return 0;
+}
+
+/* the reading's stack: a page at a time, for good */
+static void reader(void)
+{
+	for (;;) {
+		pdf_page_reset(doc);
+		ptext_init(&rt);
+		rt.soft = 1;
+		pdf_page_text(doc, rpage, &rt);
+		rdone = 1;
+		coro_switch(&read_co, &main_co);
+	}
+}
+
+/* the page being read given up (its memory freed as the reader unwinds) */
+static void stop_reading(void)
+{
+	if (rpage < 0)
+		return;
+	abandon = 1;
+	while (!rdone)
+		coro_switch(&main_co, &read_co);
+	abandon = 0;
+	ptext_free(&rt);
+	rpage = -1;
 }
 
 int doc_is_open(void)
@@ -73,6 +114,7 @@ void doc_close(void)
 {
 	if (!doc)
 		return;
+	stop_reading();
 	dv_free(&view);
 	ts_close(&store);
 	pdf_close(doc);
@@ -98,7 +140,18 @@ int doc_open(const char *path, int cols, int lines_mode, const char *cache)
 		npages = 0;
 		return -1;
 	}
-	doc->stop = user_waits;
+	doc->stop = slice_up;
+	if (!read_stack && !(read_stack = malloc(READ_STACK))) {
+		pdf_close(doc);
+		free(doc);
+		doc = NULL;
+		npages = 0;
+		return -1;
+	}
+	if (!read_started) {
+		coro_start(&read_co, read_stack, READ_STACK, reader);
+		read_started = 1;
+	}
 	/* a quarter of the memory free keeps text, at most 256 KB; the rest
 	   goes to the cache file */
 	free_mem = (long)Malloc(-1L);
@@ -140,47 +193,45 @@ void doc_want(long page)
 		next = page;
 }
 
-/* the next page not yet read, from `next` on and round: one page read
-   into the store. The page, or -1 when none was (stopped, or all done) */
-long doc_step(void)
+/* the reading on for ms milliseconds: the page it finished then, or -1
+   (it goes on in the next slice) */
+long doc_slice(unsigned long ms)
 {
-	PTEXT t;
 	long i, n = -1, len = 0;
 	char *a;
 
 	if (!doc_pending())
 		return -1;
-	for (i = 0; i < npages; i++) {
-		long k = (next + i) % npages;
-
-		if (!ts_have(&store, k)) {
-			n = k;
-			break;
+	if (rpage < 0) {
+		/* the next page not yet read, from `next` on and round */
+		for (i = 0; i < npages; i++) {
+			n = (next + i) % npages;
+			if (!ts_have(&store, n))
+				break;
 		}
+		if (i == npages)
+			return -1;
+		rpage = n;
+		rdone = 0;
 	}
-	if (n < 0)
+	slice_end = tos_ms() + ms;
+	coro_switch(&main_co, &read_co);
+	if (!rdone)
 		return -1;
-	pdf_page_reset(doc);
-	ptext_init(&t);
-	t.soft = 1;
-	pdf_page_text(doc, n, &t);
-	if (t.stopped) {
-		ptext_free(&t);
-		log_event("page-stopped", NULL, NULL);
-		return -1;
-	}
+	n = rpage;
+	rpage = -1;
 	/* the soft break as CR in the store: the conversion keeps CR, LF and Tab only */
-	for (i = 0; i < t.text.len; i++)
-		if (t.text.s[i] == '\v')
-			t.text.s[i] = '\r';
-	a = t.text.s && t.text.len > 0 ? cs_to_atari(t.text.s, t.text.len, CS_UTF8, &len) : NULL;
+	for (i = 0; i < rt.text.len; i++)
+		if (rt.text.s[i] == '\v')
+			rt.text.s[i] = '\r';
+	a = rt.text.s && rt.text.len > 0 ? cs_to_atari(rt.text.s, rt.text.len, CS_UTF8, &len) : NULL;
 	if (ts_put(&store, n, a ? a : "", a ? len : 0) != 0) {
 		/* no room for it: shown as empty, not read again */
 		ts_put(&store, n, "", 0);
 		log_event("page-lost", NULL, NULL);
 	}
 	free(a);
-	ptext_free(&t);
+	ptext_free(&rt);
 	done++;
 	next = n + 1 < npages ? n + 1 : 0;
 	dv_page_ready(&view, n);

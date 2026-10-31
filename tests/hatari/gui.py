@@ -21,38 +21,11 @@ import time
 TOP = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(TOP, "common", "tools"))
 import machines  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from pdfgen import make_pdf  # noqa: E402
 
 DOWN, UP, HOME, SPACE, CTRL = 0x50, 0x48, 0x47, 0x39, 0x1D
 RIGHT, LEFT, Q = 0x4D, 0x4B, 0x10
-
-
-def make_pdf(path, pages):
-    """a PDF of Helvetica text, one list of lines a page"""
-    objs = []
-
-    def add(body):
-        objs.append(body)
-        return len(objs)
-
-    add("<< /Type /Catalog /Pages 2 0 R >>")
-    kids = " ".join("%d 0 R" % (4 + 2 * i) for i in range(len(pages)))
-    add("<< /Type /Pages /Kids [%s] /Count %d >>" % (kids, len(pages)))
-    add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
-    for i, lines in enumerate(pages):
-        add("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents %d 0 R >>" % (5 + 2 * i))
-        content = "BT /F1 12 Tf 14 TL 72 720 Td " + " T* ".join("(%s) Tj" % l for l in lines) + " ET"
-        add("<< /Length %d >>\nstream\n%s\nendstream" % (len(content), content))
-    out = b"%PDF-1.4\n"
-    offs = []
-    for n, body in enumerate(objs, 1):
-        offs.append(len(out))
-        out += ("%d 0 obj\n%s\nendobj\n" % (n, body)).encode()
-    xref = len(out)
-    out += ("xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1)).encode()
-    for o in offs:
-        out += ("%010d 00000 n \n" % o).encode()
-    out += ("trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objs) + 1, xref)).encode()
-    open(path, "wb").write(out)
 
 
 def main(argv):
