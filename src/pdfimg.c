@@ -115,6 +115,44 @@ static int colours(PDOC *d, POBJ *cs, unsigned char *pal, int *hival)
 	return 0;
 }
 
+/* one shown row: the source row r, xs[x] the source column of shown pixel
+   x, its colour as 5-6-5 to o (from_samples's and the rows' alike) */
+static void conv_row(const unsigned char *r, const long *xs, int w, int bpc, int nc, const unsigned char *pal, int invert,
+		     unsigned short *o)
+{
+	long x;
+
+	for (x = 0; x < w; x++) {
+		long sx = xs[x];
+		int r8, g8, b8, v;
+
+		if (bpc == 1) {
+			v = (r[sx >> 3] >> (7 - (sx & 7))) & 1;
+			if (nc < 0) {
+				r8 = pal[v * 3], g8 = pal[v * 3 + 1], b8 = pal[v * 3 + 2];
+			} else {
+				v = (v ^ invert) ? 255 : 0;
+				r8 = g8 = b8 = v;
+			}
+		} else if (nc < 0) {
+			v = r[sx];
+			r8 = pal[v * 3], g8 = pal[v * 3 + 1], b8 = pal[v * 3 + 2];
+		} else if (nc == 1) {
+			r8 = g8 = b8 = r[sx];
+		} else if (nc == 3) {
+			r8 = r[sx * 3], g8 = r[sx * 3 + 1], b8 = r[sx * 3 + 2];
+		} else {
+			/* CMYK, as printers' ink: no colour management */
+			int c = r[sx * 4], m = r[sx * 4 + 1], ye = r[sx * 4 + 2], k = r[sx * 4 + 3];
+
+			r8 = 255 - (c + k > 255 ? 255 : c + k);
+			g8 = 255 - (m + k > 255 ? 255 : m + k);
+			b8 = 255 - (ye + k > 255 ? 255 : ye + k);
+		}
+		o[x] = rgb565(r8, g8, b8);
+	}
+}
+
 /* raw samples (no image filter left) to a picture of w x h, each shown
    pixel the source pixel at its place */
 static PIC *from_samples(const unsigned char *s, long n, long sw, long sh, int bpc, int nc, const unsigned char *pal,
@@ -143,44 +181,13 @@ static PIC *from_samples(const unsigned char *s, long n, long sw, long sh, int b
 	for (x = 0; x < w; x++)
 		xs[x] = x * sw / w;
 	for (y = 0; y < h; y++) {
-		const unsigned char *r = s + (y * sh / h) * row_bytes;
-		unsigned short *o = p->px + y * w;
-
 		if ((y & 15) == 15 && !poll_ok()) {
 			free(xs);
 			pic_free(p);
 			*why = PIC_STOPPED;
 			return NULL;
 		}
-		for (x = 0; x < w; x++) {
-			long sx = xs[x];
-			int r8, g8, b8, v;
-
-			if (bpc == 1) {
-				v = (r[sx >> 3] >> (7 - (sx & 7))) & 1;
-				if (nc < 0) {
-					r8 = pal[v * 3], g8 = pal[v * 3 + 1], b8 = pal[v * 3 + 2];
-				} else {
-					v = (v ^ invert) ? 255 : 0;
-					r8 = g8 = b8 = v;
-				}
-			} else if (nc < 0) {
-				v = r[sx];
-				r8 = pal[v * 3], g8 = pal[v * 3 + 1], b8 = pal[v * 3 + 2];
-			} else if (nc == 1) {
-				r8 = g8 = b8 = r[sx];
-			} else if (nc == 3) {
-				r8 = r[sx * 3], g8 = r[sx * 3 + 1], b8 = r[sx * 3 + 2];
-			} else {
-				/* CMYK, as printers' ink: no colour management */
-				int c = r[sx * 4], m = r[sx * 4 + 1], ye = r[sx * 4 + 2], k = r[sx * 4 + 3];
-
-				r8 = 255 - (c + k > 255 ? 255 : c + k);
-				g8 = 255 - (m + k > 255 ? 255 : m + k);
-				b8 = 255 - (ye + k > 255 ? 255 : ye + k);
-			}
-			o[x] = rgb565(r8, g8, b8);
-		}
+		conv_row(s + (y * sh / h) * row_bytes, xs, w, bpc, nc, pal, invert, p->px + y * w);
 	}
 	free(xs);
 	p->how = PIC_PNG;
@@ -311,4 +318,299 @@ PIC *pdf_image(PDOC *d, long obj, int w, int h, long max_bytes, int *why)
 	if (p)
 		*why = PIC_OK;
 	return p;
+}
+
+/* ------------------------------------------------------------------ a row at a time */
+/*
+ * A scan or a picture of samples needn't be whole in memory (phase 0.3: a
+ * 6600 x 5096 fax scan, 4.2 MB a bit a pixel, on a 1 MB ST): its rows at
+ * w x h come to row() one after another, top to bottom, each made as it
+ * goes from the rows decoded so far (a scan through ccitt.c and rscale.c,
+ * samples stored or Flate-packed read a piece at a time, others decoded
+ * whole as before). The same pixels as pdf_image's for the same picture.
+ */
+typedef struct {
+	int w, h;
+	long ny;			/* the next shown row */
+	unsigned short *out;		/* a shown row */
+	PIMG_ROW row;
+	void *u;
+} ROWS;
+
+/* the shown rows that are source row sy's (of sh, shown at h): made from
+   it by conv (src a row of samples) or from grey (a scan's), and handed on;
+   0 when the caller's turn says stop */
+static int emit(ROWS *o, long sy, long sh, void (*make)(void *, unsigned short *), void *mk)
+{
+	while (o->ny < o->h && o->ny * sh / o->h == sy) {
+		make(mk, o->out);
+		o->row(o->u, o->ny, o->out);
+		o->ny++;
+		if ((o->ny & 15) == 0 && !poll_ok())
+			return 0;
+	}
+	return 1;
+}
+
+typedef struct {
+	const unsigned char *r;
+	const long *xs;
+	int w, bpc, nc, invert;
+	const unsigned char *pal;
+} SMK;
+
+static void make_samples(void *u, unsigned short *o)
+{
+	SMK *m = u;
+
+	conv_row(m->r, m->xs, m->w, m->bpc, m->nc, m->pal, m->invert, o);
+}
+
+typedef struct {
+	const unsigned char *g;		/* a grey row */
+	const long *xs;
+	int w;
+} GMK;
+
+static void make_grey(void *u, unsigned short *o)
+{
+	GMK *m = u;
+	long x;
+
+	for (x = 0; x < m->w; x++) {
+		int v = m->g[m->xs[x]];
+
+		o[x] = rgb565(v, v, v);
+	}
+}
+
+static int rows_samples(PDOC *d, POBJ *o, long obj, long sw, long sh, int bpc, int nc, const unsigned char *pal, int invert,
+			ROWS *out, long max_bytes, int *why)
+{
+	int comps = nc < 0 ? 1 : nc;
+	long row_bytes = (sw * comps * bpc + 7) / 8, sy, x, *xs;
+	PCSRC *src;
+	SBUF whole;
+	unsigned char *rb = NULL;
+	SMK m;
+	int ok = 1;
+
+	if ((bpc != 1 && bpc != 8) || (nc == 4 && bpc != 8) || sw <= 0 || sh <= 0) {
+		*why = PIC_UNSUPPORTED;
+		return 0;
+	}
+	sb_init(&whole);
+	src = pdf_stream_open(d, o, obj);
+	if (!src) {
+		const char *term = NULL;
+
+		if (pdf_stream(d, o, obj, &whole, &term, max_bytes) != 0) {
+			*why = whole.len >= max_bytes ? PIC_TOO_BIG : PIC_DAMAGED;
+			sb_free(&whole);
+			return 0;
+		}
+		if (row_bytes * sh > whole.len) {
+			*why = PIC_DAMAGED;
+			sb_free(&whole);
+			return 0;
+		}
+	}
+	xs = malloc((size_t)out->w * sizeof *xs);
+	if (src)
+		rb = malloc((size_t)row_bytes);
+	if (!xs || (src && !rb)) {
+		*why = PIC_MEMORY;
+		ok = 0;
+		goto done;
+	}
+	for (x = 0; x < out->w; x++)
+		xs[x] = x * sw / out->w;
+	m.xs = xs;
+	m.w = out->w;
+	m.bpc = bpc;
+	m.nc = nc;
+	m.invert = invert;
+	m.pal = pal;
+	for (sy = 0; sy < sh && out->ny < out->h; sy++) {
+		if (src) {
+			long got = 0, k;
+
+			while (got < row_bytes && (k = pdf_stream_read(src, rb + got, row_bytes - got)) > 0)
+				got += k;
+			if (got < row_bytes) {
+				*why = PIC_DAMAGED;	/* the data stops short: as pdf_image says */
+				ok = 0;
+				break;
+			}
+			m.r = rb;
+		} else
+			m.r = (const unsigned char *)whole.s + sy * row_bytes;
+		if (!emit(out, sy, sh, make_samples, &m) || ((sy & 63) == 63 && !poll_ok())) {
+			*why = PIC_STOPPED;
+			ok = 0;
+			break;
+		}
+	}
+done:
+	free(xs);
+	free(rb);
+	if (src)
+		pdf_stream_close(src);
+	sb_free(&whole);
+	return ok;
+}
+
+static int rows_ccitt(PDOC *d, POBJ *o, const unsigned char *s, long n, long sw, long sh, ROWS *out, int *why)
+{
+	POBJ *dp = pd_get(d, o, "DecodeParms");
+	long k = 0, cols = sw, gw, gh, gi = 0, y, x, *xs = NULL;
+	int black1 = 0, f = 1, align = 0, ok = 1;
+	CCITT c;
+	RSCALE rs;
+	unsigned char *row, *grey;
+	GMK m;
+
+	if (dp && dp->t == PO_ARR && dp->a)
+		dp = pdf_res(d, pa_at(dp, dp->a - 1));
+	if (dp && dp->t == PO_DICT) {
+		POBJ *b;
+
+		k = pd_int(d, dp, "K", 0);
+		cols = pd_int(d, dp, "Columns", sw);
+		b = pd_get(d, dp, "BlackIs1");
+		black1 = b && b->t == PO_BOOL && b->a;
+		b = pd_get(d, dp, "EncodedByteAlign");
+		align = b && b->t == PO_BOOL && b->a;
+	}
+	if (k > 0) {
+		*why = PIC_UNSUPPORTED;		/* group 3, two-dimensional */
+		return 0;
+	}
+	while (f < 8 && cols / (f * 2) >= out->w)
+		f *= 2;
+	if (ccitt_open(&c, s, n, (int)cols, (int)k, align)) {
+		*why = PIC_MEMORY;
+		return 0;
+	}
+	gw = f > 1 ? cols / f : cols;
+	gh = f > 1 ? sh / f : sh;		/* the grey rows there will be: pdf_image's gh */
+	row = malloc((size_t)(cols + 7) / 8);
+	grey = malloc((size_t)gw);
+	xs = malloc((size_t)out->w * sizeof *xs);
+	if (!row || !grey || !xs || (f > 1 && rs_init(&rs, (int)cols, f))) {
+		free(row);
+		free(grey);
+		free(xs);
+		ccitt_close(&c);
+		*why = PIC_MEMORY;
+		return 0;
+	}
+	for (x = 0; x < out->w; x++)
+		xs[x] = x * gw / out->w;
+	m.g = grey;
+	m.xs = xs;
+	m.w = out->w;
+	for (y = 0; y < sh && out->ny < out->h && ccitt_row(&c, row); y++) {
+		long i;
+		int full = 1;
+
+		if (!black1)
+			for (i = 0; i < (cols + 7) / 8; i++)
+				row[i] = (unsigned char)~row[i];
+		/* the rows come as 1 for black: to rscale's ink */
+		if (f > 1)
+			full = rs_row(&rs, row, grey);
+		else
+			for (i = 0; i < cols; i++)
+				grey[i] = (row[i >> 3] >> (7 - (i & 7))) & 1 ? 0 : 255;
+		if (full) {
+			if (!emit(out, gi, gh, make_grey, &m)) {
+				*why = PIC_STOPPED;
+				ok = 0;
+				break;
+			}
+			gi++;
+		}
+		if ((y & 63) == 63 && !poll_ok()) {
+			*why = PIC_STOPPED;
+			ok = 0;
+			break;
+		}
+	}
+	if (ok && gi == 0) {
+		*why = PIC_DAMAGED;
+		ok = 0;
+	}
+	/* a scan cut short: its last grey row stands for the rest */
+	while (ok && out->ny < out->h) {
+		make_grey(&m, out->out);
+		out->row(out->u, out->ny++, out->out);
+	}
+	if (f > 1)
+		rs_close(&rs);
+	ccitt_close(&c);
+	free(row);
+	free(grey);
+	free(xs);
+	return ok;
+}
+
+int pdf_image_rows(PDOC *d, long obj, int w, int h, PIMG_ROW row, void *u, long max_bytes, int *why)
+{
+	POBJ *o = pdf_get(d, obj), *cs, *fl;
+	long sw, sh;
+	int bpc, nc, hival = 0, invert = 0, r;
+	unsigned char pal[256 * 3];
+	const char *fn = NULL;
+	ROWS out;
+
+	*why = PIC_DAMAGED;
+	if (!o || o->t != PO_DICT || w <= 0 || h <= 0)
+		return 0;
+	fl = pd_get(d, o, "Filter");
+	if (fl && fl->t == PO_ARR && fl->a)
+		fl = pdf_res(d, pa_at(fl, fl->a - 1));
+	if (fl && fl->t == PO_NAME)
+		fn = fl->u.p;
+	if (fn && (!strcmp(fn, "DCTDecode") || !strcmp(fn, "DCT") || !strcmp(fn, "JPXDecode") || !strcmp(fn, "JBIG2Decode")))
+		return -1;			/* a JPEG (or not shown): pdf_image's */
+	sw = pd_int(d, o, "Width", 0);
+	sh = pd_int(d, o, "Height", 0);
+	bpc = (int)pd_int(d, o, "BitsPerComponent", 8);
+	if (pdf_is_name(pd_get(d, o, "ImageMask"), "true") || ((cs = pd_get(d, o, "ImageMask")) && cs->t == PO_BOOL && cs->a))
+		bpc = 1, cs = NULL, nc = 1, invert = 1;	/* a stencil: painted where 0 */
+	else
+		nc = colours(d, pd_get(d, o, "ColorSpace"), pal, &hival);
+	if (sw <= 0 || sh <= 0)
+		return 0;
+	if (nc == 0) {
+		*why = PIC_UNSUPPORTED;
+		return 0;
+	}
+	memset(&out, 0, sizeof out);
+	out.w = w;
+	out.h = h;
+	out.row = row;
+	out.u = u;
+	out.out = malloc((size_t)w * 2);
+	if (!out.out) {
+		*why = PIC_MEMORY;
+		return 0;
+	}
+	if (fn && (!strcmp(fn, "CCITTFaxDecode") || !strcmp(fn, "CCF"))) {
+		SBUF b;
+		const char *term = NULL;
+
+		sb_init(&b);
+		if (pdf_stream(d, o, obj, &b, &term, max_bytes) != 0)
+			r = 0;
+		else
+			r = rows_ccitt(d, o, (const unsigned char *)b.s, b.len, sw, sh, &out, why);
+		sb_free(&b);
+	} else
+		r = rows_samples(d, o, obj, sw, sh, bpc, nc, pal, invert, &out, max_bytes, why);
+	free(out.out);
+	if (r)
+		*why = PIC_OK;
+	return r;
 }
