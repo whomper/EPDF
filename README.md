@@ -5,7 +5,7 @@
 A PDF viewer for the Atari ST, STE, TT and Falcon, written in C for GEM: the text of a document on
 every machine, and, from a later stage, its pages as they were made on the TT and the Falcon.
 
-*Work in progress: stage 1, the text view, is being built. There is no release yet.*
+*Stage 1, the text view, is out as 0.1; page rendering on the TT and Falcon is a later stage.*
 
 **Highlights**
 
@@ -20,8 +20,8 @@ every machine, and, from a later stage, its pages as they were made on the TT an
 
 ## Getting started
 
-There is no release yet. The first, 0.1, will be made by the Release workflow from `main`; its zip
-will hold:
+Take the latest release from the [Releases page](https://github.com/whomper/EPDF/releases). Its zip
+holds:
 
 | File | What it is |
 |---|---|

@@ -92,8 +92,9 @@ at first. This section is kept up to date: the build, the tests, what a release 
   menu, Hebrew (common's bidi), View > Font... (fontsel), pictures (`src/pdfimg.c`, `src/gem/pics.c`,
   decoded on a stack of their own), two columns read one after the other, `EPDF.INF` beside the
   program, the icon, iconify, Help, drops, the guide, README, NOTICES.TXT. The hub ran 7eff410 on
-  Erez's TOS (acc_all clear; gui.py's Shift+^F, then fixed in the rig and in Copy's speed) and cleared
-  0.1. To do: the drawing cost on an ST (a line 145 ms, a page 300 ms on TOS 1.04: as EHypView),
+  Erez's TOS (acc_all clear; gui.py's Shift+^F, then fixed in the rig and in Copy's speed), cleared
+  35b5f97, and 0.1 went out (v0.1 on deb68d9, 31 Oct). Next: the hub's order, the scroll drawing on the ST,
+  then Select all's inversion. To do: the drawing cost on an ST (a line 145 ms, a page 300 ms on TOS 1.04: as EHypView),
   the interpreter's per-glyph cost, JPEG decoding on a 68000 (minutes for a big one), streaming
   content for ST-1, pictures' memory on ST-1.
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
