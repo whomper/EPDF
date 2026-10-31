@@ -18,15 +18,16 @@ long pdf_stream_len(PDOC *d, POBJ *o)
 	return pd_int(d, o, "Length", -1);
 }
 
-/* the stored bytes of a stream: its /Length, checked against "endstream" */
-static unsigned char *stream_raw(PDOC *d, POBJ *o, long *lenp)
+/* where a stream's stored bytes are: its /Length, checked against
+   "endstream" (found by looking where it is wrong or missing); 0, or -1 */
+static int stream_span(PDOC *d, POBJ *o, long *offp, long *lenp)
 {
 	long off = pd_int(d, o, "$soff", -1), len = pdf_stream_len(d, o), k;
-	unsigned char tail[16], *buf;
+	unsigned char tail[16];
 	int ok = 0;
 
 	if (off < 0)
-		return NULL;
+		return -1;
 	if (len >= 0 && off + len <= d->size) {
 		long n = pdf_rd(d, off + len, tail, sizeof tail);
 
@@ -40,7 +41,7 @@ static unsigned char *stream_raw(PDOC *d, POBJ *o, long *lenp)
 		long pos = off, found = -1;
 
 		if (!blk)
-			return NULL;
+			return -1;
 		while (pos < d->size && found < 0) {
 			long got = pdf_rd(d, pos, blk, 8192 + 16), j;
 
@@ -69,6 +70,19 @@ static unsigned char *stream_raw(PDOC *d, POBJ *o, long *lenp)
 		}
 	}
 	if (len < 0 || len > (256L << 20))
+		return -1;
+	*offp = off;
+	*lenp = len;
+	return 0;
+}
+
+/* the stored bytes of a stream, read whole */
+static unsigned char *stream_raw(PDOC *d, POBJ *o, long *lenp)
+{
+	long off, len;
+	unsigned char *buf;
+
+	if (stream_span(d, o, &off, &len))
 		return NULL;
 	buf = pdf_malloc(d, len + 1);
 	if (!buf)
@@ -545,4 +559,118 @@ static int pdf_stream_in(PDOC *d, POBJ *o, long onum, SBUF *out, const char **te
 	}
 	d->st.out += out->len;
 	return 0;
+}
+
+/* ------------------------------------------------------------------ a stream a piece at a time */
+/*
+ * A content stream needn't fit in memory (phase 0.3: a map's page is MBs
+ * unpacked): a stream stored as it is, or packed by Flate alone (no
+ * predictor), not encrypted, is read through the file's window and
+ * unpacked by common's inflate_open/inflate_read (40 KB). Anything else
+ * gives NULL, and the caller decodes it whole (pdf_stream) as before.
+ */
+#define PCSRC_INFLATE 41000L		/* inflate.c's state, about: counted in st.mem while open */
+
+struct PCSRC {
+	PDOC *d;
+	long off, left;			/* the stored bytes still to read, in the file */
+	INFLATE *z;			/* NULL: stored as it is */
+};
+
+static int pcsrc_get(void *u, unsigned char *buf, long n)
+{
+	PCSRC *s = u;
+	long k;
+
+	if (n > s->left)
+		n = s->left;
+	if (n <= 0)
+		return 0;
+	k = pdf_rd(s->d, s->off, buf, n);
+	if (k <= 0)
+		return 0;
+	s->off += k;
+	s->left -= k;
+	s->d->st.raw_in += k;
+	return (int)k;
+}
+
+PCSRC *pdf_stream_open(PDOC *d, POBJ *o, long onum)
+{
+	POBJ *filter, *parms;
+	PCSRC *s;
+	long off, len;
+	int flate = 0;
+
+	(void)onum;
+	if (!o || o->t != PO_DICT || !o->flag || d->crypt)
+		return NULL;
+	filter = pd_get(d, o, "Filter");
+	if (!filter)
+		filter = pd_get(d, o, "F");
+	parms = pd_get(d, o, "DecodeParms");
+	if (!parms)
+		parms = pd_get(d, o, "DP");
+	if (filter && filter->t == PO_ARR && filter->a == 1)
+		filter = pdf_res(d, pa_at(filter, 0));
+	if (filter) {
+		if (filter->t != PO_NAME || (strcmp(filter->u.p, "FlateDecode") && strcmp(filter->u.p, "Fl")))
+			return NULL;
+		if (parms && parms->t == PO_ARR && parms->a == 1)
+			parms = pdf_res(d, pa_at(parms, 0));
+		if (parms && parms->t == PO_DICT && pd_int(d, parms, "Predictor", 1) > 1)
+			return NULL;
+		flate = 1;
+	}
+	if (stream_span(d, o, &off, &len))
+		return NULL;
+	if (flate) {
+		/* zlib's two bytes before the DEFLATE data (no preset dictionary) */
+		unsigned char h[2];
+
+		if (len < 2 || pdf_rd(d, off, h, 2) != 2 || (h[0] & 0x0F) != 8 || ((h[0] << 8) | h[1]) % 31 || (h[1] & 0x20))
+			return NULL;
+		off += 2;
+		len -= 2;
+	}
+	s = pdf_malloc(d, (long)sizeof *s);
+	if (!s)
+		return NULL;
+	s->d = d;
+	s->off = off;
+	s->left = len;
+	s->z = NULL;
+	if (flate) {
+		s->z = inflate_open(pcsrc_get, s);
+		if (!s->z) {
+			d->st.oom++;
+			pdf_free(d, s, (long)sizeof *s);
+			return NULL;
+		}
+		d->st.mem += PCSRC_INFLATE;
+		if (d->st.mem > d->st.mem_peak)
+			d->st.mem_peak = d->st.mem;
+	}
+	d->st.streams++;
+	return s;
+}
+
+long pdf_stream_read(PCSRC *s, unsigned char *out, long n)
+{
+	long k = s->z ? inflate_read(s->z, out, n) : pcsrc_get(s, out, n);
+
+	if (k > 0)
+		s->d->st.out += k;
+	return k;
+}
+
+void pdf_stream_close(PCSRC *s)
+{
+	if (!s)
+		return;
+	if (s->z) {
+		inflate_close(s->z);
+		s->d->st.mem -= PCSRC_INFLATE;
+	}
+	pdf_free(s->d, s, (long)sizeof *s);
 }

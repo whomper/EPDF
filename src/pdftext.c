@@ -1200,6 +1200,13 @@ typedef struct {
 	long nops, opcap;
 	unsigned char *sb;
 	long sbcap, sblen;
+	/* the page's content a piece at a time (run_content_pieces): the
+	   window the interpreter reads, topped up between tokens; NULL while
+	   a whole buffer is run (a form's) */
+	struct CPIECES *src;
+	unsigned char *win;
+	long wcap;
+	int src_end;
 	int depth;
 	POBJ *res;
 	long forms_run;
@@ -1631,6 +1638,9 @@ static void set_font(IX *x, const char *name, fx size)
 
 #define OPK(a, b) (((a) << 8) | (b))
 
+/* a string's byte into the scratch, while it has room (lim) */
+#define PUT(v) do { if (len < lim) o[len++] = (unsigned char)(v); } while (0)
+
 static int run_content(IX *x, const unsigned char *s, long n)
 {
 	const unsigned char *p = s, *e = s + n;
@@ -1651,11 +1661,164 @@ static int run_content(IX *x, const unsigned char *s, long n)
 		return -1;
 	}
 	x->nops = 0;
-	rc = run_content_in(x, s, n, p, e, nm);
+	{
+		/* a form run from a page read a piece at a time: its own buffer, the page's window kept */
+		struct CPIECES *save_src = x->src;
+		int save_end = x->src_end;
+
+		x->src = NULL;
+		rc = run_content_in(x, s, n, p, e, nm);
+		x->src = save_src;
+		x->src_end = save_end;
+	}
 	pdf_free(d, x->sb, x->sbcap);
 	x->sb = save_sb;
 	x->sbcap = save_cap;
 	x->sblen = save_len;
+	x->nops = 0;
+	return rc;
+}
+
+/*
+ * A page's content a piece at a time (phase 0.3: a map's is MBs unpacked,
+ * more than a 1 MB ST has): its streams one after another, each through
+ * pdf_stream_open where it can be (stored, or Flate), else decoded whole
+ * as before; a line end between two. The interpreter reads a window of
+ * CWIN bytes, topped up between tokens when less than CMARGIN is left (so
+ * a token up to CMARGIN long never straddles); its operands are copied out
+ * of it as they are read, so the window may move under them.
+ */
+#define CWIN 16384L
+#define CMARGIN 4096L
+
+typedef struct CPIECES {
+	PDOC *d;
+	POBJ *cont, *ref;		/* Contents: a stream (ref: its reference) or an array of them */
+	long k, n;			/* the next piece, how many */
+	PCSRC *s;			/* the piece read a piece at a time */
+	SBUF whole;			/* or decoded whole */
+	long wpos;
+	int nl;				/* a line end owed after a piece */
+} CPIECES;
+
+static long pieces_read(CPIECES *c, unsigned char *out, long n)
+{
+	PDOC *d = c->d;
+	long got = 0;
+
+	while (got < n) {
+		if (c->s) {
+			long k = pdf_stream_read(c->s, out + got, n - got);
+
+			if (k > 0) {
+				got += k;
+				continue;
+			}
+			pdf_stream_close(c->s);
+			c->s = NULL;
+			c->nl = 1;
+			continue;
+		}
+		if (c->whole.s) {
+			long k = c->whole.len - c->wpos;
+
+			if (k > n - got)
+				k = n - got;
+			memcpy(out + got, c->whole.s + c->wpos, (size_t)k);
+			got += k;
+			c->wpos += k;
+			if (c->wpos >= c->whole.len) {
+				sb_free(&c->whole);
+				memset(&c->whole, 0, sizeof c->whole);
+				c->nl = 1;
+			}
+			continue;
+		}
+		if (c->nl) {
+			out[got++] = '\n';
+			c->nl = 0;
+			continue;
+		}
+		if (c->k >= c->n)
+			break;
+		{
+			POBJ *r = c->cont->t == PO_ARR ? &c->cont->u.v[c->k] : c->ref, *so = c->cont->t == PO_ARR ? pdf_res(d, r) : c->cont;
+			long onum = r && r->t == PO_REF ? r->a : -1;
+			const char *term = NULL;
+
+			c->k++;
+			if (!so || so->t != PO_DICT)
+				continue;
+			c->s = pdf_stream_open(d, so, onum);
+			if (c->s)
+				continue;
+			c->wpos = 0;
+			if (pdf_stream(d, so, onum, &c->whole, &term, 32L << 20) != 0 || !c->whole.len) {
+				sb_free(&c->whole);
+				memset(&c->whole, 0, sizeof c->whole);
+			}
+		}
+	}
+	return got;
+}
+
+/* the window topped up: what is left of it from *pp moved to its start */
+static void refill(IX *x, const unsigned char **pp, const unsigned char **pe)
+{
+	long keep = *pe - *pp, got;
+
+	if (keep > 0 && *pp != x->win)
+		memmove(x->win, *pp, (size_t)keep);
+	got = pieces_read(x->src, x->win + keep, x->wcap - keep);
+	if (got <= 0) {
+		x->src_end = 1;
+		got = 0;
+	}
+	*pp = x->win;
+	*pe = x->win + keep + got;
+}
+
+static int run_content_pieces(IX *x, POBJ *cont, POBJ *ref)
+{
+	PDOC *d = x->d;
+	CPIECES c;
+	char nm[64];
+	int rc = -1;
+	long w;
+
+	memset(&c, 0, sizeof c);
+	c.d = d;
+	c.cont = cont;
+	c.ref = ref;
+	c.n = cont->t == PO_ARR ? cont->a : 1;
+	/* the window and the scratch: 16 KB each, or 4 KB where memory is short */
+	for (w = CWIN; w >= CWIN / 4; w /= 4) {
+		x->win = pdf_malloc(d, w);
+		x->sb = pdf_malloc(d, w + 64);
+		if (x->win && x->sb)
+			break;
+		pdf_free(d, x->win, w);
+		pdf_free(d, x->sb, w + 64);
+		x->win = x->sb = NULL;
+	}
+	x->wcap = w;
+	x->sbcap = w + 64;
+	x->sblen = 0;
+	x->nops = 0;
+	if (x->win && x->sb) {
+		x->src = &c;
+		x->src_end = 0;
+		rc = run_content_in(x, x->win, 0, x->win, x->win, nm);
+		x->src = NULL;
+	} else
+		x->t->failed = 1;	/* no memory to read it in: the page isn't read, not read empty */
+	if (c.s)
+		pdf_stream_close(c.s);
+	sb_free(&c.whole);
+	pdf_free(d, x->win, w);
+	pdf_free(d, x->sb, w + 64);
+	x->win = x->sb = NULL;
+	x->sbcap = x->sblen = 0;
 	x->nops = 0;
 	return rc;
 }
@@ -1668,8 +1831,14 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 
 	(void)s0;
 	(void)n0;
-	while (p < e) {
-		unsigned char c = *p;
+	for (;;) {
+		unsigned char c;
+
+		if (x->src && !x->src_end && e - p < CMARGIN)
+			refill(x, &p, &e);
+		if (p >= e)
+			break;
+		c = *p;
 
 		if ((++tick & 7) == 0)
 			pause_point(d);
@@ -1712,7 +1881,7 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 			p++;
 			o = x->sb + x->sblen;
 			{
-				long len = 0;
+				long len = 0, lim = x->sbcap - x->sblen - 2;	/* what the buffer has left: a longer string is cut */
 
 				while (p < e) {
 					unsigned char ch = *p++;
@@ -1720,11 +1889,11 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 					if (ch == '\\' && p < e) {
 						ch = *p++;
 						switch (ch) {
-						case 'n': o[len++] = '\n'; break;
-						case 'r': o[len++] = '\r'; break;
-						case 't': o[len++] = '\t'; break;
-						case 'b': o[len++] = '\b'; break;
-						case 'f': o[len++] = '\f'; break;
+						case 'n': PUT('\n'); break;
+						case 'r': PUT('\r'); break;
+						case 't': PUT('\t'); break;
+						case 'b': PUT('\b'); break;
+						case 'f': PUT('\f'); break;
 						case '\r': if (p < e && *p == '\n') p++; break;
 						case '\n': break;
 						default:
@@ -1733,19 +1902,19 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 
 								for (k = 0; k < 2 && p < e && *p >= '0' && *p <= '7'; k++)
 									v = v * 8 + (*p++ - '0');
-								o[len++] = (unsigned char)v;
+								PUT((unsigned char)v);
 							} else
-								o[len++] = ch;
+								PUT(ch);
 						}
 					} else if (ch == '(') {
 						depth++;
-						o[len++] = ch;
+						PUT(ch);
 					} else if (ch == ')') {
 						if (--depth == 0)
 							break;
-						o[len++] = ch;
+						PUT(ch);
 					} else
-						o[len++] = ch;
+						PUT(ch);
 				}
 				if (x->nops < x->opcap || op_grow(x)) {
 					x->ops[x->nops].k = K_STR;
@@ -1775,7 +1944,7 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 			p++;
 			{
 				unsigned char *o;
-				long len = 0;
+				long len = 0, lim = x->sbcap - x->sblen - 2;
 				int hi = -1;
 
 				o = x->sb + x->sblen;
@@ -1788,12 +1957,12 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 					if (hi < 0)
 						hi = v;
 					else {
-						o[len++] = (unsigned char)(hi << 4 | v);
+						PUT((unsigned char)(hi << 4 | v));
 						hi = -1;
 					}
 				}
 				if (hi >= 0)
-					o[len++] = (unsigned char)(hi << 4);
+					PUT((unsigned char)(hi << 4));
 				if (p < e)
 					p++;
 				if (x->nops < x->opcap || op_grow(x)) {
@@ -1833,7 +2002,7 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 			}
 			p = q;
 			nm[len] = 0;
-			if (x->nops < x->opcap || op_grow(x)) {
+			if (x->sblen + len + 1 <= x->sbcap && (x->nops < x->opcap || op_grow(x))) {
 				/* keep the name in the scratch (only Tf and Do read it) */
 				unsigned char *o;
 
@@ -1973,22 +2142,34 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 			} else if (len == 2 && p[-2] == 's' && p[-1] == 'h')
 				d->st.ops_paint++;
 			if (len == 2 && p[-2] == 'B' && p[-1] == 'I') {
-				/* inline image: skip to EI */
+				/* inline image: skip to EI (read a piece at a time, the
+				   window topped up as the search runs out of it, the last
+				   few bytes kept so a mark across the edge is still seen) */
 				const unsigned char *q2 = p;
-				int found = 0;
+				int found = 0, stage = 0;
 
-				while (q2 + 2 < e) {
-					if (is_white_c(q2[0]) && q2[1] == 'I' && q2[2] == 'D' && (q2 + 3 >= e || is_white_c(q2[3])))
-						break;
-					q2++;
-				}
-				q2 += 4;
-				while (q2 + 2 < e) {
-					if (is_white_c(q2[0]) && q2[1] == 'E' && q2[2] == 'I' && (q2 + 3 >= e || is_white_c(q2[3]))) {
-						found = 1;
-						break;
+				for (;;) {
+					while (q2 + 2 < e) {
+						if (!stage && is_white_c(q2[0]) && q2[1] == 'I' && q2[2] == 'D' &&
+						    (q2 + 3 >= e || is_white_c(q2[3]))) {
+							stage = 1;
+							q2 += 4;
+							continue;
+						}
+						if (stage && is_white_c(q2[0]) && q2[1] == 'E' && q2[2] == 'I' &&
+						    (q2 + 3 >= e || is_white_c(q2[3]))) {
+							found = 1;
+							break;
+						}
+						q2++;
 					}
-					q2++;
+					if (found || !x->src || x->src_end)
+						break;
+					p = q2;
+					refill(x, &p, &e);
+					q2 = p;
+					if (e - p < 4)
+						break;
 				}
 				d->st.images++;
 				d->st.img_other++;
@@ -2410,7 +2591,6 @@ int pdf_page_text(PDOC *d, long n, PTEXT *t)
 	IX x;
 	POBJ *pg, *res, *box, *cont;
 	long rot;
-	int k;
 
 	memset(&x, 0, sizeof x);
 	x.d = d;
@@ -2444,35 +2624,10 @@ int pdf_page_text(PDOC *d, long n, PTEXT *t)
 	memcpy(x.tm, IDENT, sizeof x.tm);
 	memcpy(x.tlm, IDENT, sizeof x.tlm);
 	cont = pd_get(d, pg, "Contents");
-	if (cont && cont->t == PO_DICT) {
-		POBJ *r = pd_getraw(pg, "Contents");
-		SBUF b;
-		const char *term = NULL;
-
-		if (pdf_stream(d, cont, r && r->t == PO_REF ? r->a : -1, &b, &term, 32L << 20) == 0)
-			run_content(&x, (const unsigned char *)b.s, b.len);
-		sb_free(&b);
-	} else if (cont && cont->t == PO_ARR) {
-		/* the pieces are one stream, but an operator doesn't straddle two */
-		SBUF all;
-
-		sb_init(&all);
-		for (k = 0; k < cont->a; k++) {
-			POBJ *r = &cont->u.v[k], *so = pdf_res(d, r);
-			SBUF b;
-			const char *term = NULL;
-
-			if (!so || so->t != PO_DICT)
-				continue;
-			if (pdf_stream(d, so, r->t == PO_REF ? r->a : -1, &b, &term, 32L << 20) == 0) {
-				sb_add(&all, b.s, b.len);
-				sb_addc(&all, '\n');
-			}
-			sb_free(&b);
-		}
-		run_content(&x, (const unsigned char *)all.s, all.len);
-		sb_free(&all);
-	}
+	if (cont && (cont->t == PO_DICT || cont->t == PO_ARR))
+		/* a stream, or the pieces of one (an operator doesn't straddle two),
+		   read a piece at a time */
+		run_content_pieces(&x, cont, pd_getraw(pg, "Contents"));
 	if (d->stopping) {
 		t->stopped = 1;
 		d->stopping = 0;

@@ -155,6 +155,13 @@ int pdf_is_name(const POBJ *o, const char *name);
 int pdf_stream(PDOC *d, POBJ *o, long onum, SBUF *out, const char **terminal, long max);
 /* the stream's stored length, without reading it */
 long pdf_stream_len(PDOC *d, POBJ *o);
+/* a stream's bytes a piece at a time (stored, or Flate with no predictor;
+   not encrypted): NULL where it can't be, and pdf_stream decodes it whole.
+   pdf_stream_read gives up to n bytes, 0 at the end, -1 damaged */
+typedef struct PCSRC PCSRC;
+PCSRC *pdf_stream_open(PDOC *d, POBJ *o, long onum);
+long pdf_stream_read(PCSRC *s, unsigned char *out, long n);
+void pdf_stream_close(PCSRC *s);
 
 /* ------------------------------------------------------------------ pages */
 long pdf_pages(PDOC *d);			/* page count; -1 if the tree is broken */
