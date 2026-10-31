@@ -16,6 +16,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Gateway dependencies
         run: if [ -f gateway/requirements.txt ]; then pip install -r gateway/requirements.txt; fi
+      - name: Pillow (tests/ccitt.py checks the CCITT decoder against libtiff through it)
+        run: pip install pillow
       - name: make test
         run: make test
 

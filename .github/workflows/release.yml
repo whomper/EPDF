@@ -51,6 +51,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-m68k-linux-gnu zip autoconf automake libtool gettext autopoint pkg-config
+          pip install pillow    # tests/ccitt.py checks the CCITT decoder against libtiff through it
       - name: hcp, for the help file
         run: common/tools/build-hcp.sh "$RUNNER_TEMP/hcp"
       - name: Test
