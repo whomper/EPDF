@@ -206,7 +206,7 @@ FORCE:
 .PHONY: FORCE
 GEM_SRC = src/gem/epdf.c src/gem/gemui.c src/gem/menu.c src/gem/about.c src/view/textview.c \
           common/atari/gem.c common/atari/crash.c common/ui/mbar.c common/ui/aboutbox.c common/ui/aboutline.c \
-          common/ui/alert.c common/ui/dialog.c common/ui/field.c common/ui/av.c common/ui/text.c common/ui/clip.c \
+          common/ui/alert.c common/ui/dialog.c common/ui/field.c common/ui/av.c common/ui/text.c common/ui/clip.c common/ui/iconify.c common/ui/help.c common/ui/dd.c \
           common/src/charset.c common/src/bidi.c common/ui/accmem.c common/atari/bigbuf.c
 GEM_OBJ = $(patsubst %.c,build/m68000/%.o,$(GEM_SRC)) build/m68000/version.o
 $(patsubst %.c,build/m68000/%.o,$(GEM_SRC)): XFLAGS += -Isrc/gem -Isrc/view -Icommon/ui
@@ -227,3 +227,13 @@ binary/LAUNCH.PRG: build/m68000/atari/launch.o build/m68000/common/atari/gem.o b
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68000/launch.elf \
 	  build/m68000/crt0.o build/m68000/nf.o build/m68000/atari/launch.o build/m68000/common/atari/gem.o build/m68000/common/atari/tos.o build/m68000/common/atari/libc.o -lgcc
 	python3 common/tools/elf2tos.py build/m68000/launch.elf $@
+
+# ---------------------------------------------------------------- the icons (guidelines 5.5)
+# drawn in AERA-Atari (common/icons/EPDF.txt, EPDFDOC.txt for the documents); made into
+# icons/ (committed), src/gem/icon*.h and docs/icon*.png by common/tools/appicon.py
+icons: common/icons/EPDF.txt common/icons/EPDFDOC.txt common/tools/appicon.py
+	mkdir -p icons docs
+	python3 common/tools/appicon.py EPDF --rsc icons/EPDF.RSC --rscnv icons/EPDFNV.RSC \
+		--icn icons/EPDF.ICN --mask icons/EPDFMK.ICN --headers src/gem --docs docs
+	python3 common/tools/appicon.py EPDFDOC --rsc icons/EPDFDOC.RSC --rscnv icons/EPDFDNV.RSC --label PDF
+.PHONY: icons

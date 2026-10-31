@@ -13,6 +13,11 @@
 #include "text.h"
 #include "alert.h"
 #include "av.h"
+#include "dd.h"
+#include "help.h"
+#include "iconify.h"
+#include "aboutbox.h"
+#include "crash.h"
 #include "charset.h"
 #include "pdf.h"
 #include "textview.h"
@@ -30,6 +35,9 @@ extern short _is_acc;
 static MBAR menu;
 static short win = -1;
 static int quit_now;
+static int iconified;
+static char start_dir[160];		/* EPDF.PRG's folder, for CRASH.LOG and EPDF.HYP */
+static char icon_status[16];
 
 /* the document and the page shown */
 static PDOC *doc;
@@ -266,7 +274,7 @@ static void open_window(void)
 	short x, y, w, h;
 
 	wind_calc(0, WKIND, desk_x, desk_y, desk_w, desk_h, &x, &y, &w, &h);
-	win = wind_create(WKIND, desk_x, desk_y, desk_w, desk_h);
+	win = wind_create(icon_kind(WKIND), desk_x, desk_y, desk_w, desk_h);
 	if (win < 0) {
 		alert(1, "[1][No window is free.][ OK ]");
 		return;
@@ -303,6 +311,10 @@ static void command(int c)
 		break;
 	case CMD_QUIT:
 		quit_now = 1;
+		break;
+	case CMD_GUIDE:
+		if (help_key(start_dir, "EPDF.HYP", NULL, "About"))
+			about_box();
 		break;
 	case CMD_PREV:
 		if (doc && page > 0)
@@ -348,6 +360,10 @@ static int key(short kstate, short k)
 		return 0;
 	}
 	switch (scan) {
+	case 0x62:			/* Help: EPDF.HYP in the viewer that runs (4.3) */
+		if (help_key(start_dir, "EPDF.HYP", NULL, "About"))
+			about_box();
+		return 1;
 	case 0x48:
 		scroll_to((kstate & (K_LSHIFT | K_RSHIFT)) ? top - work_rows : top - 1);
 		return 1;
@@ -376,6 +392,19 @@ static void message(const short *msg)
 			open_doc(f);
 		return;
 	}
+	{
+		DROP d;
+		int r = dd_message(msg, DD_WANT_FILES, &d);
+
+		if (r != DD_NONE) {
+			char f[256];
+
+			if (r == DD_FILES && av_arg(d.data, f, sizeof f))
+				open_doc(f);
+			dd_done(&d);
+			return;
+		}
+	}
 	switch (msg[0]) {
 	case MN_SELECTED:
 		command(mbar_command(&menu, msg[4]));
@@ -387,7 +416,15 @@ static void message(const short *msg)
 			a.y = msg[5];
 			a.w = msg[6];
 			a.h = msg[7];
-			redraw(&a);
+			if (iconified) {
+				if (doc)
+					snprintf(icon_status, sizeof icon_status, "%ld/%ld", page + 1, npages);
+				else
+					icon_status[0] = '\0';
+				app_icon_redraw(win, &a, icon_status);
+			} else {
+				redraw(&a);
+			}
 		}
 		break;
 	case WM_TOPPED:
@@ -415,6 +452,22 @@ static void message(const short *msg)
 			redraw_all();
 		}
 		break;
+	case WM_ICONIFY:
+	case WM_ALLICONIFY:
+		if (msg[3] == win && !iconified) {
+			wind_set(win, WF_ICONIFY, msg[4], msg[5], msg[6], msg[7]);
+			iconified = 1;
+			log_event("iconified", NULL, NULL);
+		}
+		break;
+	case WM_UNICONIFY:
+		if (msg[3] == win && iconified) {
+			wind_set(win, WF_UNICONIFY, msg[4], msg[5], msg[6], msg[7]);
+			iconified = 0;
+			layout();
+			log_event("uniconified", NULL, NULL);
+		}
+		break;
 	case WM_ARROWED:
 		switch (msg[4]) {
 		case WA_UPPAGE: scroll_to(top - work_rows); break;
@@ -428,6 +481,20 @@ static void message(const short *msg)
 			scroll_to((long)msg[4] * (tv.nlines - work_rows) / 1000);
 		break;
 	}
+}
+
+/* after a crash (common/atari/crash.c): GEM closed down before it quits */
+static void crash_quit(const char *what)
+{
+	(void)what;
+	if (win >= 0) {
+		wind_close(win);
+		wind_delete(win);
+		win = -1;
+	}
+	menu_bar(menu.tree, 0);
+	v_clsvwk(vdi_h);
+	appl_exit();
 }
 
 int main(void)
@@ -454,6 +521,23 @@ int main(void)
 	vst_alignment(vdi_h, 0, 5);
 	text_font(vdi_h, 1, cw, ch);
 	wind_get(0, WF_WORKXYWH, &desk_x, &desk_y, &desk_w, &desk_h);
+	if (!screen_check("EPDF", scr_w)) {	/* not in ST low (5.2) */
+		v_clsvwk(vdi_h);
+		appl_exit();
+		return 1;
+	}
+	/* EPDF's own folder from the command it was started with, not the
+	   current one (6.1) */
+	strncpy(start_dir, app_dir(), sizeof start_dir - 1);
+	{
+		size_t n = strlen(start_dir);
+
+		if (n > 3 && start_dir[n - 1] == '\\')
+			start_dir[n - 1] = '\0';
+	}
+	crash_install(start_dir, "EPDF", app_version);
+	crash_cleanup = crash_quit;
+	help_init();
 	tv_init(&tv);
 	av_init("EPDF");
 
@@ -467,6 +551,7 @@ int main(void)
 		if (av_arg(cmd, f, sizeof f))
 			open_doc(f);
 	}
+	crash_offer("EPDF", "next to EPDF.PRG");
 	log_event("started", app_version, NULL);
 	while (!quit_now) {
 		short which = evnt_multi_(MU_MESAG | MU_KEYBD, 0, 0, 0, 0, msg, &ev);
@@ -483,6 +568,7 @@ int main(void)
 	tv_free(&tv);
 	close_doc();
 	av_exit();
+	crash_remove();
 	v_clsvwk(vdi_h);
 	appl_exit();
 	return 0;

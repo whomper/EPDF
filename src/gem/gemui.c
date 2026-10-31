@@ -56,16 +56,27 @@ void frame(GRECT *r, short color)
 	v_pline(vdi_h, 5, p);
 }
 
-/* at most cols characters, in the flags' style */
+/* at most cols characters, in the flags' style: drawn plain, bold added
+   by common/ui/text.c (never vst_effects' bold for text in fixed cells) */
 void text_at(short x, short y, const char *s, long n, short cols, short flags)
 {
+	short colour = (flags & TX_INVERSE) ? 0 : 1;
+
 	if (n > cols)
 		n = cols;
+	if (n <= 0)
+		return;
 	vswr_mode(vdi_h, MD_TRANS);
-	vst_color(vdi_h, (flags & TX_INVERSE) ? 0 : 1);
-	vst_effects(vdi_h, (flags & TX_BOLD) ? 1 : (flags & TX_DIM) ? 2 : 0);
+	vst_color(vdi_h, colour);
+	vst_effects(vdi_h, (flags & TX_DIM) ? 2 : 0);
 	text_n(vdi_h, x, y, s, n);
 	vst_effects(vdi_h, 0);
+	if (flags & TX_BOLD) {
+		if (text_fx_fast(1, MD_TRANS))
+			text_fx(vdi_h, x, y, s, n, 1, colour);
+		else
+			text_bold_strike(vdi_h, x, y, s, n);
+	}
 }
 
 void clip_on(GRECT *r)

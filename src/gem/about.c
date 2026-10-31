@@ -11,16 +11,19 @@
 #include "gem.h"
 #include "aboutbox.h"
 #include "aboutline.h"
+#include "gemui.h"
+#include "iconify.h"
 #include "epdf.h"
-
-/* the family's icon is drawn in AERA-Atari (common/icons/); until EPDF's is, the box shows no picture */
-static const unsigned short no_icon[64];
+#include "icon.h"
+#include "icon16.h"
+#include "icon256.h"
 
 void about_box(void)
 {
 	static char status[100], mem[100];
 	ABOUT a = { "EPDF", app_version, "PDF viewer for the Atari ST, TT and Falcon",
-		    { status, mem, NULL }, { 0, 0, 0 }, no_icon, NULL, NULL, NULL, NULL };
+		    { status, mem, NULL }, { 0, 0, 0 }, icon_bits, icon16_px, icon16_rgb,
+		    icon256_px, icon256_rgb };
 
 	snprintf(status, sizeof status, "%s", doc_status());
 	about_mem_line(mem, (int)sizeof mem);
@@ -28,4 +31,10 @@ void about_box(void)
 		a.status[1] = NULL;
 	log_event("dialog", "about", app_version);
 	about_show(&a);
+}
+
+/* an iconified window: the icon (common/ui/iconify.c), the page under it */
+void app_icon_redraw(short h, const GRECT *area, const char *status)
+{
+	icon_redraw(h, area, icon_bits, icon16_px, status);
 }
