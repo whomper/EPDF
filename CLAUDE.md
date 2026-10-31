@@ -88,11 +88,14 @@ at first. This section is kept up to date: the build, the tests, what a release 
   then", 29 Oct) and under way; stage 2 (page rendering) is not started and waits for his answer. Done:
   the window with every page one after another (`src/view/docview.c`), reflow (the extractor's soft
   break, `PTEXT.soft`), reading in slices on a second stack (`src/gem/coro.S`), the text store with
-  `EPDF.TXC` (`src/view/tstore.c`), Find/^G/Shift+^G, selection, Copy, Select all, the context menu,
-  `EPDF.INF` beside the program, the icon, iconify, Help, drops, the guide, README, NOTICES.TXT. To
-  do: Hebrew (common's bidi), the Font dialog, pictures, the drawing cost on an ST, the interpreter's
-  per-glyph cost (a 4000-glyph page reads in 1.6 s on an ST), columns, streaming content for ST-1;
-  then a candidate to the hub for its TOS runs, then 0.1.
+  `EPDF.TXC` (`src/view/tstore.c`), Find/^G/Shift+^G, selection (XOR), Copy, Select all, the context
+  menu, Hebrew (common's bidi), View > Font... (fontsel), pictures (`src/pdfimg.c`, `src/gem/pics.c`,
+  decoded on a stack of their own), two columns read one after the other, `EPDF.INF` beside the
+  program, the icon, iconify, Help, drops, the guide, README, NOTICES.TXT. The hub ran 7eff410 on
+  Erez's TOS (acc_all clear; gui.py's Shift+^F, then fixed in the rig and in Copy's speed) and cleared
+  0.1. To do: the drawing cost on an ST (a line 145 ms, a page 300 ms on TOS 1.04: as EHypView),
+  the interpreter's per-glyph cost, JPEG decoding on a 68000 (minutes for a big one), streaming
+  content for ST-1, pictures' memory on ST-1.
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
   checks: `tools/nofpu.sh`); decode streams with `inflate_open`/`inflate_read` so a page needn't fit
   in memory; reuse `common/atari/dspjpeg.c` with `PIC_LIBJPEG` for JPEG on the Falcon; a progressive
@@ -104,7 +107,11 @@ at first. This section is kept up to date: the build, the tests, what a release 
   keys, 3.2). The extractor's text is UTF-8; the view's is the Atari character set with the soft
   break as CR (`cs_to_atari` keeps only CR, LF, Tab). The page's text is read a page at a time on its
   own stack; the reader's hook (`PDOC.stop`, every 8 tokens and 32 glyphs) hands the machine back when
-  the slice is up; nothing on that stack may call the AES.
+  the slice is up; nothing on that stack may call the AES. A picture is decoded on a second stack
+  (`pic_poll` hands back the same way); it may use the document's objects only before its first
+  hand-back. A page that is read ends its slice, and its rows are drawn in the next turn. A picture
+  over 60 % of a page that has text is left out (background or scan behind a text layer).
+  The extractor marks a picture as a line "\x7F<object> <w>x<h>" in the page's text.
 - **Governance:** the hub owns AERA-Atari and `common/`. Never change `common/` here: pull it with
   `tools/sync-common.sh`; a needed change goes to the hub as a patch (`git format-patch`, plain text)
   with its reason and tests. Before every release send the hub the candidate commit and the checks
