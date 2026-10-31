@@ -262,9 +262,20 @@ static int find_step(void)
 		doc_want(find_page);
 		return 1;
 	}
-	if (find_dir > 0 ? search_text(t, len, find_text, find_from, &at, &n)
-			 : search_text_back(t, len, find_text, find_from, &at, &n)) {
+	while (find_dir > 0 ? search_text(t, len, find_text, find_from, &at, &n)
+			    : search_text_back(t, len, find_text, find_from, &at, &n)) {
 		char p[16];
+		long ls = at;
+
+		while (ls > 0 && t[ls - 1] != '\n')
+			ls--;
+		if (t[ls] == 0x7F) {
+			/* inside a picture's line ("\x7F<object> <w>x<h>"): not text */
+			find_from = find_dir > 0 ? at + 1 : at;
+			if (find_dir < 0 && at == 0)
+				break;
+			continue;
+		}
 
 		find_dir = 0;
 		select_span(find_page, at, find_page, at + n);
@@ -290,24 +301,29 @@ static int find_step(void)
  * Copy: the selection's text to the clipboard, lines ending CR LF; the
  * soft breaks as spaces (or line ends, showing the page's lines). A job
  * of its own between event calls (the guidelines' Speed: a whole book is
- * a normal thing to copy, 8.5 s on an ST in one go): a page or a piece of
- * one a step, its progress on the info line, Esc or Undo to stop it. The
- * clipboard is written at the end.
+ * a normal thing to copy, 8.5 s on an ST in one go): 2 KB of the text a
+ * step, handed to common's sliced clipboard writer (clip_put_step, which
+ * writes it 16 KB at a time), its progress on the info line, Esc or Undo
+ * to stop it (the clipboard as it was, or no half-written one).
  */
+#define COPY_STEP 2048
 static struct {
 	int on;
 	long p, at;			/* the page and offset it goes on from */
 	long p0, o0, p1, o1;		/* the selection, as it was when Copy began */
-	char *buf;
-	long len, cap, missing;
+	long len, missing;
+	int skip;			/* inside a picture's line (pdftext.c's "\x7F..."): not copied */
 	unsigned long said;		/* tos_ms() when the progress was last shown */
+	char piece[COPY_STEP * 2 + 2];	/* a step's text, line ends made CR LF */
 } cp;
 
 static void copy_end(const char *say)
 {
-	free(cp.buf);
+	if (cp.on)
+		clip_put_end(0);	/* given up: the old clipboard kept, or this one removed */
 	memset(&cp, 0, sizeof cp);
-	win_status(say);
+	if (say)
+		win_status(say);
 }
 
 static void copy(void)
@@ -316,6 +332,10 @@ static void copy(void)
 
 	if (!v || v->sel_p0 < 0 || cp.on)
 		return;
+	if (!clip_put_begin()) {
+		win_status("no clipboard to copy to");
+		return;
+	}
 	memset(&cp, 0, sizeof cp);
 	cp.on = 1;
 	cp.p0 = v->sel_p0;
@@ -324,26 +344,13 @@ static void copy(void)
 	cp.o1 = v->sel_o1;
 	cp.p = cp.p0;
 	cp.at = cp.o0;
-	/* the buffer at its size at once, from the pages' lengths (a buffer
-	   doubled as it fills is copied each time: 100 ms at 128 KB on an ST);
-	   an eighth more for line ends made CR LF */
-	{
-		long p, n = 0, l;
-
-		for (p = cp.p0; p <= cp.p1; p++)
-			if ((l = doc_page_len(p)) > 0)
-				n += l + 2;
-		n += n / 8 + 64;
-		if ((cp.buf = malloc((size_t)n)) != NULL)
-			cp.cap = n;
-	}
 	win_status("copying...");
 }
 
 /* the copy on by up to 2 KB of text; 1 while it goes on */
 static int copy_step(void)
 {
-	long len, e, i, room;
+	long len, e, i, end;
 	const char *t;
 	char *q;
 
@@ -351,8 +358,10 @@ static int copy_step(void)
 		return 0;
 	if (cp.p > cp.p1) {
 		char n[16];
+		int ok = cp.len > 0;
 
-		if (cp.len && clip_put(cp.buf, cp.len)) {
+		cp.on = 0;		/* clip_put_end is called here, not by copy_end */
+		if (clip_put_end(ok) && ok) {
 			snprintf(n, sizeof n, "%ld", cp.len);
 			copy_end(cp.missing ? "copied; pages not read yet left out" : "copied");
 			log_event("copied", n, NULL);	/* the copy done, its status shown */
@@ -368,25 +377,9 @@ static int copy_step(void)
 		cp.at = 0;
 		return 1;
 	}
-	e = cp.p == cp.p1 && cp.o1 < len ? cp.o1 : len;
-	if (e - cp.at > 2048)
-		e = cp.at + 2048;
-	/* room for the piece: each character two at most, and a page's break */
-	room = (e - cp.at) * 2 + 2;
-	if (cp.len + room > cp.cap) {
-		long cap = cp.cap ? cp.cap * 2 : 16384;
-		char *nb;
-
-		while (cap < cp.len + room)
-			cap *= 2;
-		if (!(nb = realloc(cp.buf, (size_t)cap))) {
-			copy_end("too much to copy for the memory");
-			return 0;
-		}
-		cp.buf = nb;
-		cp.cap = cap;
-	}
-	q = cp.buf + cp.len;
+	end = cp.p == cp.p1 && cp.o1 < len ? cp.o1 : len;
+	e = end - cp.at > COPY_STEP ? cp.at + COPY_STEP : end;
+	q = cp.piece;
 	if (cp.at == 0 && cp.p > cp.p0 && cp.len) {
 		*q++ = '\r';
 		*q++ = '\n';
@@ -394,6 +387,14 @@ static int copy_step(void)
 	for (i = cp.at; i < e; i++) {
 		char c = t[i];
 
+		if (cp.skip) {			/* a picture's line, and its line end */
+			cp.skip = c != '\n';
+			continue;
+		}
+		if (c == 0x7F && (i == 0 || t[i - 1] == '\n')) {
+			cp.skip = 1;
+			continue;
+		}
 		if (c == '\n' || (c == '\r' && lines_mode)) {
 			*q++ = '\r';
 			*q++ = '\n';
@@ -401,8 +402,14 @@ static int copy_step(void)
 			*q++ = c == '\r' ? ' ' : c;
 		}
 	}
-	cp.len = (long)(q - cp.buf);
-	if (e >= (cp.p == cp.p1 && cp.o1 < len ? cp.o1 : len)) {
+	if (q > cp.piece && !clip_put_step(cp.piece, (long)(q - cp.piece))) {
+		cp.on = 0;
+		clip_put_end(0);
+		copy_end("the clipboard couldn't be written");
+		return 0;
+	}
+	cp.len += (long)(q - cp.piece);
+	if (e >= end) {
 		cp.p++;
 		cp.at = 0;
 		/* the progress every quarter of a second (the guidelines' Speed);
@@ -932,7 +939,7 @@ int main(void)
 	if (has_menu)
 		menu_bar(menu.tree, 0);
 	mbar_free(&menu);
-	free(cp.buf);
+	copy_end(NULL);
 	doc_close();
 	pics_exit();
 	font_exit();
