@@ -23,7 +23,7 @@ joined and wrapped to the window, or each line as it is on the page.
   **Options > Install application...** on the desktop).
 
 **Needs:** any ST, STE, TT or Falcon with 1 MB or more; TOS 1.04 or newer, EmuTOS, MagiC or MiNT;
-a screen 640 pixels wide or more. EPDF takes about 420 KB when it starts, and more as it reads: on a
+a screen 640 pixels wide or more. EPDF takes about 390 KB when it starts, and more as it reads: on a
 1 MB ST, run it without accessories.
 
 **Under TOS, put Atari's `FOLDR100.PRG` first in `AUTO`**, renamed for more room (`FOLDR400.PRG`).
