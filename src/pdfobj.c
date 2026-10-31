@@ -511,6 +511,8 @@ static int fast_int_or_ref(LEX *x, POBJ *out)
 
 		while (r < e && is_white_c(*r))
 			r++;
+		if (r >= e && !x->final)
+			return 0;			/* what follows is past the buffer: the general way, which says so */
 		if (r < e && *r >= '0' && *r <= '9') {
 			const unsigned char *s = r;
 
@@ -520,6 +522,8 @@ static int fast_int_or_ref(LEX *x, POBJ *out)
 			}
 			while (s < e && is_white_c(*s))
 				s++;
+			if (s + 1 >= e && !x->final)
+				return 0;		/* "n g" and maybe "R" at the buffer's end: the same */
 			if (d2 < 6 && s + 1 <= e && s < e && *s == 'R' && (s + 1 >= e || !(*(s + 1) >= '!' && *(s + 1) <= '~') ||
 			    *(s + 1) == '/' || *(s + 1) == ']' || *(s + 1) == '>' || *(s + 1) == '<' || *(s + 1) == '[')) {
 				out->t = PO_REF;
@@ -559,7 +563,10 @@ int parse_obj(LEX *x, POBJ *out)
 			return 1;
 		}
 		x->p = save;
-		x->trunc = 0;
+		if (x->trunc)
+			return 0;	/* the look past it ran off a buffer that isn't the file's end: the
+					   number may be cut, or begin a reference ("12 0 R"): read more
+					   (it was taken as it stood, and a font's /Widths lost) */
 		out->t = PO_INT;
 		out->a = t.i;
 		return 1;
@@ -613,8 +620,15 @@ int parse_obj(LEX *x, POBJ *out)
 			(void)t2;
 			if (!parse_obj(x, &el)) {
 				if (x->p == save || x->trunc) {	/* a stray token: skip it */
-					if (x->trunc || x->p >= x->e)
+					if (x->trunc || x->p >= x->e) {
+						/* the buffer ended inside the array: cut off (read
+						   more), as a dict's end says (a font's /Widths past
+						   load_file_obj's first 1024 bytes was lost, and
+						   tried again at each use: 468 KB on a page) */
+						if (x->p >= x->e)
+							x->trunc = !x->final;
 						goto bad;
+					}
 					lex_token(x, &t2);
 					if (t2.kind == T_ARR1)
 						break;
@@ -776,6 +790,8 @@ int pdf_is_name(const POBJ *o, const char *name)
 }
 
 /* ------------------------------------------------------------------ objects */
+static POBJ unloadable;			/* the cache's mark for an object that can't be loaded */
+
 static POBJ *cache_find(PDOC *d, long num)
 {
 	PCENT *c = &d->cache[num & (PCACHE - 1)];
@@ -957,7 +973,7 @@ POBJ *pdf_get(PDOC *d, long num)
 		return NULL;
 	o = cache_find(d, num);
 	if (o)
-		return o;
+		return o == &unloadable ? NULL : o;
 	e = &d->xe[num];
 	if (e->t == 1) {
 		o = load_file_obj(d, num, e->a, e->b);
@@ -979,8 +995,9 @@ POBJ *pdf_get(PDOC *d, long num)
 			return NULL;
 		o = parse_indirect(d, d->os_buf + i, d->os_len - 1 - i, 1, num, 0, 0, 1, &trunc);
 	}
-	if (o)
-		cache_put(d, num, o);
+	/* one that can't be loaded is remembered too (for the page): parsed
+	   again at each use, its half-built pieces stayed in the arena each time */
+	cache_put(d, num, o ? o : &unloadable);
 	return o;
 }
 
