@@ -173,16 +173,15 @@ def main(argv):
         n = count("EPDF dialog font")
         key(F, [CTRL, SHIFT])
         wait_count("EPDF dialog font", n + 1)
-        time.sleep(2)
+        time.sleep(4)
         key(ESC)
         wait("EPDF dialog-closed font cancel")
         key(F, [CTRL, SHIFT])
         wait_count("EPDF dialog font", n + 2)
-        time.sleep(2)
-        key(TAB)
-        key(TAB)
-        key(UP)
-        key(RETURN)
+        time.sleep(4)               # EPDF says so before the dialog has drawn its lists
+        for k in (TAB, TAB, UP, RETURN):
+            key(k)
+            time.sleep(0.5)
         wait("EPDF dialog-closed font System font,8")
         shot("font8")
         # Insert: the context menu; Esc closes it with nothing chosen
