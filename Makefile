@@ -22,18 +22,21 @@ HCFLAGS = $(CFLAGS) -fwrapv -std=gnu99 -Wall -Wextra -Wno-sign-compare -Wno-unus
           -Isrc -Icommon/src -I$(BSSL)/inc -I$(BSSL)/src
 
 PDF_SRC  = src/pdfobj.c src/pdfxref.c src/pdffilt.c src/pdfcrypt.c src/pdfdoc.c src/pdftext.c src/pdfmeas.c
-COMMON_SRC = common/src/inflate.c common/src/util.c
+COMMON_SRC = common/src/inflate.c common/src/util.c common/src/futil.c
 BSSL_SRC = $(addprefix $(BSSL)/src/, hash/md5.c hash/sha2small.c hash/sha2big.c \
            symcipher/aes_big_cbcdec.c symcipher/aes_big_cbcenc.c symcipher/aes_big_dec.c symcipher/aes_big_enc.c symcipher/aes_common.c \
            codec/dec32be.c codec/enc32be.c codec/dec32le.c codec/enc32le.c codec/dec64be.c codec/enc64be.c)
 HDRS     = $(wildcard src/*.h src/gem/*.h src/view/*.h common/src/*.h common/ui/*.h common/atari/*.h common/atari/include/*.h)
 
 .PHONY: all test measure dist help clean atari measure-atari fttest imgbench gui-test
-all: build/pdfmeasure build/glyphjob build/imgdump binary/EPDF.PRG
+all: build/pdfmeasure build/pdftext build/glyphjob build/imgdump binary/EPDF.PRG
 build:
 	mkdir -p build
 build/pdfmeasure: tools/pdfmeasure.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HDRS) | build
 	$(CC) $(HCFLAGS) -o $@ tools/pdfmeasure.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC)
+
+build/pdftext: tools/pdftext.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HDRS) | build
+	$(CC) $(HCFLAGS) -o $@ tools/pdftext.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC)
 
 build/glyphjob: tools/glyphjob.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HDRS) | build
 	$(CC) $(HCFLAGS) -o $@ tools/glyphjob.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC)
@@ -50,9 +53,18 @@ build/pdfmeasure_asan: tools/pdfmeasure.c src/pdfio_host.c $(PDF_SRC) $(COMMON_S
 build/test_textview: tests/test_textview.c src/view/textview.c src/view/textview.h | build
 	$(CC) -Isrc/view -Wall -Wextra -O2 -o $@ tests/test_textview.c src/view/textview.c
 
-test: build/test_ccitt build/test_textview
+build/test_inf: tests/test_inf.c src/view/inf.c src/view/inf.h | build
+	$(CC) -Isrc/view -Wall -Wextra -O2 -o $@ tests/test_inf.c src/view/inf.c
+VIEW_TEST_SRC = src/view/docview.c src/view/textview.c src/view/tstore.c src/pdfio_host.c
+build/test_tstore build/test_docview: build/test_%: tests/test_%.c $(VIEW_TEST_SRC) $(wildcard src/view/*.h) src/plat.h | build
+	$(CC) -Isrc -Isrc/view -Icommon/src -Wall -Wextra -O2 -o $@ $< $(VIEW_TEST_SRC)
+
+test: build/test_ccitt build/test_textview build/test_inf build/test_tstore build/test_docview
 	python3 tests/ccitt.py
 	build/test_textview
+	build/test_inf
+	build/test_tstore build
+	build/test_docview
 	@if [ -f build/m68000/epdf.elf ]; then python3 common/tools/oddaccess.py build/m68000/epdf.elf; fi
 	tools/nofpu.sh build/m68000/epdf.elf build/m68030/measure.elf build/m68030/fttest.elf
 measure: build/pdfmeasure
@@ -218,7 +230,8 @@ build/m68000/version.c: FORCE | build/m68000
 	@if cmp -s $@.new $@; then rm $@.new; else mv $@.new $@; fi
 FORCE:
 .PHONY: FORCE
-GEM_SRC = src/gem/epdf.c src/gem/gemui.c src/gem/menu.c src/gem/about.c src/view/textview.c \
+GEM_SRC = src/gem/epdf.c src/gem/doc.c src/gem/textwin.c src/gem/gemui.c src/gem/menu.c src/gem/about.c \
+          src/view/textview.c src/view/docview.c src/view/tstore.c src/view/inf.c common/ui/bgwork.c common/ui/twin.c \
           common/atari/gem.c common/atari/crash.c common/ui/mbar.c common/ui/aboutbox.c common/ui/aboutline.c \
           common/ui/alert.c common/ui/dialog.c common/ui/field.c common/ui/av.c common/ui/text.c common/ui/clip.c common/ui/iconify.c common/ui/help.c common/ui/dd.c \
           common/src/charset.c common/src/bidi.c common/ui/accmem.c common/atari/bigbuf.c

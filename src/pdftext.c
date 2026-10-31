@@ -1617,10 +1617,19 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 {
 	PDOC *d = x->d;
 
+	unsigned tick = 0;
+
 	(void)s0;
 	(void)n0;
 	while (p < e) {
 		unsigned char c = *p;
+
+		if (d->stopping)
+			return -1;
+		if ((++tick & 255) == 0 && d->stop && d->stop(d->stop_ctx)) {
+			d->stopping = 1;
+			return -1;
+		}
 
 		if (is_white_c(c)) {
 			p++;
@@ -2079,16 +2088,34 @@ static void emit_line(IX *x, CH *c, long a, long b, PTEXT *t)
 	}
 }
 
+/* a line of the page: chunks [a, b), its baseline, size and extent */
+typedef struct {
+	long a, b;
+	fx y, fs, x0, x1;
+} LN;
+
+/*
+ * The lines in reading order. Between two lines comes '\n', or with
+ * t->soft '\v' where the paragraph goes on: the line before reaches the
+ * right edge of the text (within 4 em), the next starts where it did
+ * (within 1 em) and is in the same size. A gap of more than 1.875 lines
+ * is a paragraph's end and gets an empty line. A word cut by a hyphen at a
+ * soft break, or at any break without t->soft, is joined to its rest.
+ */
 static void assemble(IX *x, PTEXT *t)
 {
-	long i, j;
-	fx prev_y = 0, prev_fs = 0;
-	int have_prev = 0;
+	long i, j, nl = 0, k;
+	LN *ln;
+	fx right = 0;
+	int pstart = 1;		/* the line before began a paragraph */
 
 	if (x->nch == 0)
 		return;
 	ch_sort(x->ch, x->nch, ch_cmp_y);
-	for (i = 0; i < x->nch;) {
+	ln = pdf_malloc(x->d, x->nch * (long)sizeof(LN));
+	if (!ln)
+		return;
+	for (i = 0; i < x->nch; i = j) {
 		fx y0 = x->ch[i].y, fsm = x->ch[i].fs;
 
 		j = i + 1;
@@ -2099,27 +2126,44 @@ static void assemble(IX *x, PTEXT *t)
 		}
 		if (j - i > 1)
 			ch_sort(x->ch + i, j - i, ch_cmp_x);
-		if (have_prev) {
-			/* a word cut by a hyphen at the end of the line is joined to its rest */
+		ln[nl].a = i;
+		ln[nl].b = j;
+		ln[nl].y = y0;
+		ln[nl].fs = fsm;
+		ln[nl].x0 = x->ch[i].x;
+		ln[nl].x1 = x->ch[j - 1].x + x->ch[j - 1].dx;
+		if (ln[nl].x1 > right)
+			right = ln[nl].x1;
+		nl++;
+	}
+	for (k = 0; k < nl; k++) {
+		if (k > 0) {
+			LN *p = &ln[k - 1], *c = &ln[k];
+			fx fs = p->fs > c->fs ? p->fs : c->fs;
+			int para = p->y - c->y > fxmul(fs, 0x1E000);	/* 1.875 lines of its size */
+			/* where the next line may start: where this one did, or up to
+			   3 em left of a paragraph's first line (its indent) */
+			fx left = p->x0 - (pstart ? 3 * fs : fs);
+			int soft = t->soft && !para && p->x1 > right - 4 * fs && c->x0 >= left && c->x0 <= p->x0 + fs &&
+				   fxabs(c->fs - p->fs) <= (fs >> 3);
 			SBUF *o = &t->text;
 			long l = o->len;
 
-			if (l >= 2 && o->s[l - 1] == '-' && ((o->s[l - 2] >= 'a' && o->s[l - 2] <= 'z') || (unsigned char)o->s[l - 2] >= 0x80) &&
-			    x->txt.s[x->ch[i].off] >= 'a' && x->txt.s[x->ch[i].off] <= 'z')
+			if ((soft || !t->soft) && l >= 2 && o->s[l - 1] == '-' &&
+			    ((o->s[l - 2] >= 'a' && o->s[l - 2] <= 'z') || (unsigned char)o->s[l - 2] >= 0x80) &&
+			    x->txt.s[x->ch[c->a].off] >= 'a' && x->txt.s[x->ch[c->a].off] <= 'z')
 				o->len--;
 			else
+				sb_addc(o, soft ? '\v' : '\n');
+			if (para)
 				sb_addc(o, '\n');
-			if (prev_y - y0 > fxmul(prev_fs > fsm ? prev_fs : fsm, 0x1E000))	/* 1.875 lines of its size */
-				sb_addc(&t->text, '\n');
+			pstart = !soft;
 		}
-		emit_line(x, x->ch, i, j, t);
+		emit_line(x, x->ch, ln[k].a, ln[k].b, t);
 		t->lines++;
-		prev_y = y0;
-		prev_fs = fsm;
-		have_prev = 1;
-		i = j;
 	}
 	sb_addc(&t->text, '\n');
+	pdf_free(x->d, ln, x->nch * (long)sizeof(LN));
 }
 
 int pdf_page_text(PDOC *d, long n, PTEXT *t)
@@ -2132,6 +2176,7 @@ int pdf_page_text(PDOC *d, long n, PTEXT *t)
 	memset(&x, 0, sizeof x);
 	x.d = d;
 	x.t = t;
+	d->stopping = 0;
 	sb_init(&x.txt);
 	pg = pdf_page(d, n, &res, &box, &rot);
 	if (!pg) {
@@ -2178,7 +2223,10 @@ int pdf_page_text(PDOC *d, long n, PTEXT *t)
 		run_content(&x, (const unsigned char *)all.s, all.len);
 		sb_free(&all);
 	}
-	{
+	if (d->stopping) {
+		t->stopped = 1;
+		d->stopping = 0;
+	} else {
 		long t0 = d->clock ? d->clock() : 0;
 
 		assemble(&x, t);

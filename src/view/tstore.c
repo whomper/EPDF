@@ -1,0 +1,171 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright (C) 2026 AERA | Erez Yaary */
+#include <stdlib.h>
+#include <string.h>
+#include "plat.h"
+#include "tstore.h"
+
+int ts_open(TSTORE *s, long npages, long budget, const char *path)
+{
+	long i;
+
+	memset(s, 0, sizeof *s);
+	s->pg = malloc((size_t)(npages > 0 ? npages : 1) * sizeof *s->pg);
+	s->pool = malloc((size_t)(budget > 0 ? budget : 1));
+	if (!s->pg || !s->pool) {
+		free(s->pg);
+		free(s->pool);
+		memset(s, 0, sizeof *s);
+		return -1;
+	}
+	for (i = 0; i < npages; i++) {
+		s->pg[i].len = -1;
+		s->pg[i].in_ram = 0;
+	}
+	s->npages = npages;
+	s->budget = budget;
+	for (i = 0; i < TS_SLOTS; i++)
+		s->slot[i].page = -1;
+	if (path && strlen(path) < sizeof s->path)
+		strcpy(s->path, path);
+	return 0;
+}
+
+void ts_close(TSTORE *s)
+{
+	int i;
+
+	for (i = 0; i < TS_SLOTS; i++)
+		free(s->slot[i].s);
+	if (s->path[0] && s->file_len > 0)
+		pf_remove(s->path);
+	free(s->pg);
+	free(s->pool);
+	memset(s, 0, sizeof *s);
+}
+
+/* the pool written at the end of the cache file in one open; its pages
+   then live there */
+static int spill(TSTORE *s)
+{
+	int h;
+	long i, w;
+
+	if (!s->path[0] || s->pool_len == 0)
+		return -1;
+	h = pf_open(s->path, s->file_len ? PF_UPDATE : PF_WRITE);
+	if (h < 0)
+		return -1;
+	s->writes++;
+	if (pf_seek(h, s->file_len) != s->file_len) {
+		pf_close(h);
+		return -1;
+	}
+	w = pf_write(h, s->pool, s->pool_len);
+	pf_close(h);
+	if (w != s->pool_len)
+		return -1;
+	for (i = 0; i < s->npages; i++)
+		if (s->pg[i].in_ram && s->pg[i].len >= 0) {
+			s->pg[i].off += s->file_len;
+			s->pg[i].in_ram = 0;
+		}
+	s->file_len += s->pool_len;
+	s->pool_len = 0;
+	return 0;
+}
+
+int ts_put(TSTORE *s, long n, const char *text, long len)
+{
+	int i;
+
+	if (n < 0 || n >= s->npages || len < 0)
+		return -1;
+	for (i = 0; i < TS_SLOTS; i++)
+		if (s->slot[i].page == n)
+			s->slot[i].page = -1;
+	if (s->pool_len + len > s->budget && spill(s) != 0 && s->pool_len + len > s->budget) {
+		/* no file: as much as memory takes */
+		char *p = realloc(s->pool, (size_t)(s->pool_len + len));
+
+		if (!p)
+			return -1;
+		s->pool = p;
+		s->budget = s->pool_len + len;
+	}
+	if (len > s->budget) {
+		/* bigger than the pool: straight to the file */
+		int h = pf_open(s->path, s->file_len ? PF_UPDATE : PF_WRITE);
+		long w = -1;
+
+		if (h < 0)
+			return -1;
+		s->writes++;
+		if (pf_seek(h, s->file_len) == s->file_len)
+			w = pf_write(h, text, len);
+		pf_close(h);
+		if (w != len)
+			return -1;
+		s->pg[n].off = s->file_len;
+		s->pg[n].len = len;
+		s->pg[n].in_ram = 0;
+		s->file_len += len;
+		return 0;
+	}
+	memcpy(s->pool + s->pool_len, text, (size_t)len);
+	s->pg[n].off = s->pool_len;
+	s->pg[n].len = len;
+	s->pg[n].in_ram = 1;
+	s->pool_len += len;
+	return 0;
+}
+
+int ts_have(const TSTORE *s, long n)
+{
+	return n >= 0 && n < s->npages && s->pg[n].len >= 0;
+}
+
+const char *ts_get(TSTORE *s, long n, long *len)
+{
+	int i, best = 0, h;
+	char *p;
+
+	if (!ts_have(s, n))
+		return NULL;
+	*len = s->pg[n].len;
+	if (s->pg[n].in_ram)
+		return s->pool + s->pg[n].off;
+	s->tick++;
+	for (i = 0; i < TS_SLOTS; i++)
+		if (s->slot[i].page == n) {
+			s->slot[i].used = s->tick;
+			return s->slot[i].s;
+		}
+	for (i = 1; i < TS_SLOTS; i++)
+		if (s->slot[i].page < 0 || s->slot[i].used < s->slot[best].used)
+			best = i;
+	if (s->slot[best].page < 0)
+		for (i = 0; i < TS_SLOTS; i++)
+			if (s->slot[i].page < 0) {
+				best = i;
+				break;
+			}
+	p = realloc(s->slot[best].s, (size_t)(*len > 0 ? *len : 1));
+	if (!p)
+		return NULL;
+	s->slot[best].s = p;
+	s->slot[best].page = -1;
+	h = pf_open(s->path, PF_READ);
+	if (h < 0)
+		return NULL;
+	s->reads++;
+	if (pf_seek(h, s->pg[n].off) != s->pg[n].off || pf_read(h, p, *len) != *len) {
+		pf_close(h);
+		return NULL;
+	}
+	pf_close(h);
+	s->slot[best].page = n;
+	s->slot[best].len = *len;
+	s->slot[best].used = s->tick;
+	return p;
+}

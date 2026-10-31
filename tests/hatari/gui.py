@@ -127,15 +127,15 @@ def main(argv):
         time.sleep(1.0)
 
     try:
+        wait("EPDF opened TWO.PDF 2")
         wait("EPDF started")
-        wait("EPDF opened TWO.PDF")
-        time.sleep(2)
+        wait("EPDF page 2 ")                   # read in the background
         shot("page1")
         key(DOWN, [])
         key(SPACE)
         shot("scrolled")
         key(RIGHT, [CTRL])
-        wait("EPDF page 2")
+        wait("EPDF top 2")
         shot("page2")
     finally:
         h.kill()

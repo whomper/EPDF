@@ -7,7 +7,7 @@
 
 enum {
 	CMD_NONE, CMD_ABOUT, CMD_OPEN, CMD_CLOSE, CMD_QUIT, CMD_PREV, CMD_NEXT, CMD_FIRST, CMD_LAST,
-	CMD_COPY, CMD_GUIDE, CMD_COUNT
+	CMD_COPY, CMD_GUIDE, CMD_LINES, CMD_COUNT
 };
 
 int menu_build(MBAR *m, short cw, short ch, short screen_w, short screen_h);

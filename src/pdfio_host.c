@@ -39,3 +39,53 @@ long pdf_ms(void)
 	clock_gettime(CLOCK_MONOTONIC, &ts);
 	return (long)(ts.tv_sec * 1000L + ts.tv_nsec / 1000000L);
 }
+
+/* ---------------------------------------------------------------- plat.h on POSIX, for the tests */
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include "plat.h"
+
+int pf_open(const char *path, int mode)
+{
+	int fl = mode == PF_WRITE ? O_WRONLY | O_CREAT | O_TRUNC : mode == PF_UPDATE ? O_RDWR : O_RDONLY;
+
+	return open(path, fl, 0644);
+}
+
+long pf_read(int h, void *buf, long n)
+{
+	return (long)read(h, buf, (size_t)n);
+}
+
+long pf_write(int h, const void *buf, long n)
+{
+	return (long)write(h, buf, (size_t)n);
+}
+
+long pf_seek(int h, long off)
+{
+	return (long)lseek(h, off, SEEK_SET);
+}
+
+void pf_close(int h)
+{
+	close(h);
+}
+
+long pf_size(const char *path)
+{
+	struct stat st;
+
+	return stat(path, &st) == 0 ? (long)st.st_size : -1;
+}
+
+int pf_remove(const char *path)
+{
+	return unlink(path) == 0 ? 0 : -1;
+}
+
+int pf_rename(const char *from, const char *to)
+{
+	return rename(from, to) == 0 ? 0 : -1;
+}

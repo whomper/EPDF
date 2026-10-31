@@ -2,7 +2,7 @@
  * Copyright (C) 2026 AERA | Erez Yaary */
 /*
  * The menu bar in the guidelines' order (3.1): the Desk menu under the
- * program's name, File, Edit, Page, Help; built by common/ui/mbar.c.
+ * program's name, File, Edit, View, Page, Help; built by common/ui/mbar.c.
  */
 #include <stddef.h>
 #include "menu.h"
@@ -14,7 +14,6 @@ static const MBAR_ITEM desk_items[] = {
 
 static const MBAR_ITEM file_items[] = {
 	{ "Open...", "^O", CMD_OPEN },
-	{ "Close window", "^U", CMD_CLOSE },
 	{ "-", NULL, CMD_NONE },
 	{ "Quit", "^Q", CMD_QUIT },
 	{ NULL, NULL, CMD_NONE }
@@ -22,6 +21,12 @@ static const MBAR_ITEM file_items[] = {
 
 static const MBAR_ITEM edit_items[] = {
 	{ "Copy", "^C", CMD_COPY },
+	{ NULL, NULL, CMD_NONE }
+};
+
+/* a tick: each line as on the page, else the paragraphs joined and wrapped to the window */
+static const MBAR_ITEM view_items[] = {
+	{ "The page's lines", NULL, CMD_LINES },
 	{ NULL, NULL, CMD_NONE }
 };
 
@@ -43,6 +48,7 @@ static const MBAR_TITLE titles[] = {
 	{ " EPDF ", desk_items },
 	{ " File ", file_items },
 	{ " Edit ", edit_items },
+	{ " View ", view_items },
 	{ " Page ", page_items },
 	{ " Help ", help_items },
 	{ NULL, NULL }

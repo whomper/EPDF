@@ -61,3 +61,58 @@ long pdf_us(void)
 	Supexec(sup_us);
 	return us_hz * 5000L + (192L - us_c) * 26L;
 }
+
+/* ---------------------------------------------------------------- plat.h on GEMDOS */
+#include "plat.h"
+
+int pf_open(const char *path, int mode)
+{
+	long h;
+
+	if (mode == PF_WRITE)
+		h = Fcreate(path, 0);
+	else
+		h = Fopen(path, mode == PF_UPDATE ? 2 : 0);
+	return h < 0 ? -1 : (int)h;
+}
+
+long pf_read(int h, void *buf, long n)
+{
+	return Fread((short)h, n, buf);
+}
+
+long pf_write(int h, const void *buf, long n)
+{
+	return Fwrite((short)h, n, (void *)buf);
+}
+
+long pf_seek(int h, long off)
+{
+	return Fseek(off, (short)h, 0);
+}
+
+void pf_close(int h)
+{
+	Fclose((short)h);
+}
+
+long pf_size(const char *path)
+{
+	DTA dta, *old = Fgetdta();
+	long r;
+
+	Fsetdta(&dta);
+	r = Fsfirst(path, 0) == 0 ? (long)dta.d_length : -1;
+	Fsetdta(old);
+	return r;
+}
+
+int pf_remove(const char *path)
+{
+	return Fdelete(path) == 0 ? 0 : -1;
+}
+
+int pf_rename(const char *from, const char *to)
+{
+	return Frename(from, to) == 0 ? 0 : -1;
+}

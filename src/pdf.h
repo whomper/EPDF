@@ -121,6 +121,11 @@ typedef struct pdoc {
 	int32_t *pageidx;		/* object number of each page, built once */
 	void *fc;			/* the fonts kept from page to page (pdftext.c) */
 	int skip_kids;			/* while a page's inherited attributes are read: leave /Kids arrays unparsed */
+	/* asked every few hundred operators while a page's text is read: 1 stops
+	   it (the page then has stopped set; read it again later) */
+	int (*stop)(void *ctx);
+	void *stop_ctx;
+	int stopping;
 	char err[96];
 } PDOC;
 
@@ -191,6 +196,9 @@ typedef struct {
 	long unmapped;			/* characters with no Unicode */
 	long fonts_nomap;		/* fonts with no ToUnicode and no usable encoding */
 	int failed;			/* the page could not be read */
+	int stopped;			/* d->stop said stop: the text is not whole */
+	int soft;			/* set by the caller: a line that goes on in the next ends
+					   in '\v' (a paragraph's soft break), else in '\n' */
 } PTEXT;
 void ptext_init(PTEXT *t);
 void ptext_free(PTEXT *t);
