@@ -46,6 +46,10 @@ gives way to you at once.
   ⇧^Clr/Home).
 - **Help:** this guide.
 
+**Hebrew** shows in the Atari's own Hebrew letters, each line in the order it is read, and a line
+that starts in Hebrew is set at the right. A letter the Atari's character set doesn't have shows as
+"?".
+
 The window can be moved, sized, sent to the back and iconified (where the AES can iconify); the
 icon shows the page you are on.
 

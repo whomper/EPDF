@@ -18,6 +18,7 @@
 #include "text.h"
 #include "iconify.h"
 #include "docview.h"
+#include "bidi.h"
 #include "epdf.h"
 
 /* the speed build (make speed-test) times a scroll's parts */
@@ -222,6 +223,32 @@ static void blank(const GRECT *c, short x1, short x2, short y, short h)
 	fill(&r, 0);
 }
 
+/*
+ * A row as it shows: Hebrew in display order (common's bidi, only where
+ * the row has Hebrew), a row whose first strong letter is Hebrew put at
+ * the right. *vis is what to draw (s itself, or vbuf), *x where it starts;
+ * pos[i] (when the row has Hebrew) the column logical letter i shows in.
+ */
+static char vbuf[BIDI_MAX];
+static short vpos[BIDI_MAX];
+static unsigned char vodd[BIDI_MAX];
+
+static int row_visual(const char *s, long n, const char **vis, short *x)
+{
+	int rtl;
+
+	*vis = s;
+	*x = (short)(work.x + MARGIN);
+	if (n <= 0 || n > BIDI_MAX || !bidi_has_rtl(s, (short)n))
+		return 0;
+	rtl = bidi_is_rtl(s, (short)n);
+	bidi_visual_map(s, (short)n, (short)rtl, vbuf, vpos, vodd);
+	*vis = vbuf;
+	if (rtl)
+		*x = (short)(work.x + MARGIN + (cols - n) * cw);
+	return 1;
+}
+
 /* the selected part of a row shown inverted (XOR), within the clip c */
 static void invert(const GRECT *c, short x1, short x2, short y)
 {
@@ -292,13 +319,23 @@ static void draw_rows(const GRECT *c, long r0, long r1)
 			vst_color(vdi_h, 1);
 			continue;
 		}
-		text_n(vdi_h, tx, y, s, n);
-		blank(c, (short)(tx + n * cw), right, y, ch);
 		{
-			long a, b;
+			const char *vis;
+			short x;
+			int bi = row_visual(s, n, &vis, &x);
+			long a, b, i;
 
-			if (dv_sel_cols(v, page, off, n, &a, &b))
-				invert(c, (short)(tx + a * cw), (short)(tx + b * cw), y);
+			if (x > tx)
+				blank(c, tx, x, y, ch);
+			text_n(vdi_h, x, y, vis, n);
+			blank(c, (short)(x + n * cw), right, y, ch);
+			if (dv_sel_cols(v, page, off, n, &a, &b)) {
+				if (!bi)
+					invert(c, (short)(x + a * cw), (short)(x + b * cw), y);
+				else
+					for (i = a; i < b; i++)	/* letter by letter: Hebrew runs back */
+						invert(c, (short)(x + vpos[i] * cw), (short)(x + (vpos[i] + 1) * cw), y);
+			}
 		}
 	}
 	/* below the last row */
@@ -537,11 +574,27 @@ int win_hit(short mx, short my, long *page, long *off)
 	r = (my - work.y) / ch;
 	if (!dv_row(v, r, &kind, &s, &n, page, off) || *off < 0)
 		return 0;
-	col = (mx - (work.x + MARGIN) + cw / 2) / cw;
-	if (col < 0)
-		col = 0;
-	if (col > n)
-		col = n;
+	{
+		const char *vis;
+		short x;
+		int bi = row_visual(s, n, &vis, &x);
+
+		col = (mx - x + cw / 2) / cw;
+		if (col < 0)
+			col = 0;
+		if (col > n)
+			col = n;
+		if (bi && col < n) {
+			/* the logical letter shown in that column */
+			long i;
+
+			for (i = 0; i < n; i++)
+				if (vpos[i] == col) {
+					col = vodd[i] ? i + 1 : i;
+					break;
+				}
+		}
+	}
 	*off += col;
 	return 1;
 }
