@@ -14,6 +14,7 @@
 #include <string.h>
 #include "tos.h"
 #include "gemui.h"
+#include "dialog.h"
 #include "mbar.h"
 #include "text.h"
 #include "alert.h"
@@ -785,6 +786,7 @@ int main(void)
 	ap_id = appl_init();
 	if (ap_id < 0)
 		return 1;
+	dlg_title = "EPDF";			/* dialogs in a window (MiNT, MagiC): 3.5 */
 	vdi_h = graf_handle(&gl_wchar, &gl_hchar, &d, &d);
 	cw = gl_wchar;
 	ch = gl_hchar;

@@ -81,6 +81,7 @@ int find_dialog(char *text)
 	}
 	lf_init(&lf, tree, FIELD, text, CAP, 0);
 	lf_end(&lf);
+	dlg_name("Find");			/* its window's name, where it has one */
 	r = dlg_modal(tree, FIELD, CANCEL);
 	lf_forget(tree);
 	log_event("dialog-closed", "find", r == FIND ? "find" : "cancel");
