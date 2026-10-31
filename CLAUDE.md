@@ -112,10 +112,14 @@ at first. This section is kept up to date: the build, the tests, what a release 
   TOS 1.04 a line 80, a page 145, next page 310, Select all 85, released so by Erez's choice
   ("option 3 now, then option 1"). Option 1 is on main since: rows wholly selected shown to the
   text's right edge, inverted as one box (win_sel_change: only rows whose shape changed are drawn).
-  Next: 0.3, big documents on ST-1. To do on the ST's speed: a line (80), next page (310), a page
-  scrolled with everything selected (~205: the text, then one box turned over); then the
-  interpreter's per-glyph cost, JPEG decoding on a 68000 (minutes for a big one), streaming
-  content for ST-1, pictures' memory on ST-1.
+  0.3, big documents on ST-1 (started 31 Oct), is on main as 8db7191b: content and scans read in
+  pieces, pictures made a row at a time into the screen's bitmap (common's pic_dither_row), the
+  reader's memory cut (pieces joined, big objects kept, a 4-byte object table), the text store's pool
+  given back and the page or picture tried again when memory is refused. On ST-1 (big.py) 22 of the
+  corpus's 25 pass; the 3 fail on JPEGs too big for a 68000 (0.4). Next: the 0.3 release through the
+  hub, then 0.4. Still to do on the ST's speed: a line (80), next page (310), a page scrolled with
+  everything selected (~205), the About box (265 on EmuTOS); the interpreter's per-glyph cost (a map's
+  or photo-nasa-sunda's one page isn't read in 200 s on a 68000).
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
   checks: `tools/nofpu.sh`); decode streams with `inflate_open`/`inflate_read` so a page needn't fit
   in memory; reuse `common/atari/dspjpeg.c` with `PIC_LIBJPEG` for JPEG on the Falcon; a progressive
