@@ -228,11 +228,8 @@ static void select_span(long p0, long o0, long p1, long o1)
 	if (q0 == p0 && r0 == o0 && q1 == p1 && r1 == o1)
 		return;			/* the same again (^A twice): nothing to turn over */
 	dv_select(v, p0, o0, p1, o1);
-	/* inverted as they stand: the old selection back, the new one on */
-	if (q0 >= 0)
-		win_xor_span(q0, r0, q1, r1);
-	if (p0 >= 0)
-		win_xor_span(p0, o0, p1, o1);
+	/* the rows whose look changed: the old shape off, the new one on */
+	win_sel_change(q0, r0, q1, r1, p0, o0, p1, o1);
 	menu_states();
 }
 
@@ -479,9 +476,9 @@ static void click(short mx, short my, short kstate)
 		if (!(mb & 1))
 			break;
 		if (win_hit(mx, my, &p, &o) && (p != lp || o != lo)) {
-			/* the selection's end moved: what lies between, inverted */
+			/* the selection's end moved: the rows whose look changed */
 			dv_select(v, ap, ao, p, o);
-			win_xor_span(lp, lo, p, o);
+			win_sel_change(ap, ao, lp, lo, ap, ao, p, o);
 			lp = p;
 			lo = o;
 		}
