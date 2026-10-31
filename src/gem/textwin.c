@@ -542,6 +542,12 @@ static void moved(long d)
 		pxy[3] = (short)(pxy[1] + keep * ch - 1);
 		pxy[5] = (short)(work.y + (d > 0 ? 0 : ad));
 		pxy[7] = (short)(pxy[5] + keep * ch - 1);
+		if (d < 0) {
+			/* down the screen: what shows of the row after the last
+			   whole one moves too, the top of the cut row at the foot */
+			pxy[3] = (short)(work.y + work.h - 1 - ad);
+			pxy[7] = (short)(work.y + work.h - 1);
+		}
 		clip[0] = work.x;
 		clip[1] = work.y;
 		clip[2] = (short)(work.x + work.w - 1);
@@ -556,12 +562,9 @@ static void moved(long d)
 		T_MARK("copy");
 	}
 	if (d > 0)
-		win_draw_rows(keep, rows + 1);
+		win_draw_rows(keep, rows + 1);	/* the rows that came in, and the cut one */
 	else
-		win_draw_rows(0, rows - keep);
-	/* the row cut at the foot shows the row after the last whole one */
-	if (d < 0 && keep < rows + 1)
-		win_draw_rows(rows, rows + 1);
+		win_draw_rows(0, rows - keep);	/* the rows that came in at the top */
 	T_MARK("rows");
 }
 
