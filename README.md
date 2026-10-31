@@ -44,7 +44,9 @@ will hold:
    `EPDFDOC` is the icon for `*.PDF` in the desktop's **Install icon...**.
 
 **Needs:** any ST, STE, TT or Falcon with 1 MB or more; TOS 1.04 or newer, EmuTOS, MagiC or MiNT; a
-screen 640 pixels wide or more.
+screen 640 pixels wide or more. EPDF takes about 420 KB when it starts, and more as it reads (the
+pages' text up to a quarter of what is free, the rest in `EPDF.TXC`; a picture's own buffers while
+it is decoded): on a 1 MB ST, run it without the family's accessories.
 
 **Under TOS, put Atari's `FOLDR100.PRG` first in `AUTO`**, renamed for more room (`FOLDR400.PRG`).
 TOS keeps an entry in a small internal pool for every folder a program or accessory has looked

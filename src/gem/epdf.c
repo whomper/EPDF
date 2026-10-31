@@ -130,8 +130,11 @@ static void window_place_save(void)
 
 /* ---------------------------------------------------------------- the document */
 
+static void copy_end(const char *say);
+
 static void open_doc(const char *p)
 {
+	copy_end(NULL);			/* a copy of the old document's text: given up */
 	graf_mouse(BUSYBEE, NULL);
 	if (doc_open(p, win_cols(), lines_mode, cache_path) != 0) {
 		graf_mouse(ARROW, NULL);
@@ -283,70 +286,125 @@ static int find_step(void)
 	return 1;
 }
 
-/* the selection's text to the clipboard, lines ending CR LF; the soft
-   breaks as spaces (or line ends, showing the page's lines). Counted
-   first, then written into one buffer: a call a letter took an ST 580 ms
-   for 4.6 KB */
+/*
+ * Copy: the selection's text to the clipboard, lines ending CR LF; the
+ * soft breaks as spaces (or line ends, showing the page's lines). A job
+ * of its own between event calls (the guidelines' Speed: a whole book is
+ * a normal thing to copy, 8.5 s on an ST in one go): a page or a piece of
+ * one a step, its progress on the info line, Esc or Undo to stop it. The
+ * clipboard is written at the end.
+ */
+static struct {
+	int on;
+	long p, at;			/* the page and offset it goes on from */
+	long p0, o0, p1, o1;		/* the selection, as it was when Copy began */
+	char *buf;
+	long len, cap, missing;
+	unsigned long said;		/* tos_ms() when the progress was last shown */
+} cp;
+
+static void copy_end(const char *say)
+{
+	free(cp.buf);
+	memset(&cp, 0, sizeof cp);
+	win_status(say);
+}
+
 static void copy(void)
 {
 	DOCVIEW *v = doc_view();
-	long p, missing = 0, size = 0, len;
-	char *buf, *q;
 
-	if (!v || v->sel_p0 < 0)
+	if (!v || v->sel_p0 < 0 || cp.on)
 		return;
-	for (p = v->sel_p0; p <= v->sel_p1; p++) {
-		const char *t = doc_page_text(p, &len);
-		long a, e, i;
+	memset(&cp, 0, sizeof cp);
+	cp.on = 1;
+	cp.p0 = v->sel_p0;
+	cp.o0 = v->sel_o0;
+	cp.p1 = v->sel_p1;
+	cp.o1 = v->sel_o1;
+	cp.p = cp.p0;
+	cp.at = cp.o0;
+	win_status("copying...");
+}
 
-		if (!t) {
-			missing++;
-			continue;
-		}
-		a = p == v->sel_p0 ? v->sel_o0 : 0;
-		e = p == v->sel_p1 && v->sel_o1 < len ? v->sel_o1 : len;
-		size += e - a + 2;
-		for (i = a; i < e; i++)
-			size += t[i] == '\n' || (t[i] == '\r' && lines_mode);
-	}
-	if (size <= 0 || !(buf = malloc((size_t)size + 1))) {
-		win_status("nothing copied");
-		return;
-	}
-	q = buf;
-	for (p = v->sel_p0; p <= v->sel_p1; p++) {
-		const char *t = doc_page_text(p, &len);
-		long a, e, i;
+/* the copy on by up to 2 KB of text; 1 while it goes on */
+static int copy_step(void)
+{
+	long len, e, i, room;
+	const char *t;
+	char *q;
 
-		if (!t)
-			continue;
-		a = p == v->sel_p0 ? v->sel_o0 : 0;
-		e = p == v->sel_p1 && v->sel_o1 < len ? v->sel_o1 : len;
-		if (p > v->sel_p0 && q > buf) {
-			*q++ = '\r';
-			*q++ = '\n';
-		}
-		for (i = a; i < e; i++) {
-			char c = t[i];
-
-			if (c == '\n' || (c == '\r' && lines_mode)) {
-				*q++ = '\r';
-				*q++ = '\n';
-			} else {
-				*q++ = c == '\r' ? ' ' : c;
-			}
-		}
-	}
-	if (q > buf && clip_put(buf, (long)(q - buf))) {
+	if (!cp.on)
+		return 0;
+	if (cp.p > cp.p1) {
 		char n[16];
 
-		win_status(missing ? "copied; pages not read yet left out" : "copied");
-		snprintf(n, sizeof n, "%ld", (long)(q - buf));
-		log_event("copied", n, NULL);	/* the copy done, its status shown */
-	} else {
-		win_status("nothing copied");
+		if (cp.len && clip_put(cp.buf, cp.len)) {
+			snprintf(n, sizeof n, "%ld", cp.len);
+			copy_end(cp.missing ? "copied; pages not read yet left out" : "copied");
+			log_event("copied", n, NULL);	/* the copy done, its status shown */
+		} else {
+			copy_end("nothing copied");
+		}
+		return 0;
 	}
-	free(buf);
+	t = doc_page_text(cp.p, &len);
+	if (!t) {
+		cp.missing++;
+		cp.p++;
+		cp.at = 0;
+		return 1;
+	}
+	e = cp.p == cp.p1 && cp.o1 < len ? cp.o1 : len;
+	if (e - cp.at > 2048)
+		e = cp.at + 2048;
+	/* room for the piece: each character two at most, and a page's break */
+	room = (e - cp.at) * 2 + 2;
+	if (cp.len + room > cp.cap) {
+		long cap = cp.cap ? cp.cap * 2 : 16384;
+		char *nb;
+
+		while (cap < cp.len + room)
+			cap *= 2;
+		if (!(nb = realloc(cp.buf, (size_t)cap))) {
+			copy_end("too much to copy for the memory");
+			return 0;
+		}
+		cp.buf = nb;
+		cp.cap = cap;
+	}
+	q = cp.buf + cp.len;
+	if (cp.at == 0 && cp.p > cp.p0 && cp.len) {
+		*q++ = '\r';
+		*q++ = '\n';
+	}
+	for (i = cp.at; i < e; i++) {
+		char c = t[i];
+
+		if (c == '\n' || (c == '\r' && lines_mode)) {
+			*q++ = '\r';
+			*q++ = '\n';
+		} else {
+			*q++ = c == '\r' ? ' ' : c;
+		}
+	}
+	cp.len = (long)(q - cp.buf);
+	if (e >= (cp.p == cp.p1 && cp.o1 < len ? cp.o1 : len)) {
+		cp.p++;
+		cp.at = 0;
+		/* the progress every quarter of a second (the guidelines' Speed);
+		   the AES draws the info line again at each one */
+		if (cp.p1 > cp.p0 && tos_ms() - cp.said >= 250) {
+			char msg[48];
+
+			snprintf(msg, sizeof msg, "copying... %ld of %ld pages", cp.p - cp.p0, cp.p1 - cp.p0 + 1);
+			win_status(msg);
+			cp.said = tos_ms();
+		}
+	} else {
+		cp.at = e;
+	}
+	return 1;
 }
 
 /* a click in the text: the selection made by dragging; with Shift, the
@@ -564,6 +622,11 @@ static void key(short kstate, short k)
 
 	if (win_iconified())
 		return;			/* an iconified window takes no keys (5.1) */
+	if (cp.on && (scan == 0x01 || scan == 0x61)) {
+		copy_end("copy stopped");	/* Esc or Undo: the copy given up */
+		log_event("copy-stopped", NULL, NULL);
+		return;
+	}
 	/* the AES makes these itself from Control with the arrows and
 	   Clr/Home, and gives them without Control in kstate; Shift may be gone
 	   too when EPDF was busy, so Shift+^Home and ^End both mean the last */
@@ -785,7 +848,7 @@ int main(void)
 	while (!quit_now) {
 		short which, flags = MU_MESAG | MU_KEYBD | MU_BUTTON;
 		unsigned long t;
-		int pending = doc_pending() || find_dir || doc_pic_busy() || pics_waiting();
+		int pending = doc_pending() || find_dir || doc_pic_busy() || pics_waiting() || cp.on;
 
 		/* the sliders after a scroll, once no key waits; the reading
 		   on while nothing else does */
@@ -818,6 +881,11 @@ int main(void)
 				arrived_pic = -1;
 			} else if (win_sliders_due()) {
 				win_sliders();
+			} else if (cp.on) {
+				/* a copy the user asked for: before the reading and the pictures */
+				bg_begin();
+				while (copy_step() && bg_more())
+					;
 			} else if ((doc_pic_busy() || pics_waiting()) && bg_may_work() && ((pic_turn ^= 1) || !doc_pending())) {
 				long obj = -1;
 
@@ -851,6 +919,7 @@ int main(void)
 	if (has_menu)
 		menu_bar(menu.tree, 0);
 	mbar_free(&menu);
+	free(cp.buf);
 	doc_close();
 	pics_exit();
 	font_exit();

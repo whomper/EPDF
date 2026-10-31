@@ -23,7 +23,8 @@ joined and wrapped to the window, or each line as it is on the page.
   **Options > Install application...** on the desktop).
 
 **Needs:** any ST, STE, TT or Falcon with 1 MB or more; TOS 1.04 or newer, EmuTOS, MagiC or MiNT;
-a screen 640 pixels wide or more.
+a screen 640 pixels wide or more. EPDF takes about 420 KB when it starts, and more as it reads: on a
+1 MB ST, run it without accessories.
 
 **Under TOS, put Atari's `FOLDR100.PRG` first in `AUTO`**, renamed for more room (`FOLDR400.PRG`).
 
@@ -38,7 +39,8 @@ page at a time while you read, starting with the page you are on; a page it hasn
 gives way to you at once.
 
 - **File:** Open... (^O), Quit (^Q).
-- **Edit:** Copy (^C) puts the text you selected on the clipboard; Select all (^A); Find... (^F)
+- **Edit:** Copy (^C) puts the text you selected on the clipboard (a big selection is copied a
+  page at a time, with its progress under the title; Esc stops it); Select all (^A); Find... (^F)
   looks for a word or a phrase, whatever its case, across the lines it was set on; Find next (^G)
   and Find previous (⇧^G) look again. A search goes round the whole document, reading pages it
   hasn't read yet first, and says on the line under the title where it found the text.
