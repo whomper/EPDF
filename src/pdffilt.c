@@ -595,14 +595,20 @@ static int pcsrc_get(void *u, unsigned char *buf, long n)
 	return (int)k;
 }
 
-PCSRC *pdf_stream_open(PDOC *d, POBJ *o, long onum)
+static int is_ccitt(const POBJ *f)
+{
+	return f && f->t == PO_NAME && (!strcmp(f->u.p, "CCITTFaxDecode") || !strcmp(f->u.p, "CCF"));
+}
+
+/* image: the stream's last filter is a scan's (CCITTFaxDecode), left to
+   the caller: the bytes before it */
+static PCSRC *src_open(PDOC *d, POBJ *o, int image)
 {
 	POBJ *filter, *parms;
 	PCSRC *s;
 	long off, len;
 	int flate = 0;
 
-	(void)onum;
 	if (!o || o->t != PO_DICT || !o->flag || d->crypt)
 		return NULL;
 	filter = pd_get(d, o, "Filter");
@@ -611,6 +617,17 @@ PCSRC *pdf_stream_open(PDOC *d, POBJ *o, long onum)
 	parms = pd_get(d, o, "DecodeParms");
 	if (!parms)
 		parms = pd_get(d, o, "DP");
+	if (image) {
+		/* /CCITTFaxDecode, [/CCITTFaxDecode] or [/FlateDecode /CCITTFaxDecode] */
+		if (is_ccitt(filter))
+			filter = NULL;
+		else if (filter && filter->t == PO_ARR && filter->a >= 1 && filter->a <= 2
+			 && is_ccitt(pdf_res(d, pa_at(filter, filter->a - 1)))) {
+			filter = filter->a == 2 ? pdf_res(d, pa_at(filter, 0)) : NULL;
+			parms = parms && parms->t == PO_ARR && parms->a == 2 ? pdf_res(d, pa_at(parms, 0)) : NULL;
+		} else
+			return NULL;
+	}
 	if (filter && filter->t == PO_ARR && filter->a == 1)
 		filter = pdf_res(d, pa_at(filter, 0));
 	if (filter) {
@@ -653,6 +670,18 @@ PCSRC *pdf_stream_open(PDOC *d, POBJ *o, long onum)
 	}
 	d->st.streams++;
 	return s;
+}
+
+PCSRC *pdf_stream_open(PDOC *d, POBJ *o, long onum)
+{
+	(void)onum;
+	return src_open(d, o, 0);
+}
+
+PCSRC *pdf_stream_open_scan(PDOC *d, POBJ *o, long onum)
+{
+	(void)onum;
+	return src_open(d, o, 1);
 }
 
 long pdf_stream_read(PCSRC *s, unsigned char *out, long n)

@@ -52,6 +52,15 @@ static int poll_ok(void)
 
 /* the number of colours of a colour space (1 grey, 3 RGB, 4 CMYK), its
    palette when Indexed (pal: 256 x 3, *hival), 0 when it isn't known */
+/* why a stream couldn't be decoded whole: too big for max, refused
+   memory (the reader's count of refusals went up since oom), or damaged */
+static int stream_why(PDOC *d, const SBUF *b, long max, long oom)
+{
+	if (b->len >= max)
+		return PIC_TOO_BIG;
+	return d->st.oom != oom ? PIC_MEMORY : PIC_DAMAGED;
+}
+
 static int colours(PDOC *d, POBJ *cs, unsigned char *pal, int *hival)
 {
 	if (!cs)
@@ -278,7 +287,7 @@ PIC *pdf_image(PDOC *d, long obj, int w, int h, long max_bytes, int *why)
 {
 	POBJ *o = pdf_get(d, obj), *cs;
 	const char *term = NULL;
-	long sw, sh;
+	long sw, sh, oom;
 	int bpc, nc, hival = 0, invert = 0;
 	unsigned char pal[256 * 3];
 	SBUF b;
@@ -299,8 +308,9 @@ PIC *pdf_image(PDOC *d, long obj, int w, int h, long max_bytes, int *why)
 		return NULL;
 	}
 	sb_init(&b);
+	oom = d->st.oom;
 	if (pdf_stream(d, o, obj, &b, &term, max_bytes) != 0) {
-		*why = b.len >= max_bytes ? PIC_TOO_BIG : PIC_DAMAGED;
+		*why = stream_why(d, &b, max_bytes, oom);
 		sb_free(&b);
 		return NULL;
 	}
@@ -403,9 +413,10 @@ static int rows_samples(PDOC *d, POBJ *o, long obj, long sw, long sh, int bpc, i
 	src = pdf_stream_open(d, o, obj);
 	if (!src) {
 		const char *term = NULL;
+		long oom = d->st.oom;
 
 		if (pdf_stream(d, o, obj, &whole, &term, max_bytes) != 0) {
-			*why = whole.len >= max_bytes ? PIC_TOO_BIG : PIC_DAMAGED;
+			*why = stream_why(d, &whole, max_bytes, oom);
 			sb_free(&whole);
 			return 0;
 		}
@@ -460,7 +471,15 @@ done:
 	return ok;
 }
 
-static int rows_ccitt(PDOC *d, POBJ *o, const unsigned char *s, long n, long sw, long sh, ROWS *out, int *why)
+static long scan_fill(void *u, uint8_t *buf, long n)
+{
+	long k = pdf_stream_read(u, buf, n);
+
+	return k > 0 ? k : 0;
+}
+
+/* src: the coded bytes pulled a piece at a time; else s, n whole */
+static int rows_ccitt(PDOC *d, POBJ *o, PCSRC *src, const unsigned char *s, long n, long sw, long sh, ROWS *out, int *why)
 {
 	POBJ *dp = pd_get(d, o, "DecodeParms");
 	long k = 0, cols = sw, gw, gh, gi = 0, y, x, *xs = NULL;
@@ -488,7 +507,7 @@ static int rows_ccitt(PDOC *d, POBJ *o, const unsigned char *s, long n, long sw,
 	}
 	while (f < 8 && cols / (f * 2) >= out->w)
 		f *= 2;
-	if (ccitt_open(&c, s, n, (int)cols, (int)k, align)) {
+	if (src ? ccitt_open_pull(&c, scan_fill, src, (int)cols, (int)k, align) : ccitt_open(&c, s, n, (int)cols, (int)k, align)) {
 		*why = PIC_MEMORY;
 		return 0;
 	}
@@ -600,12 +619,18 @@ int pdf_image_rows(PDOC *d, long obj, int w, int h, PIMG_ROW row, void *u, long 
 	if (fn && (!strcmp(fn, "CCITTFaxDecode") || !strcmp(fn, "CCF"))) {
 		SBUF b;
 		const char *term = NULL;
+		PCSRC *src = pdf_stream_open_scan(d, o, obj);
+		long oom = d->st.oom;
 
 		sb_init(&b);
-		if (pdf_stream(d, o, obj, &b, &term, max_bytes) != 0)
+		if (src) {
+			r = rows_ccitt(d, o, src, NULL, 0, sw, sh, &out, why);
+			pdf_stream_close(src);
+		} else if (pdf_stream(d, o, obj, &b, &term, max_bytes) != 0) {
+			*why = stream_why(d, &b, max_bytes, oom);
 			r = 0;
-		else
-			r = rows_ccitt(d, o, (const unsigned char *)b.s, b.len, sw, sh, &out, why);
+		} else
+			r = rows_ccitt(d, o, NULL, (const unsigned char *)b.s, b.len, sw, sh, &out, why);
 		sb_free(&b);
 	} else
 		r = rows_samples(d, o, obj, sw, sh, bpc, nc, pal, invert, &out, max_bytes, why);

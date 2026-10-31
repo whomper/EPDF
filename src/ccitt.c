@@ -51,6 +51,7 @@ int ccitt_open(CCITT *c, const uint8_t *data, long n, int cols, int k, int byte_
 	c->align = byte_align;
 	c->in = data;
 	c->nbits = n * 8;
+	c->lim = 0x7FFFFFFFL;
 	if (cols < 1 || cols > 65000)
 		return -1;
 	c->ref = malloc((size_t)(cols + 8) * 2);
@@ -65,8 +66,54 @@ int ccitt_open(CCITT *c, const uint8_t *data, long n, int cols, int k, int byte_
 	return 0;
 }
 
+#define CCBUF 4096
+
+/* the bytes not read yet to buf's start, and buf filled again behind them */
+static void refill(CCITT *c)
+{
+	long p = c->pos >> 3, have = (c->nbits >> 3) - p;
+
+	if (have < 0)
+		have = 0;
+	if (have)
+		memmove(c->buf, c->buf + p, (size_t)have);
+	c->pos &= 7;
+	while (have < CCBUF) {
+		long k = c->fill(c->fu, c->buf + have, CCBUF - have);
+
+		if (k <= 0) {
+			c->fill = NULL;		/* the end: what's in buf is all */
+			break;
+		}
+		have += k;
+	}
+	c->nbits = have * 8;
+	/* a code is 13 bits at most and peek looks 3 bytes on: refilled 8 bytes before buf's end */
+	c->lim = c->fill ? (have - 8) * 8 : 0x7FFFFFFFL;
+}
+
+#define MORE(c) do { if ((c)->pos > (c)->lim) refill(c); } while (0)
+
+int ccitt_open_pull(CCITT *c, long (*fill)(void *u, uint8_t *buf, long n), void *u, int cols, int k, int byte_align)
+{
+	uint8_t *buf = malloc(CCBUF);
+
+	if (!buf)
+		return -1;
+	if (ccitt_open(c, NULL, 0, cols, k, byte_align)) {
+		free(buf);
+		return -1;
+	}
+	c->in = c->buf = buf;
+	c->fill = fill;
+	c->fu = u;
+	c->lim = -1;			/* filled at the first row */
+	return 0;
+}
+
 void ccitt_close(CCITT *c)
 {
+	free(c->buf);
 	free(c->ref);
 	free(c->cur);
 	if (g_refs && --g_refs == 0) {
@@ -98,8 +145,11 @@ static int run(CCITT *c, int black)
 	int total = 0;
 
 	for (;;) {
-		unsigned e = tab[peek(c, 13)];
+		unsigned e;
 		int r;
+
+		MORE(c);
+		e = tab[peek(c, 13)];
 
 		if (!e) {
 			c->err = 1;
@@ -160,6 +210,7 @@ int ccitt_row(CCITT *c, uint8_t *row)
 		return 0;
 	if (c->align)
 		c->pos = (c->pos + 7) & ~7L;
+	MORE(c);
 	if (c->pos >= c->nbits) {
 		c->eof = 1;
 		return 0;
@@ -168,8 +219,10 @@ int ccitt_row(CCITT *c, uint8_t *row)
 	if (c->k == 0) {					/* group 3, one-dimensional: runs from the left */
 		int x = 0, black = 0;
 
-		while (peek(c, 12) == 0 && c->pos < c->nbits)	/* fill bits, then the EOL */
+		while (peek(c, 12) == 0 && c->pos < c->nbits) {	/* fill bits, then the EOL */
 			c->pos++;
+			MORE(c);
+		}
 		if (peek(c, 12) == 1)
 			c->pos += 12;
 		while (x < cols) {
@@ -187,8 +240,11 @@ int ccitt_row(CCITT *c, uint8_t *row)
 		return 1;
 	}
 	while (a0 < cols) {
-		unsigned v = peek(c, 7);
+		unsigned v;
 		int b1, b2;
+
+		MORE(c);
+		v = peek(c, 7);
 
 		/* b1: the first change on the line above, right of a0, to the other colour */
 		while (bi > 0 && c->ref[bi - 1] > a0)
