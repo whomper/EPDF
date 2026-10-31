@@ -76,13 +76,20 @@ typedef struct {
 	long total;
 } PARENA;
 
-/* the cross-reference table: 8 bytes an object */
+/* the cross-reference table: 4 bytes an object (a 34000-object manual's
+   was 265 KB at 8, 0.3). The top two bits the kind (0 not set, 1 in use,
+   2 compressed, 3 free); in use, the file offset (generation 0);
+   compressed, the object stream's number (18 bits) and the index in it
+   (12, a hint). What doesn't fit (a generation, a bigger number) is all
+   ones below the kind, and the entry is in xx (xe_get, pdfobj.c) */
+typedef uint32_t PXE;
 typedef struct {
+	int32_t num;
 	uint32_t a;			/* in use: file offset; compressed: the object stream's number */
 	uint16_t b;			/* in use: generation; compressed: index in the stream */
-	uint8_t t;			/* 0 not set, 1 in use, 2 compressed, 3 free */
+	uint8_t t;
 	uint8_t pad;
-} PXE;
+} PXX;
 
 #define PCACHE 256
 typedef struct { int32_t num; POBJ *o; } PCENT;
@@ -100,6 +107,9 @@ typedef struct pdoc {
 	/* cross-reference table and trailer */
 	PXE *xe;
 	long nxe;
+	PXX *xx;			/* the entries that don't fit in 4 bytes */
+	long nxx, capxx;
+	int xx_sorted;
 	POBJ *trailer;
 	POBJ *root;
 	int repaired;			/* the table was rebuilt by scanning the file */
@@ -110,6 +120,12 @@ typedef struct pdoc {
 	PARENA a;			/* what lives for a page */
 	PARENA *cur;			/* where parsing allocates */
 	PCENT cache[PCACHE];
+	/* big objects (a page tree's shared resources, a dictionary of every
+	   page's pictures) parsed once into doc_a and kept, not parsed again
+	   for every page */
+	PCENT kept[8];
+	int nkept;
+	long kept_bytes;
 	/* the last object stream, decoded */
 	long os_num;
 	unsigned char *os_buf;

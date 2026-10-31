@@ -33,11 +33,9 @@ static void xe_set(PDOC *d, long num, int t, uint32_t a, uint16_t b)
 {
 	if (num < 0 || !xe_room(d, num + 1))
 		return;
-	if (d->xe[num].t)			/* a newer section has it */
+	if (xe_kind(d, num))			/* a newer section has it */
 		return;
-	d->xe[num].t = (uint8_t)t;
-	d->xe[num].a = a;
-	d->xe[num].b = b;
+	xe_put(d, num, t, a, b);
 }
 
 /* a dict (or any object) at file offset off, parsed into the document arena */
@@ -211,11 +209,8 @@ static int xref_table(PDOC *d, long off, long *next_pos_after)
 
 						if (num >= d->nxe && !xe_room(d, num + 1))
 							goto bad;
-						if (!d->xe[num].t) {
-							d->xe[num].t = p[17] == 'n' ? 1 : 3;
-							d->xe[num].a = o2;
-							d->xe[num].b = (uint16_t)g2;
-						}
+						if (!xe_kind(d, num))
+							xe_put(d, num, p[17] == 'n' ? 1 : 3, (uint32_t)o2, (uint16_t)g2);
 						p += 18;
 						i++;
 						continue;
@@ -432,7 +427,7 @@ int xref_load(PDOC *d)
 	if (sz && sz->t == PO_INT)
 		xe_room(d, sz->a);
 	root = pd_getraw(d->trailer, "Root");
-	if (!root || root->t != PO_REF || root->a >= d->nxe || d->xe[root->a].t == 0)
+	if (!root || root->t != PO_REF || root->a >= d->nxe || xe_kind(d, root->a) == 0)
 		return -1;
 	return 0;
 }
@@ -451,8 +446,7 @@ int xref_rebuild(PDOC *d)
 	buf = pdf_malloc(d, chunk + 64);
 	if (!buf)
 		return -1;
-	if (d->xe)
-		memset(d->xe, 0, (size_t)d->nxe * sizeof(PXE));
+	xe_clear(d);
 	d->trailer = NULL;
 	while (pos < d->size) {
 		long got = pdf_rd(d, pos, buf, chunk + 32), lim, j;
@@ -492,9 +486,7 @@ int xref_rebuild(PDOC *d)
 					continue;
 				if (!xe_room(d, num + 1))
 					continue;
-				d->xe[num].t = 1;
-				d->xe[num].a = (uint32_t)(pos + k + 1);
-				d->xe[num].b = (uint16_t)g;
+				xe_put(d, num, 1, (uint32_t)(pos + k + 1), (uint16_t)g);
 				cur = num;
 				cur_off = pos + k + 1;
 				(void)cur_off;
@@ -527,7 +519,7 @@ int xref_rebuild(PDOC *d)
 	}
 	pdf_free(d, buf, chunk + 64);
 	/* an encrypted file needs its key before an object stream can be read */
-	if (!tr && xref_cand >= 0 && d->xe[xref_cand].t == 1) {
+	if (!tr && xref_cand >= 0 && xe_kind(d, xref_cand) == 1) {
 		POBJ *t = pdf_get(d, xref_cand);
 
 		if (t && pd_getraw(t, "Root"))
@@ -572,7 +564,7 @@ int xref_rebuild(PDOC *d)
 	if (root_cand >= 0) {
 		POBJ *r = pd_getraw(tr, "Root");
 
-		if (!r || r->t != PO_REF || r->a >= d->nxe || d->xe[r->a].t == 0) {
+		if (!r || r->t != PO_REF || r->a >= d->nxe || xe_kind(d, r->a) == 0) {
 			if (r)
 				r->a = (int32_t)root_cand;
 		}

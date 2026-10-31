@@ -9,6 +9,7 @@
 #   make icons      icons/ and src/gem/icon*.h from common/icons/EPDF.txt, EPDFDOC.txt
 #   make gui-test   EPDF.PRG driven in Hatari (tests/hatari/gui.py)
 #   make files-test each file's opens on a 1 MB ST against the budget (tests/hatari/files.py, 6.5)
+#   big documents on a 1 MB ST: python3 tests/hatari/big.py WORK [NAME...] (the corpus)
 #   make measure-atari  the stage 0 measuring programs (MEASURE.PRG and the others)
 #   make measure    the measurement run on this computer (corpus: tools/fetch-corpus.py)
 #
@@ -72,7 +73,11 @@ VIEW_TEST_SRC = src/view/docview.c src/view/textview.c src/view/tstore.c src/pdf
 build/test_tstore build/test_docview: build/test_%: tests/test_%.c $(VIEW_TEST_SRC) $(wildcard src/view/*.h) src/plat.h | build
 	$(CC) -Isrc -Isrc/view -Icommon/src -Wall -Wextra -O2 -o $@ $< $(VIEW_TEST_SRC)
 
-test: build/test_ccitt build/test_textview build/test_inf build/test_tstore build/test_docview build/test_search
+build/test_xe: tests/test_xe.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HDRS) | build
+	$(CC) $(HCFLAGS) -fsanitize=address,undefined -o $@ tests/test_xe.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC)
+
+test: build/test_xe build/test_ccitt build/test_textview build/test_inf build/test_tstore build/test_docview build/test_search
+	build/test_xe
 	python3 tests/ccitt.py
 	build/test_textview
 	build/test_inf

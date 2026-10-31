@@ -28,8 +28,8 @@ int main(int argc, char **argv)
 		return 1;
 	}
 	n = pdf_pages(&d);
-	printf("%s: %ld objects, %ld pages; open %ld KB (the table %ld KB)\n", argv[1], d.nxe, n, d.st.mem / 1024,
-	       d.nxe * (long)sizeof(PXE) / 1024);
+	printf("%s: %ld objects, %ld pages; open %ld KB (the table %ld KB, %ld entries beside it)\n", argv[1], d.nxe, n,
+	       d.st.mem / 1024, d.nxe * (long)sizeof(PXE) / 1024, d.nxx);
 	for (k = first; k < first + count && k < n; k++) {
 		PTEXT t;
 		long m0 = d.st.mem, oom = d.st.oom;

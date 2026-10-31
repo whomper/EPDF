@@ -26,10 +26,11 @@ static int over_cap(PDOC *d, long n)
 		memcap = c ? atol(c) * 1024 : 0;
 	}
 	if (memcap > 0 && d->st.mem + n > memcap) {
-		void *bt[4];
-		int k = backtrace(bt, 4), i;
+		void *bt[10];
+		int k = backtrace(bt, 10), i;
 
-		fprintf(stderr, "pdf: refused %ld bytes, %ld in use; from", n, d->st.mem);
+		fprintf(stderr, "pdf: refused %ld bytes, %ld in use (arenas: page %ld, document %ld; fonts %ld, os %ld); from", n, d->st.mem,
+			d->a.total, d->doc_a.total, d->st.fonts, d->os_len);
 		for (i = 1; i < k; i++)
 			fprintf(stderr, " %p", bt[i]);
 		fprintf(stderr, "\n");
@@ -113,6 +114,21 @@ void pa_free(PDOC *d, PARENA *a)
 	}
 	a->head = NULL;
 	a->total = 0;
+}
+
+/* the arena back to where it was (head, and head's use then): what was
+   built since dropped */
+static void pa_back(PDOC *d, PARENA *a, ACH *head, long used)
+{
+	while (a->head && a->head != head) {
+		ACH *c = a->head;
+
+		a->head = c->next;
+		a->total -= c->size + (long)sizeof(ACH);
+		pdf_free(d, c, c->size + (long)sizeof(ACH));
+	}
+	if (a->head)
+		a->head->used = used;
 }
 
 /* ------------------------------------------------------------------ file window */
@@ -876,30 +892,54 @@ static POBJ *parse_indirect(PDOC *d, const unsigned char *buf, long n, int final
 	return o;
 }
 
+/* the most the kept objects may take in the document's arena */
+#define KEPT_MAX (64L * 1024)
+
 static POBJ *load_file_obj(PDOC *d, long num, long off, long gen)
 {
-	long want = 1024, got;
+	long want = 1024, got, a0 = 0;
 	unsigned char *buf = NULL;
 	POBJ *o = NULL;
 	int trunc = 0;
-	long used_before;
+	PARENA *page = NULL;
+	ACH *k0 = NULL;
+	long ku0 = 0;
 
 	for (;;) {
-		ACH *ch0 = d->cur->head;
-		long used0 = ch0 ? ch0->used : 0;
+		PARENA *a = d->cur;
+		ACH *h0 = a->head;
+		long u0 = h0 ? h0->used : 0;
 
 		buf = pdf_malloc(d, want);
 		if (!buf)
-			return NULL;
+			break;
 		got = pdf_rd(d, off, buf, want);
 		o = parse_indirect(d, buf, got, off + got >= d->size, num, gen, off, 0, &trunc);
 		pdf_free(d, buf, want);
 		if (o || !trunc || off + got >= d->size || want >= (8L << 20))
 			break;
-		/* cut off: the half-built objects stay in the arena (small); read more */
-		(void)used0;
-		(void)used_before;
+		/* cut off: what it built dropped, and more read. One past 4 KB is
+		   parsed into the document's arena and kept (pdf_get), while
+		   there is room */
+		pa_back(d, a, h0, u0);
 		want *= 4;
+		if (want >= 16384 && !page && d->cur == &d->a && !d->skip_kids && d->nkept < 8 && d->kept_bytes < KEPT_MAX) {
+			page = d->cur;
+			d->cur = &d->doc_a;
+			a0 = d->doc_a.total;
+			k0 = d->doc_a.head;
+			ku0 = k0 ? k0->used : 0;
+		}
+	}
+	if (page) {
+		d->cur = page;
+		if (!o)
+			pa_back(d, &d->doc_a, k0, ku0);	/* damaged: nothing of it stays */
+		else {
+			d->kept[d->nkept].num = (int32_t)num;
+			d->kept[d->nkept++].o = o;
+			d->kept_bytes += d->doc_a.total - a0;
+		}
 	}
 	return o;
 }
@@ -964,24 +1004,146 @@ static int objstm_load(PDOC *d, long snum)
 	return 1;
 }
 
+/* ------------------------------------------------------------------ the table's entries */
+#define XE_BIG 0x3FFFFFFFUL		/* below the kind: the entry is in xx */
+
+static int xx_cmp(const void *a, const void *b)
+{
+	const PXX *x = a, *y = b;
+
+	return x->num < y->num ? -1 : x->num > y->num;
+}
+
+/* num's entry in the sorted side list, or NULL */
+static PXX *xx_find(PDOC *d, long num)
+{
+	long lo = 0, hi = d->nxx - 1;
+
+	while (lo <= hi) {
+		long m = (lo + hi) >> 1;
+
+		if (d->xx[m].num == num)
+			return &d->xx[m];
+		if (d->xx[m].num < num)
+			lo = m + 1;
+		else
+			hi = m - 1;
+	}
+	return NULL;
+}
+
+void xe_put(PDOC *d, long num, int t, uint32_t a, uint16_t b)
+{
+	uint32_t v = (uint32_t)t << 30;
+
+	if (t == 1 && b == 0 && a < XE_BIG)
+		v |= a;
+	else if (t == 2 && a < (1UL << 18))
+		v |= a << 12 | (b < 4095 ? b : 4095);	/* the index a hint: past 4094, found by search */
+	else if (t == 1 || t == 2) {
+		long k;
+
+		/* a number already there takes its place (a newer section, a rebuild) */
+		for (k = d->nxx - 1; k >= 0 && d->xx_sorted == 0; k--)
+			if (d->xx[k].num == num)
+				break;
+		if (d->xx_sorted || k < 0) {
+			PXX *f = d->xx_sorted ? xx_find(d, num) : NULL;
+
+			if (f)
+				k = f - d->xx;
+			else {
+				if (d->nxx == d->capxx) {
+					long cap = d->capxx ? d->capxx * 2 : 16;
+					PXX *q = pdf_realloc(d, d->xx, d->capxx * (long)sizeof(PXX), cap * (long)sizeof(PXX));
+
+					if (!q)
+						return;
+					d->xx = q;
+					d->capxx = cap;
+				}
+				k = d->nxx++;
+				d->xx_sorted = 0;
+			}
+		}
+		d->xx[k].num = (int32_t)num;
+		d->xx[k].a = a;
+		d->xx[k].b = b;
+		d->xx[k].t = (uint8_t)t;
+		v |= XE_BIG;
+	}
+	d->xe[num] = v;
+}
+
+int xe_get(PDOC *d, long num, uint32_t *a, uint16_t *b)
+{
+	uint32_t v = d->xe[num];
+	int t = (int)(v >> 30);
+
+	if ((v & XE_BIG) == XE_BIG && (t == 1 || t == 2)) {
+		PXX *f;
+
+		if (!d->xx_sorted) {
+			/* a number set twice before the sort: the later one is what
+			   counts, and xe_put replaced it in place */
+			qsort(d->xx, (size_t)d->nxx, sizeof *d->xx, xx_cmp);
+			d->xx_sorted = 1;
+		}
+		f = xx_find(d, num);
+		if (!f)
+			return 0;
+		*a = f->a;
+		*b = f->b;
+		return t;
+	}
+	if (t == 1) {
+		*a = v & XE_BIG;
+		*b = 0;
+	} else if (t == 2) {
+		*a = (v & XE_BIG) >> 12;
+		*b = (uint16_t)(v & 4095);
+	} else {
+		*a = 0;
+		*b = 0;
+	}
+	return t;
+}
+
+void xe_clear(PDOC *d)
+{
+	if (d->xe)
+		memset(d->xe, 0, (size_t)d->nxe * sizeof(PXE));
+	d->nxx = 0;
+	d->xx_sorted = 0;
+}
+
 POBJ *pdf_get(PDOC *d, long num)
 {
-	PXE *e;
 	POBJ *o;
+	uint32_t ea;
+	uint16_t eb;
+	int et;
 
 	if (num < 0 || num >= d->nxe)
 		return NULL;
 	o = cache_find(d, num);
 	if (o)
 		return o == &unloadable ? NULL : o;
-	e = &d->xe[num];
-	if (e->t == 1) {
-		o = load_file_obj(d, num, e->a, e->b);
-	} else if (e->t == 2) {
-		long i, idx = e->b;
+	{
+		int k;
+
+		for (k = 0; k < d->nkept; k++)
+			if (d->kept[k].num == num)
+				return d->kept[k].o;
+	}
+	et = xe_get(d, num, &ea, &eb);
+	if (et == 1) {
+		o = load_file_obj(d, num, ea, eb);
+	} else if (et == 2) {
+		long i, idx = eb;
 		int trunc = 0;
 
-		if (!objstm_load(d, e->a))
+		if (!objstm_load(d, ea))
 			return NULL;
 		if (idx >= d->os_n || d->os_off[2 * idx] != num) {	/* the index is a hint */
 			for (idx = 0; idx < d->os_n; idx++)
@@ -1030,11 +1192,8 @@ int objstm_register(PDOC *d, long snum)
 			d->xe = q;
 			d->nxe = num + 1;
 		}
-		if (d->xe[num].t == 0) {
-			d->xe[num].t = 2;
-			d->xe[num].a = (uint32_t)snum;
-			d->xe[num].b = (uint16_t)i;
-		}
+		if (xe_kind(d, num) == 0)
+			xe_put(d, num, 2, (uint32_t)snum, (uint16_t)i);
 	}
 	return 1;
 }

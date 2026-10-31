@@ -180,7 +180,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   machine and the TOS (`describe()`). The cloud session that made the measurement run had no TOS
   images: its numbers are on EmuTOS 1.4 (CPU-bound work is TOS-independent; file and GEM calls are not).
 - **Build and test:** see the Makefile's header. `make` builds `binary/EPDF.PRG` (host tools under
-  `build/`); `make test` runs the host tests (layout, store, view, INF, search, CCITT) and checks the
+  `build/`); `make test` runs the host tests (layout, store, view, INF, search, CCITT, the object table) and checks the
   programs (`tools/nofpu.sh`, `common/tools/oddaccess.py`). Before a push that touches the GEM side:
   `make gui-test` (`tests/hatari/gui.py`, ST:mono; also Falcon:16). A change to drawing, a loop over
   the data or the start: `make speed-test` (`tests/hatari/speed.py`, build/aprof: EPDF as released
@@ -190,4 +190,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   (`tests/hatari/files.py`, ST-1: each file's opens from the GEMDOS trace against the budget, 6.5).
   `make shots` takes docs/screenshot.png and docs/help/WINDOW.IMG again. `make help HCP=...`, `make
   dist`. The stage 0 tools: `make measure-atari`, `make measure`, `tests/hatari/measure.py`.
-  `build/pdftext FILE PAGE [marks]` shows a page's reflowed text on the host.
+  `build/pdftext FILE PAGE [marks]` shows a page's reflowed text on the host. Memory (0.3):
+  `build/pdfmem FILE [FIRST [COUNT]]` gives each page's peak in the reader; `PDF_MEMCAP=KB` caps it
+  on the host and names each refused allocation's callers; `tests/hatari/big.py WORK [NAME...]`
+  opens the corpus on ST-1 and reports pages and pictures that failed.

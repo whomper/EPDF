@@ -513,7 +513,12 @@ static int pdf_stream_in(PDOC *d, POBJ *o, long onum, SBUF *out, const char **te
 	if (!parms)
 		parms = pd_get(d, o, "DP");
 	if (d->crypt && onum >= 0 && !pdf_is_name(pd_getraw(o, "Type"), "XRef") && !crypt_identity(d, filter, parms)) {
-		len = pc_decrypt(d, onum, d->xe && onum < d->nxe ? d->xe[onum].b : 0, 1, raw, len);
+		uint32_t ea = 0;
+		uint16_t eb = 0;
+
+		if (d->xe && onum < d->nxe && xe_get(d, onum, &ea, &eb) != 1)
+			eb = 0;
+		len = pc_decrypt(d, onum, eb, 1, raw, len);
 		d->st.crypt_bytes += len;
 	}
 	b.s = (char *)raw;

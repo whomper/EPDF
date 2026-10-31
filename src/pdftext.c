@@ -1175,9 +1175,11 @@ typedef struct {
 typedef struct {
 	fx x, y, fs, dx, dy;		/* origin, size, advance (device units) */
 	long off;			/* in the chunk text */
-	int len;
-	int sp;				/* the chunk starts with a space */
+	short len;
+	char sp;			/* the chunk starts with a space */
+	char plain;			/* its text is ASCII: the next may join it */
 } CH;
+#define CH_MAX 30000			/* a chunk's bytes at most (len) */
 
 enum { K_NUM, K_STR, K_NAME, K_ARR0, K_ARR1, K_DICT };
 typedef struct {
@@ -1480,17 +1482,46 @@ static void show_text(IX *x, int from, int to)
 	x->d->st.glyphs += glyphs;
 	x->d->st.ops_text++;
 	if (x->txt.len > start) {
+		long len = x->txt.len - start, k;
+		int plain = 1;
+		fx dx = fxmul(tadv, m[0]), dy = fxmul(tadv, m[1]);
+
+		for (k = start; k < x->txt.len; k++)
+			if ((unsigned char)x->txt.s[k] >= 0x80) {
+				plain = 0;
+				break;
+			}
+		/* a piece that goes on where the last one ended, on its line in its
+		   size, joins it (a book's text set a letter at a time: a chunk a
+		   letter took its memory, 0.3); within 1/16 em, where assemble
+		   would put no space between them either */
+		if (plain && x->nch > 0) {
+			c = &x->ch[x->nch - 1];
+			if (c->plain && c->y == org_y && c->fs == fsz && !c->dy && !dy && dx >= 0 && c->dx >= 0 &&
+			    c->off + c->len == start && c->len + len <= CH_MAX &&
+			    fxabs(org_x - (c->x + c->dx)) <= (fsz >> 4)) {
+				c->dx = org_x + dx - c->x;
+				c->len = (short)(c->len + len);
+				goto moved;
+			}
+		}
+		if (len > CH_MAX) {
+			len = CH_MAX;		/* the rest isn't shown */
+			x->txt.len = start + len;
+		}
 		c = &x->ch[x->nch++];
 		c->x = org_x;
 		c->y = org_y;
 		c->fs = fsz;
-		c->dx = fxmul(tadv, m[0]);
-		c->dy = fxmul(tadv, m[1]);
+		c->dx = dx;
+		c->dy = dy;
 		c->off = start;
-		c->len = (int)(x->txt.len - start);
+		c->len = (short)len;
 		c->sp = x->txt.s[start] == ' ';
+		c->plain = (char)plain;
 		x->d->st.chunks++;
 	}
+moved:
 	/* the text matrix moves on by the advance */
 	x->tm[4] += fxmul(tadv, x->tm[0]);
 	x->tm[5] += fxmul(tadv, x->tm[1]);
@@ -2638,6 +2669,10 @@ int pdf_page_text(PDOC *d, long n, PTEXT *t)
 		if (d->clock)
 			d->st.t_asm += d->clock() - t0;
 	}
+#ifdef PDF_MEMDEBUG
+	fprintf(stderr, "page %ld: chunks %ld (%ld KB), ops %ld KB, sb %ld KB, txt %ld KB, mem %ld KB\n", n, x.nch,
+		x.capch * (long)sizeof(CH) / 1024, x.opcap * (long)sizeof(OP) / 1024, x.sbcap / 1024, (long)x.txt.cap / 1024, d->st.mem / 1024);
+#endif
 	pdf_free(d, x.ch, x.capch * (long)sizeof(CH));
 	pdf_free(d, x.sb, x.sbcap);
 	pdf_free(d, x.ops, x.opcap * (long)sizeof(OP));
