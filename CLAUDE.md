@@ -106,9 +106,15 @@ at first. This section is kept up to date: the build, the tests, what a release 
   decoded on a stack of their own), two columns read one after the other, `EPDF.INF` beside the
   program, the icon, iconify, Help, drops, the guide, README, NOTICES.TXT. The hub ran 7eff410 on
   Erez's TOS (acc_all clear; gui.py's Shift+^F, then fixed in the rig and in Copy's speed), cleared
-  35b5f97, and 0.1 went out (v0.1 on deb68d9, 31 Oct). Next: the hub's order, the scroll drawing on the ST,
-  then Select all's inversion. To do: the drawing cost on an ST (a line 145 ms, a page 300 ms on TOS 1.04: as EHypView),
-  the interpreter's per-glyph cost, JPEG decoding on a 68000 (minutes for a big one), streaming
+  35b5f97, and 0.1 went out (v0.1 on deb68d9, 31 Oct). 0.2, the stock machines' speed, went out
+  the same day (v0.2 on bcd2adc): text, scroll and selection drawn into TOS's screen through
+  common's text_plain, scr_rows and scr_xor; the Falcon within every time but Select all (55); on
+  TOS 1.04 a line 80, a page 145, next page 310, Select all 85, released so by Erez's choice
+  ("option 3 now, then option 1"). Option 1 is on main since: rows wholly selected shown to the
+  text's right edge, inverted as one box (win_sel_change: only rows whose shape changed are drawn).
+  Next: 0.3, big documents on ST-1. To do on the ST's speed: a line (80), next page (310), a page
+  scrolled with everything selected (~205: the text, then one box turned over); then the
+  interpreter's per-glyph cost, JPEG decoding on a 68000 (minutes for a big one), streaming
   content for ST-1, pictures' memory on ST-1.
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
   checks: `tools/nofpu.sh`); decode streams with `inflate_open`/`inflate_read` so a page needn't fit
