@@ -57,6 +57,7 @@ static int rdone;			/* the reader has finished rpage */
 static int abandon;			/* the document closes: stop the page and the picture */
 static unsigned long slice_end;		/* tos_ms() when the slice is up */
 static PTEXT rt;			/* the page read */
+static long rpage_oom;			/* the reader's refused allocations before it */
 static PICE *rpic;			/* the picture being decoded, NULL none */
 static int pdone;			/* the decoder has finished rpic */
 static int rpic_planes;
@@ -91,6 +92,8 @@ static void reader(void)
 {
 	for (;;) {
 		pdf_page_reset(doc);
+		doc->st.mem_peak = doc->st.mem;	/* this page's own peak, for the log */
+		rpage_oom = doc->st.oom;
 		ptext_init(&rt);
 		rt.soft = 1;
 		rt.pics = 1;
@@ -326,6 +329,7 @@ long doc_slice(unsigned long ms)
 {
 	long i, n = -1, len = 0;
 	char *a;
+	int rt_failed;
 
 	if (!doc_pending())
 		return -1;
@@ -348,6 +352,7 @@ long doc_slice(unsigned long ms)
 		return -1;
 	n = rpage;
 	rpage = -1;
+	rt_failed = rt.failed;
 	/* the soft break as CR in the store: the conversion keeps CR, LF and Tab only */
 	for (i = 0; i < rt.text.len; i++)
 		if (rt.text.s[i] == '\v')
@@ -368,10 +373,13 @@ long doc_slice(unsigned long ms)
 	next = n + 1 < npages ? n + 1 : 0;
 	dv_page_ready(&view, n);
 	{
-		char p[16], l[16];
+		/* "page N LEN": the rigs count them; the reader's peak for the
+		   page, the heap's size and the allocations refused (oom) with it */
+		char p[16], l[96];
 
 		snprintf(p, sizeof p, "%ld", n + 1);
-		snprintf(l, sizeof l, "%ld", len);
+		snprintf(l, sizeof l, "%ld peak %ld heap %ld oom %ld%s", len, doc->st.mem_peak / 1024,
+			 (heap_st + heap_tt) / 1024, doc->st.oom - rpage_oom, rt_failed ? " failed" : "");
 		log_event("page", p, l);
 	}
 	return n;

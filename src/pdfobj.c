@@ -18,7 +18,8 @@ void *pdf_malloc(PDOC *d, long n)
 		d->st.mem += n;
 		if (d->st.mem > d->st.mem_peak)
 			d->st.mem_peak = d->st.mem;
-	}
+	} else if (n > 0)
+		d->st.oom++;
 	return p;
 }
 
@@ -30,7 +31,8 @@ void *pdf_realloc(PDOC *d, void *p, long oldn, long n)
 		d->st.mem += n - oldn;
 		if (d->st.mem > d->st.mem_peak)
 			d->st.mem_peak = d->st.mem;
-	}
+	} else if (n > 0)
+		d->st.oom++;
 	return q;
 }
 

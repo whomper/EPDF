@@ -40,6 +40,7 @@ typedef struct {
 	long forms;			/* form XObjects run */
 	long chunks;			/* pieces of text */
 	long mem, mem_peak;		/* bytes malloc'd now, the most */
+	long oom;			/* allocations refused (out of memory) */
 	long tounicode_ent;		/* ToUnicode entries read */
 	long font_prog, font_prog_bytes;	/* embedded font programs met (not loaded) */
 	long t_stream, t_font, t_asm;	/* clock ticks in pdf_stream, in font_load (its streams apart), in assemble */

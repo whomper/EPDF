@@ -203,17 +203,25 @@ void pics_done(PICE *e, unsigned char *std, long bytes, int why)
 	void *dst;
 
 	if (!std) {
+		char a[40];
+
 		e->state = PICS_FAILED;
 		e->why = why ? why : PIC_MEMORY;
+		snprintf(a, sizeof a, "%ld %dx%d why %d", e->obj, e->w, e->h, e->why);
+		log_event("picture-failed", a, NULL);	/* the rigs count them */
 		return;
 	}
 	dst = Mxalloc(bytes, 0);
 	if ((long)dst <= 0)
 		dst = Malloc(bytes);		/* TOS 1.x: no Mxalloc, and no TT RAM */
 	if ((long)dst <= 0) {
+		char a[40];
+
 		free(std);
 		e->state = PICS_FAILED;
 		e->why = PIC_MEMORY;
+		snprintf(a, sizeof a, "%ld %dx%d ST RAM %ld", e->obj, e->w, e->h, bytes);
+		log_event("picture-failed", a, NULL);
 		return;
 	}
 	memset(&src, 0, sizeof src);
