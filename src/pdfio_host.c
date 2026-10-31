@@ -27,6 +27,11 @@ long pdf_os_read(void *h, long off, void *buf, long n)
 	return (long)fread(buf, 1, (size_t)n, f);
 }
 
+long pdf_os_window(void)
+{
+	return PWIN;
+}
+
 void pdf_os_close(void *h)
 {
 	fclose(h);

@@ -3,8 +3,10 @@
 /*
  * tstore.h - the text of a document's pages, as they are extracted, in
  * memory up to a budget and beyond it in a cache file (the guidelines'
- * 6.5: gathered in memory, written a buffer at a time, one open per
- * write). The cache file lasts as long as the document is open.
+ * 6.5: gathered in memory, written a buffer at a time). The cache file
+ * lasts as long as the document is open, and stays open as long: one
+ * open for all its writes and reads (a program's one big file, 6.5),
+ * not one a page read back.
  *
  * A page read back from the file is kept in a few slots, so drawing the
  * pages in view reads each once.
@@ -29,7 +31,8 @@ typedef struct {
 	char path[160];			/* the cache file; "" for none: everything stays in memory */
 	struct { long page; char *s; long len; unsigned long used; } slot[TS_SLOTS];
 	unsigned long tick;
-	long writes, reads;		/* file opens, for the tests */
+	int fh;				/* the cache file, open; -1 not yet */
+	long writes, reads, opens;	/* file writes, reads and opens, for the tests */
 } TSTORE;
 
 /* budget: the bytes kept in memory (the pool), path: the cache file */

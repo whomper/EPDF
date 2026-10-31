@@ -101,7 +101,10 @@ The Hatari rigs start the family's machines (`ST`, `ST-1`, `TT`, `Falcon`, `Falc
 
 - `make gui-test` (`tests/hatari/gui.py`): EPDF opened on a document, scrolled, paged;
 - `make speed-test` (`tests/hatari/speed.py`): each action's longest stretch between event calls on
-  `ST` and `Falcon-4`, against the guidelines' times.
+  `ST` and `Falcon-4`, against the guidelines' times;
+- `make files-test` (`tests/hatari/files.py`): each file's opens on a 1 MB ST, from Hatari's GEMDOS
+  trace, while a 40-page book is read, paged through and closed: the PDF opened once, `EPDF.TXC` made
+  and opened once.
 
 ## Licence
 

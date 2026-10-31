@@ -55,7 +55,7 @@ int pdf_open(PDOC *d, const char *path)
 		set_err(d, "cannot open the file");
 		return -1;
 	}
-	d->wcap = PWIN;
+	d->wcap = pdf_os_window();
 	d->win = pdf_malloc(d, d->wcap);
 	if (!d->win) {
 		set_err(d, "no memory");

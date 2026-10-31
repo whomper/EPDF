@@ -255,6 +255,9 @@ void pdf_free(PDOC *d, void *p, long n);
 void *pdf_os_open(const char *path, long *size);
 long pdf_os_read(void *h, long off, void *buf, long n);
 void pdf_os_close(void *h);
+/* the file window's size: 32 KB on a 68020 or better, 16 KB on a 68000
+   (the guidelines' 6.5: big pieces, never small ones) */
+long pdf_os_window(void);
 /* time in milliseconds, for the drivers */
 long pdf_ms(void);
 long pdf_us(void);				/* the Atari's finer clock (pdfio_tos.c) */

@@ -8,6 +8,7 @@
 #   make dist       a release's files in dist/: each file, and EPDF-x.y.zip
 #   make icons      icons/ and src/gem/icon*.h from common/icons/EPDF.txt, EPDFDOC.txt
 #   make gui-test   EPDF.PRG driven in Hatari (tests/hatari/gui.py)
+#   make files-test each file's opens on a 1 MB ST against the budget (tests/hatari/files.py, 6.5)
 #   make measure-atari  the stage 0 measuring programs (MEASURE.PRG and the others)
 #   make measure    the measurement run on this computer (corpus: tools/fetch-corpus.py)
 #
@@ -28,7 +29,7 @@ BSSL_SRC = $(addprefix $(BSSL)/src/, hash/md5.c hash/sha2small.c hash/sha2big.c 
            codec/dec32be.c codec/enc32be.c codec/dec32le.c codec/enc32le.c codec/dec64be.c codec/enc64be.c)
 HDRS     = $(wildcard src/*.h src/gem/*.h src/view/*.h common/src/*.h common/ui/*.h common/atari/*.h common/atari/include/*.h)
 
-.PHONY: all test measure dist help clean atari measure-atari fttest imgbench gui-test
+.PHONY: all test measure dist help clean atari measure-atari fttest imgbench gui-test files-test
 all: build/pdfmeasure build/pdftext build/glyphjob build/imgdump binary/EPDF.PRG
 build:
 	mkdir -p build
@@ -310,6 +311,11 @@ dist: binary/EPDF.PRG help
 
 gui-test: binary/EPDF.PRG binary/LAUNCH.PRG
 	python3 tests/hatari/gui.py ST:mono build/gui
+
+# each file's opens and lookups from Hatari's GEMDOS trace, a 40-page book on
+# a 1 MB ST (the text goes to EPDF.TXC), against the job's budget (6.5)
+files-test: binary/EPDF.PRG binary/LAUNCH.PRG
+	python3 tests/hatari/files.py build/files ST-1
 
 # docs/screenshot.png and docs/help/WINDOW.IMG again, from Hatari (commit them)
 shots: binary/EPDF.PRG binary/LAUNCH.PRG

@@ -26,6 +26,7 @@ int ts_open(TSTORE *s, long npages, long budget, const char *path)
 	s->budget = budget;
 	for (i = 0; i < TS_SLOTS; i++)
 		s->slot[i].page = -1;
+	s->fh = -1;
 	if (path && strlen(path) < sizeof s->path)
 		strcpy(s->path, path);
 	return 0;
@@ -37,33 +38,57 @@ void ts_close(TSTORE *s)
 
 	for (i = 0; i < TS_SLOTS; i++)
 		free(s->slot[i].s);
-	if (s->path[0] && s->file_len > 0)
+	if (s->fh >= 0)
+		pf_close(s->fh);
+	if (s->path[0] && s->fh >= 0)
 		pf_remove(s->path);
 	free(s->pg);
 	free(s->pool);
 	memset(s, 0, sizeof *s);
 }
 
-/* the pool written at the end of the cache file in one open; its pages
-   then live there */
-static int spill(TSTORE *s)
+/* the cache file, made and opened for reading and writing the first
+   time it is wanted, then kept open until the document closes; -1 when
+   it can't be */
+static int file(TSTORE *s)
 {
 	int h;
-	long i, w;
 
-	if (!s->path[0] || s->pool_len == 0)
+	if (s->fh >= 0 || !s->path[0])
+		return s->fh;
+	h = pf_open(s->path, PF_WRITE);		/* made empty */
+	if (h < 0)
 		return -1;
-	h = pf_open(s->path, s->file_len ? PF_UPDATE : PF_WRITE);
+	pf_close(h);
+	s->fh = pf_open(s->path, PF_UPDATE);
+	s->opens++;
+	if (s->fh < 0)
+		pf_remove(s->path);
+	return s->fh;
+}
+
+/* len bytes at the end of the cache file: 0, or -1 */
+static int append(TSTORE *s, const void *p, long len)
+{
+	int h = file(s);
+
 	if (h < 0)
 		return -1;
 	s->writes++;
-	if (pf_seek(h, s->file_len) != s->file_len) {
-		pf_close(h);
+	if (pf_seek(h, s->file_len) != s->file_len || pf_write(h, p, len) != len)
 		return -1;
-	}
-	w = pf_write(h, s->pool, s->pool_len);
-	pf_close(h);
-	if (w != s->pool_len)
+	return 0;
+}
+
+/* the pool written at the end of the cache file in one write; its pages
+   then live there */
+static int spill(TSTORE *s)
+{
+	long i;
+
+	if (!s->path[0] || s->pool_len == 0)
+		return -1;
+	if (append(s, s->pool, s->pool_len) != 0)
 		return -1;
 	for (i = 0; i < s->npages; i++)
 		if (s->pg[i].in_ram && s->pg[i].len >= 0) {
@@ -95,16 +120,7 @@ int ts_put(TSTORE *s, long n, const char *text, long len)
 	}
 	if (len > s->budget) {
 		/* bigger than the pool: straight to the file */
-		int h = pf_open(s->path, s->file_len ? PF_UPDATE : PF_WRITE);
-		long w = -1;
-
-		if (h < 0)
-			return -1;
-		s->writes++;
-		if (pf_seek(h, s->file_len) == s->file_len)
-			w = pf_write(h, text, len);
-		pf_close(h);
-		if (w != len)
+		if (append(s, text, len) != 0)
 			return -1;
 		s->pg[n].off = s->file_len;
 		s->pg[n].len = len;
@@ -155,15 +171,12 @@ const char *ts_get(TSTORE *s, long n, long *len)
 		return NULL;
 	s->slot[best].s = p;
 	s->slot[best].page = -1;
-	h = pf_open(s->path, PF_READ);
+	h = file(s);
 	if (h < 0)
 		return NULL;
 	s->reads++;
-	if (pf_seek(h, s->pg[n].off) != s->pg[n].off || pf_read(h, p, *len) != *len) {
-		pf_close(h);
+	if (pf_seek(h, s->pg[n].off) != s->pg[n].off || pf_read(h, p, *len) != *len)
 		return NULL;
-	}
-	pf_close(h);
 	s->slot[best].page = n;
 	s->slot[best].len = *len;
 	s->slot[best].used = s->tick;

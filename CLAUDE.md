@@ -166,6 +166,8 @@ at first. This section is kept up to date: the build, the tests, what a release 
   `make gui-test` (`tests/hatari/gui.py`, ST:mono; also Falcon:16). A change to drawing, a loop over
   the data or the start: `make speed-test` (`tests/hatari/speed.py`, build/aprof with `gem.c`
   `-DAES_PROFILE=20` and `textwin.c` `-DEPDF_TIMES`), its stretches on ST and Falcon-4 in the commit.
+  A change to the store, the reader's file access or the INF: `make files-test`
+  (`tests/hatari/files.py`, ST-1: each file's opens from the GEMDOS trace against the budget, 6.5).
   `make shots` takes docs/screenshot.png and docs/help/WINDOW.IMG again. `make help HCP=...`, `make
   dist`. The stage 0 tools: `make measure-atari`, `make measure`, `tests/hatari/measure.py`.
   `build/pdftext FILE PAGE [marks]` shows a page's reflowed text on the host.

@@ -32,6 +32,15 @@ void pdf_os_close(void *h)
 	Fclose((short)((long)h - 1));
 }
 
+long pdf_os_window(void)
+{
+	static long w;
+
+	if (!w)
+		w = get_cookie(0x5F435055L) >= 20 ? 2 * PWIN : PWIN;	/* _CPU */
+	return w;
+}
+
 long pdf_ms(void)
 {
 	return (long)tos_ms();

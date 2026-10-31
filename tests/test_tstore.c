@@ -38,12 +38,17 @@ int main(int argc, char **argv)
 	}
 	if (s.writes < 3 || s.writes > 5)
 		printf("FAIL %ld writes\n", s.writes), bad++;
+	/* the file opened once, for every write and every read (6.5) */
+	if (s.opens != 1 || s.reads < 1)
+		printf("FAIL %ld opens, %ld reads\n", s.opens, s.reads), bad++;
 	/* a page bigger than the pool goes to the file whole */
 	memset(text, 'x', 50);
 	text[50] = '\0';
 	ts_put(&s, 2, text, 50);
 	check(&s, 2, text);
 	check(&s, 1, "page 1's text");
+	if (s.opens != 1)
+		printf("FAIL %ld opens after the big page\n", s.opens), bad++;
 	ts_close(&s);
 	if (pf_size(path) >= 0)
 		printf("FAIL %s left behind\n", path), bad++;
