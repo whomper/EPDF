@@ -26,7 +26,7 @@ from pdfgen import make_pdf  # noqa: E402
 
 DOWN, UP, HOME, SPACE, CTRL = 0x50, 0x48, 0x47, 0x39, 0x1D
 RIGHT, LEFT, Q = 0x4D, 0x4B, 0x10
-F, G, A, C, RETURN, UNDO, ESC, SHIFT, INSERT = 0x21, 0x22, 0x1E, 0x2E, 0x1C, 0x61, 0x01, 0x2A, 0x52
+F, G, A, C, RETURN, UNDO, ESC, SHIFT, INSERT, TAB = 0x21, 0x22, 0x1E, 0x2E, 0x1C, 0x61, 0x01, 0x2A, 0x52, 0x0F
 
 
 def main(argv):
@@ -143,6 +143,19 @@ def main(argv):
         key(A, [CTRL])
         key(C, [CTRL])
         wait("EPDF copied")
+        # the Font dialog: Esc cancels it; then the system font's 8 x 8
+        key(F, [CTRL, SHIFT])
+        time.sleep(4)
+        key(ESC)
+        wait("EPDF dialog-closed font cancel")
+        key(F, [CTRL, SHIFT])
+        time.sleep(4)
+        key(TAB)
+        key(TAB)
+        key(UP)
+        key(RETURN)
+        wait("EPDF dialog-closed font System font,8")
+        shot("font8")
         # Insert: the context menu; Esc closes it with nothing chosen
         key(INSERT)
         wait("EPDF menu popup")

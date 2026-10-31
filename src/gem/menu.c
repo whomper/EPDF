@@ -33,6 +33,8 @@ static const MBAR_ITEM edit_items[] = {
 
 /* a tick: each line as on the page, else the paragraphs joined and wrapped to the window */
 static const MBAR_ITEM view_items[] = {
+	{ "Font...", "\x01^F", CMD_FONT },
+	{ "-", NULL, CMD_NONE },
 	{ "The page's lines", NULL, CMD_LINES },
 	{ NULL, NULL, CMD_NONE }
 };

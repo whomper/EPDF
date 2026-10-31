@@ -61,6 +61,12 @@ int win_hit(short mx, short my, long *page, long *off);
 void win_draw_span(long p0, long o0, long p1, long o1);
 void win_show(long page, long off);		/* that place in view */
 
+/* font.c: the text view's font (FONT= in EPDF.INF) */
+void font_init(const char *setting, const char *dir);
+const char *font_setting(void);
+int font_dialog(void);			/* View > Font...: 1 when another was chosen */
+void font_exit(void);
+
 /* find.c */
 int find_dialog(char *text);		/* text: 65 bytes; 1 when Find was chosen */
 

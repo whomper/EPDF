@@ -95,15 +95,6 @@ void clip_off(void)
 	text_noclip(vdi_h);
 }
 
-/* EPDF uses the system font alone for now */
-void font_sys_push(void)
-{
-}
-
-void font_sys_pop(void)
-{
-}
-
 /* ST RAM to blit from: the screen can't be fed from TT RAM, where the
    program may be loaded */
 void *st_ram(long n)

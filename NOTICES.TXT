@@ -94,3 +94,7 @@ Trademarks
 
 PDF and PostScript are trademarks of Adobe in the United States and/or
 other countries. EPDF is not made by or affiliated with Adobe.
+
+Helvetica and Times are trademarks of Monotype; ITC Zapf Dingbats is a
+trademark of the International Typeface Corporation. EPDF names the
+standard fonts only to say which widths it uses.

@@ -506,6 +506,13 @@ static void command(int c)
 		else if (doc_view() && find_dialog(find_text))
 			find_start(1);
 		break;
+	case CMD_FONT:
+		if (font_dialog()) {
+			setting("FONT", font_setting(), "the text's font and its size: \"System font,16\", or a fixed-width GDOS font's name and points");
+			win_layout();
+			win_draw_all();
+		}
+		break;
 	case CMD_LINES:
 		lines_mode = !lines_mode;
 		if (has_menu)
@@ -550,7 +557,7 @@ static void key(short kstate, short k)
 		case 0x10: command(CMD_QUIT); return;		/* ^Q */
 		case 0x2e: command(CMD_COPY); return;		/* ^C */
 		case 0x1e: command(CMD_SELALL); return;		/* ^A */
-		case 0x21: command(CMD_FIND); return;		/* ^F */
+		case 0x21: command(shift(kstate) ? CMD_FONT : CMD_FIND); return;	/* ^F; Shift+^F: Font... */
 		case 0x22: command(shift(kstate) ? CMD_FINDPREV : CMD_FINDNEXT); return;	/* ^G, Shift+^G */
 		}
 		return;
@@ -643,14 +650,19 @@ static void crash_quit(const char *what)
 }
 
 /* the reading on for a piece of the slice; a page it finished shown */
-static void read_on(void)
+static long arrived = -1;		/* a page read, its rows still to draw */
+
+/* the reading on for a piece of the slice; 1 when a page came, whose rows
+   are drawn in a turn of their own (a page's rows and the slice that read
+   it, together, made one stretch of 400 ms on an ST with TOS 1.04) */
+static int read_on(void)
 {
 	long n = doc_slice(40);
 
-	if (n >= 0) {
-		win_page_ready(n);
-		win_info();
-	}
+	if (n < 0)
+		return 0;
+	arrived = n;
+	return 1;
 }
 
 int main(void)
@@ -676,7 +688,7 @@ int main(void)
 	vq_extnd(vdi_h, 1, work_out);
 	planes = work_out[4];
 	vst_alignment(vdi_h, 0, 5);
-	text_font(vdi_h, 1, cw, ch);
+	text_font(vdi_h, 1, cw, ch);	/* until the INF's font is set */
 	wind_get(0, WF_WORKXYWH, &desk_x, &desk_y, &desk_w, &desk_h);
 	if (!screen_check("EPDF", scr_w)) {	/* not in ST low (5.2) */
 		v_clsvwk(vdi_h);
@@ -701,6 +713,7 @@ int main(void)
 	av_init("EPDF");
 	bg_init(BG_NOW);
 	settings_read();
+	font_init(inf_get(&inf, "FONT"), start_dir);
 	if ((v = inf_get(&inf, "WINDOW")) != NULL) {
 		short *f[4];
 		char *end;
@@ -746,9 +759,9 @@ int main(void)
 
 		/* the sliders after a scroll, once no key waits; the reading
 		   on while nothing else does */
-		if (win_sliders_due() || pending)
+		if (win_sliders_due() || pending || arrived >= 0)
 			flags |= MU_TIMER;
-		t = win_sliders_due() ? 0 : bg_timer(pending, 1000);
+		t = win_sliders_due() || arrived >= 0 ? 0 : bg_timer(pending, 1000);
 		/* either button going down (0x100: the AES's "any of them"), two
 		   clicks counted */
 		which = evnt_multi_(flags, 0x102, 3, 0, t, msg, &ev);
@@ -766,21 +779,24 @@ int main(void)
 		if (which & MU_MESAG)
 			message(msg);
 		if (which == MU_TIMER) {
-			if (win_sliders_due())
+			if (arrived >= 0) {
+				win_page_ready(arrived);	/* the page read last turn */
+				win_info();
+				arrived = -1;
+			} else if (win_sliders_due()) {
 				win_sliders();
-			else if (pending && bg_may_work()) {
+			} else if (pending && bg_may_work()) {
 				bg_begin();
 				/* a search first: the user waits for it; the reading after */
-				while (find_dir && find_step() && bg_more()) {
+				while (find_dir && arrived < 0 && find_step() && bg_more()) {
 					long len;
 
 					if (!doc_page_text(find_page, &len))
 						read_on();	/* the page it waits for */
 				}
 				if (!find_dir)
-					do
-						read_on();
-					while (doc_pending() && bg_more());
+					while (!read_on() && doc_pending() && bg_more())
+						;
 			}
 		}
 	}
@@ -790,6 +806,7 @@ int main(void)
 		menu_bar(menu.tree, 0);
 	mbar_free(&menu);
 	doc_close();
+	font_exit();
 	inf_free(&inf);
 	av_exit();
 	crash_remove();

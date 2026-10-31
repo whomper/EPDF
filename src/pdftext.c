@@ -1208,17 +1208,38 @@ typedef struct {
 
 static const fx IDENT[6] = { FX_ONE, 0, 0, FX_ONE, 0, 0 };
 
+/* six numbers copied as six longs (libc's memcpy goes a byte at a time) */
+static void mat_copy(fx *o, const fx *a)
+{
+	o[0] = a[0];
+	o[1] = a[1];
+	o[2] = a[2];
+	o[3] = a[3];
+	o[4] = a[4];
+	o[5] = a[5];
+}
+
 static void mat_mul(const fx *a, const fx *b, fx *o)		/* o = a x b */
 {
 	fx r[6];
 
-	r[0] = fxmul(a[0], b[0]) + fxmul(a[1], b[2]);
-	r[1] = fxmul(a[0], b[1]) + fxmul(a[1], b[3]);
-	r[2] = fxmul(a[2], b[0]) + fxmul(a[3], b[2]);
-	r[3] = fxmul(a[2], b[1]) + fxmul(a[3], b[3]);
-	r[4] = fxmul(a[4], b[0]) + fxmul(a[5], b[2]) + b[4];
-	r[5] = fxmul(a[4], b[1]) + fxmul(a[5], b[3]) + b[5];
-	memcpy(o, r, sizeof r);
+	if (b[1] == 0 && b[2] == 0) {
+		/* b scales and moves, without turning: a page's matrices nearly always */
+		r[0] = fxmul(a[0], b[0]);
+		r[1] = fxmul(a[1], b[3]);
+		r[2] = fxmul(a[2], b[0]);
+		r[3] = fxmul(a[3], b[3]);
+		r[4] = fxmul(a[4], b[0]) + b[4];
+		r[5] = fxmul(a[5], b[3]) + b[5];
+	} else {
+		r[0] = fxmul(a[0], b[0]) + fxmul(a[1], b[2]);
+		r[1] = fxmul(a[0], b[1]) + fxmul(a[1], b[3]);
+		r[2] = fxmul(a[2], b[0]) + fxmul(a[3], b[2]);
+		r[3] = fxmul(a[2], b[1]) + fxmul(a[3], b[3]);
+		r[4] = fxmul(a[4], b[0]) + fxmul(a[5], b[2]) + b[4];
+		r[5] = fxmul(a[4], b[1]) + fxmul(a[5], b[3]) + b[5];
+	}
+	mat_copy(o, r);
 }
 
 static fx fxabs(fx v) { return v < 0 ? -v : v; }
@@ -1228,6 +1249,12 @@ static int utf8_put(SBUF *b, unsigned u)
 	char t[4];
 	int n;
 
+	if (u < 0x80 && b->len + 2 <= b->cap) {
+		/* most letters: one byte where there is room, no call */
+		b->s[b->len++] = (char)u;
+		b->s[b->len] = 0;
+		return 1;
+	}
 	if (u < 0x80) { t[0] = (char)u; n = 1; }
 	else if (u < 0x800) { t[0] = (char)(0xC0 | u >> 6); t[1] = (char)(0x80 | (u & 63)); n = 2; }
 	else if (u < 0x10000) { t[0] = (char)(0xE0 | u >> 12); t[1] = (char)(0x80 | ((u >> 6) & 63)); t[2] = (char)(0x80 | (u & 63)); n = 3; }
@@ -1465,7 +1492,7 @@ static void tm_translate(IX *x, fx tx, fx ty)
 	fx t[6] = { FX_ONE, 0, 0, FX_ONE, tx, ty };
 
 	mat_mul(t, x->tlm, x->tlm);
-	memcpy(x->tm, x->tlm, sizeof x->tm);
+	mat_copy(x->tm, x->tlm);
 }
 
 static int op_grow(IX *x);
@@ -1850,8 +1877,8 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 				d->st.ops_other++;
 				break;
 			case OPK('B', 'T'):
-				memcpy(x->tm, IDENT, sizeof x->tm);
-				memcpy(x->tlm, IDENT, sizeof x->tlm);
+				mat_copy(x->tm, IDENT);
+				mat_copy(x->tlm, IDENT);
 				break;
 			case OPK('E', 'T'):
 				break;
@@ -1883,7 +1910,7 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 
 					for (k = 0; k < 6; k++)
 						x->tlm[k] = opnum(x, x->nops - 6 + k);
-					memcpy(x->tm, x->tlm, sizeof x->tm);
+					mat_copy(x->tm, x->tlm);
 				}
 				break;
 			case OPK('T', '*'):
@@ -2202,6 +2229,8 @@ static void assemble(IX *x, PTEXT *t)
 		}
 		emit_line(x, x->ch, ln[k].a, ln[k].b, t);
 		t->lines++;
+		if ((k & 7) == 7)
+			pause_point(x->d);	/* a page's lines take time too: the caller may want the machine */
 	}
 	sb_addc(&t->text, '\n');
 	pdf_free(x->d, ln, x->nch * (long)sizeof(LN));
