@@ -37,6 +37,8 @@ def main(argv):
     os.makedirs(hd)
     for f in ("EPDF.PRG", "LAUNCH.PRG"):
         shutil.copy(os.path.join(TOP, "binary", f), os.path.join(hd, f))
+    if os.environ.get("EPDF_PRG"):          # another build of it (the speed build's AESGAP lines)
+        shutil.copy(os.environ["EPDF_PRG"], os.path.join(hd, "EPDF.PRG"))
     one = ["Page one, line %d of the text that is long enough to wrap in a narrow window." % i for i in range(1, 60)]
     make_pdf(os.path.join(hd, "TWO.PDF"), [one, ["The second page", "has two lines."]])
     with open(os.path.join(hd, "LAUNCH.TXT"), "w", newline="") as f:
@@ -80,9 +82,12 @@ def main(argv):
             send("hatari-event keydown 0x%x" % k)
         send("hatari-event keypress 0x%x" % code)
         if mods:
-            # held until the program has read the key: the AES gives the
-            # shift keys as they are then (the guidelines, 3.2)
-            time.sleep(0.6)
+            # Shift and Control held through the press, as a hand holds them and
+            # as the family's speed rig does (common/tests/speed/speed.py): sent
+            # straight after it, they were up before TOS's AES took the key
+            # (^F came for Shift+^F on TOS 1.04 and EmuTOS with EPDF idle in
+            # evnt_multi)
+            time.sleep(0.3)
         for k in mods:
             send("hatari-event keyup 0x%x" % k)
 

@@ -721,6 +721,74 @@ void win_draw_span(long p0, long o0, long p1, long o1)
 		win_draw_rows(first, last + 1);
 }
 
+/*
+ * The cells of page p0 offset o0 to p1 o1 (either way round) inverted on
+ * the screen as they stand (XOR), through the window's rectangles: a
+ * selection made, let go or changed by that span without its text drawn
+ * again (Select all on a whole window: 445 ms drawn again on an ST, a few
+ * filled boxes this way). The screen must show the view as it is now.
+ */
+void win_xor_span(long p0, long o0, long p1, long o1)
+{
+	DOCVIEW *v = doc_view();
+	GRECT r, c;
+	long row, n, page, off;
+	int kind;
+	const char *s;
+
+	if (!v || win < 0 || iconified || p0 < 0)
+		return;
+	if (p1 < p0 || (p1 == p0 && o1 < o0)) {
+		long t;
+
+		t = p0, p0 = p1, p1 = t;
+		t = o0, o0 = o1, o1 = t;
+	}
+	wind_update(BEG_UPDATE);
+	graf_mouse(M_OFF, NULL);
+	wind_get(win, WF_FIRSTXYWH, &r.x, &r.y, &r.w, &r.h);
+	while (r.w > 0 && r.h > 0) {
+		if (overlap(&r, &work, &c)) {
+			short clip[4];
+
+			clip[0] = c.x;
+			clip[1] = c.y;
+			clip[2] = (short)(c.x + c.w - 1);
+			clip[3] = (short)(c.y + c.h - 1);
+			vs_clip(vdi_h, 1, clip);
+			for (row = 0; row <= rows && dv_row(v, row, &kind, &s, &n, &page, &off); row++) {
+				long a, b, i;
+				const char *vis;
+				short x, y = (short)(work.y + row * ch);
+				int bi;
+
+				if (kind != DV_TEXT || off < 0 || page < p0 || page > p1)
+					continue;
+				if (n > cols)
+					n = cols;	/* as draw_rows shows it */
+				a = page == p0 ? o0 - off : 0;
+				b = page == p1 ? o1 - off : n;
+				if (a < 0)
+					a = 0;
+				if (b > n)
+					b = n;
+				if (b <= a)
+					continue;
+				bi = row_visual(s, n, &vis, &x);
+				if (!bi)
+					invert(&c, (short)(x + a * cw), (short)(x + b * cw), y);
+				else
+					for (i = a; i < b; i++)
+						invert(&c, (short)(x + vpos[i] * cw), (short)(x + (vpos[i] + 1) * cw), y);
+			}
+			vs_clip(vdi_h, 0, clip);
+		}
+		wind_get(win, WF_NEXTXYWH, &r.x, &r.y, &r.w, &r.h);
+	}
+	graf_mouse(M_ON, NULL);
+	wind_update(END_UPDATE);
+}
+
 /* the selection's start shown in the window, a few rows under the top */
 void win_show(long page, long off)
 {

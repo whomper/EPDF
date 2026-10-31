@@ -2187,6 +2187,110 @@ typedef struct {
 	fx y, fs, x0, x1;
 } LN;
 
+#define GBIN (8L << 16)		/* the gutter's bins: 8 points */
+#define GBINS 128
+
+/*
+ * Two columns side by side read one after the other (with t->soft, the
+ * text view's): where many lines have a gap wider than 1.5 em at the same
+ * place, near the middle of the text, that is a gutter. The lines are cut
+ * there, and between lines that cross it (a heading over both) the left
+ * column's lines come first, then the right's. Room: ln holds 2 x nl.
+ */
+static long columns(IX *x, LN *ln, long nl)
+{
+	fx lo = 0x7fffffff, hi = -0x7fffffff, width, gutter;
+	short votes[GBINS];
+	long k, c, best = -1, nb, nout = 0, nl_ = 0, nr = 0;
+	LN *left, *right, *out;
+
+	if (nl < 8)
+		return nl;
+	for (k = 0; k < nl; k++) {
+		if (ln[k].x0 < lo)
+			lo = ln[k].x0;
+		if (ln[k].x1 > hi)
+			hi = ln[k].x1;
+	}
+	width = hi - lo;
+	if (width <= GBIN * 4)
+		return nl;
+	nb = width / GBIN + 1;
+	if (nb > GBINS)
+		nb = GBINS;
+	memset(votes, 0, sizeof votes);
+	for (k = 0; k < nl; k++) {
+		long last = -1;
+
+		for (c = ln[k].a + 1; c < ln[k].b; c++) {
+			fx end = x->ch[c - 1].x + x->ch[c - 1].dx, gap = x->ch[c].x - end;
+
+			if (gap > ln[k].fs + (ln[k].fs >> 1)) {
+				long b = (end + gap / 2 - lo) / GBIN;
+
+				if (b >= 0 && b < nb && b != last)
+					votes[b]++, last = b;
+			}
+		}
+	}
+	for (k = 0; k < nb; k++)
+		if (best < 0 || votes[k] > votes[best])
+			best = k;
+	gutter = lo + best * GBIN + GBIN / 2;
+	if (best < 0 || votes[best] < 6 || votes[best] * 10L < nl * 3 ||
+	    gutter < lo + width * 3 / 10 || gutter > lo + width * 7 / 10)
+		return nl;
+	left = ln + nl;			/* the room after the lines: the left column, then the right */
+	out = pdf_malloc(x->d, 2 * nl * (long)sizeof(LN));
+	if (!out)
+		return nl;
+	right = out + nl;
+	for (k = 0; k <= nl; k++) {
+		LN *l = k < nl ? &ln[k] : NULL;
+		long m = -1;
+
+		if (l) {
+			if (l->x1 <= gutter + l->fs) {
+				left[nl_++] = *l;
+				continue;
+			}
+			if (l->x0 >= gutter - l->fs) {
+				right[nr++] = *l;
+				continue;
+			}
+			/* a gap round the gutter: the line cut there */
+			for (c = l->a + 1; c < l->b; c++)
+				if (x->ch[c - 1].x + x->ch[c - 1].dx <= gutter && x->ch[c].x >= gutter) {
+					m = c;
+					break;
+				}
+			if (m > 0) {
+				LN a = *l, b = *l;
+
+				a.b = m;
+				a.x1 = x->ch[m - 1].x + x->ch[m - 1].dx;
+				b.a = m;
+				b.x0 = x->ch[m].x;
+				left[nl_++] = a;
+				right[nr++] = b;
+				continue;
+			}
+		}
+		/* a line across both columns, or the page's end: the band so far,
+		   the left column first */
+		for (c = 0; c < nl_; c++)
+			out[nout++] = left[c];
+		for (c = 0; c < nr; c++)
+			out[nout++] = right[c];
+		nl_ = nr = 0;
+		if (l)
+			out[nout++] = *l;
+	}
+	memcpy(ln, out, (size_t)nout * sizeof(LN));
+	pdf_free(x->d, out, 2 * nl * (long)sizeof(LN));
+	return nout;
+}
+
 /*
  * The lines in reading order. Between two lines comes '\n', or with
  * t->soft '\v' where the paragraph goes on: the next line's first word
@@ -2222,7 +2326,7 @@ static void assemble(IX *x, PTEXT *t)
 		t->nimg = j;
 	}
 	ch_sort(x->ch, x->nch, ch_cmp_y);
-	ln = pdf_malloc(x->d, x->nch * (long)sizeof(LN));
+	ln = pdf_malloc(x->d, 2 * x->nch * (long)sizeof(LN));	/* lines split at a gutter: twice as many at most */
 	if (!ln)
 		return;
 	for (i = 0; i < x->nch; i = j) {
@@ -2244,6 +2348,8 @@ static void assemble(IX *x, PTEXT *t)
 		ln[nl].x1 = x->ch[j - 1].x + x->ch[j - 1].dx;
 		nl++;
 	}
+	if (t->soft)
+		nl = columns(x, ln, nl);
 	/* the pictures in the order they stand on the page, top first */
 	if (t->pics)
 		pic_order(t);
@@ -2296,7 +2402,7 @@ static void assemble(IX *x, PTEXT *t)
 	sb_addc(&t->text, '\n');
 	while (t->pics && t->pnext < t->nimg)
 		pic_line(t, &t->img[t->pnext++]);
-	pdf_free(x->d, ln, x->nch * (long)sizeof(LN));
+	pdf_free(x->d, ln, 2 * x->nch * (long)sizeof(LN));
 }
 
 int pdf_page_text(PDOC *d, long n, PTEXT *t)

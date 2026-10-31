@@ -63,6 +63,7 @@ int win_message(const short *msg);
 void win_status(const char *s);		/* after the info line's page, until cleared (NULL) */
 int win_hit(short mx, short my, long *page, long *off);
 void win_draw_span(long p0, long o0, long p1, long o1);
+void win_xor_span(long p0, long o0, long p1, long o1);	/* those cells inverted where they show */
 void win_show(long page, long off);		/* that place in view */
 void win_pic_ready(long obj);		/* a picture decoded: its rows drawn */
 

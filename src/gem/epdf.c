@@ -207,10 +207,11 @@ static void select_span(long p0, long o0, long p1, long o1)
 		return;
 	q0 = v->sel_p0, r0 = v->sel_o0, q1 = v->sel_p1, r1 = v->sel_o1;
 	dv_select(v, p0, o0, p1, o1);
+	/* inverted as they stand: the old selection back, the new one on */
 	if (q0 >= 0)
-		win_draw_span(q0, r0, q1, r1);		/* the old one off */
+		win_xor_span(q0, r0, q1, r1);
 	if (p0 >= 0)
-		win_draw_span(p0, o0, p1, o1);
+		win_xor_span(p0, o0, p1, o1);
 	menu_states();
 }
 
@@ -283,19 +284,20 @@ static int find_step(void)
 }
 
 /* the selection's text to the clipboard, lines ending CR LF; the soft
-   breaks as spaces (or line ends, showing the page's lines) */
+   breaks as spaces (or line ends, showing the page's lines). Counted
+   first, then written into one buffer: a call a letter took an ST 580 ms
+   for 4.6 KB */
 static void copy(void)
 {
 	DOCVIEW *v = doc_view();
-	SBUF b;
-	long p, missing = 0;
+	long p, missing = 0, size = 0, len;
+	char *buf, *q;
 
 	if (!v || v->sel_p0 < 0)
 		return;
-	sb_init(&b);
 	for (p = v->sel_p0; p <= v->sel_p1; p++) {
-		long len, a, e, i;
 		const char *t = doc_page_text(p, &len);
+		long a, e, i;
 
 		if (!t) {
 			missing++;
@@ -303,27 +305,48 @@ static void copy(void)
 		}
 		a = p == v->sel_p0 ? v->sel_o0 : 0;
 		e = p == v->sel_p1 && v->sel_o1 < len ? v->sel_o1 : len;
-		if (p > v->sel_p0 && b.len)
-			sb_adds(&b, "\r\n");
+		size += e - a + 2;
+		for (i = a; i < e; i++)
+			size += t[i] == '\n' || (t[i] == '\r' && lines_mode);
+	}
+	if (size <= 0 || !(buf = malloc((size_t)size + 1))) {
+		win_status("nothing copied");
+		return;
+	}
+	q = buf;
+	for (p = v->sel_p0; p <= v->sel_p1; p++) {
+		const char *t = doc_page_text(p, &len);
+		long a, e, i;
+
+		if (!t)
+			continue;
+		a = p == v->sel_p0 ? v->sel_o0 : 0;
+		e = p == v->sel_p1 && v->sel_o1 < len ? v->sel_o1 : len;
+		if (p > v->sel_p0 && q > buf) {
+			*q++ = '\r';
+			*q++ = '\n';
+		}
 		for (i = a; i < e; i++) {
-			if (t[i] == '\n')
-				sb_adds(&b, "\r\n");
-			else if (t[i] == '\r')
-				sb_adds(&b, lines_mode ? "\r\n" : " ");
-			else
-				sb_addc(&b, t[i]);
+			char c = t[i];
+
+			if (c == '\n' || (c == '\r' && lines_mode)) {
+				*q++ = '\r';
+				*q++ = '\n';
+			} else {
+				*q++ = c == '\r' ? ' ' : c;
+			}
 		}
 	}
-	if (b.len && clip_put(b.s, b.len)) {
+	if (q > buf && clip_put(buf, (long)(q - buf))) {
 		char n[16];
 
-		snprintf(n, sizeof n, "%ld", b.len);
-		log_event("copied", n, NULL);
 		win_status(missing ? "copied; pages not read yet left out" : "copied");
+		snprintf(n, sizeof n, "%ld", (long)(q - buf));
+		log_event("copied", n, NULL);	/* the copy done, its status shown */
 	} else {
 		win_status("nothing copied");
 	}
-	sb_free(&b);
+	free(buf);
 }
 
 /* a click in the text: the selection made by dragging; with Shift, the
@@ -355,8 +378,9 @@ static void click(short mx, short my, short kstate)
 		if (!(mb & 1))
 			break;
 		if (win_hit(mx, my, &p, &o) && (p != lp || o != lo)) {
+			/* the selection's end moved: what lies between, inverted */
 			dv_select(v, ap, ao, p, o);
-			win_draw_span(lp, lo, p, o);
+			win_xor_span(lp, lo, p, o);
 			lp = p;
 			lo = o;
 		}
