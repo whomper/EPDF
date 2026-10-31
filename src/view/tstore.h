@@ -44,5 +44,9 @@ int ts_put(TSTORE *s, long n, const char *text, long len);
    valid until the next ts_get or ts_put */
 const char *ts_get(TSTORE *s, long n, long *len);
 int ts_have(const TSTORE *s, long n);
+/* memory given back when the reader or a picture is refused it: the pool
+   written to the cache file and cut to keep bytes, the slots freed (what
+   ts_get gave is then gone). The bytes given back; 0 with no cache file */
+long ts_shrink(TSTORE *s, long keep);
 
 #endif

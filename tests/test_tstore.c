@@ -49,6 +49,21 @@ int main(int argc, char **argv)
 	check(&s, 1, "page 1's text");
 	if (s.opens != 1)
 		printf("FAIL %ld opens after the big page\n", s.opens), bad++;
+	/* memory given back (0.3): the pool to the file, cut to 16 bytes; every page still there */
+	ts_put(&s, 0, "zero", 4);
+	if (ts_shrink(&s, 16) < 24 || s.budget != 16 || s.pool_len)
+		printf("FAIL shrink: budget %ld, pool %ld\n", s.budget, s.pool_len), bad++;
+	check(&s, 0, "zero");
+	check(&s, 2, text);
+	ts_put(&s, 4, "four, longer than sixteen", 25);
+	ts_put(&s, 5, "five", 4);
+	check(&s, 4, "four, longer than sixteen");
+	check(&s, 5, "five");
+	check(&s, 9, "page 9's text");
+	ts_shrink(&s, 16);
+	if (s.budget != 16 || s.pool_len)
+		printf("FAIL second shrink\n"), bad++;
+	check(&s, 5, "five");
 	ts_close(&s);
 	if (pf_size(path) >= 0)
 		printf("FAIL %s left behind\n", path), bad++;
@@ -58,6 +73,9 @@ int main(int argc, char **argv)
 	ts_put(&s, 1, "klm", 3);
 	check(&s, 0, "abcdefghij");
 	check(&s, 1, "klm");
+	if (ts_shrink(&s, 1) != 0)
+		printf("FAIL shrink without a file\n"), bad++;
+	check(&s, 0, "abcdefghij");
 	ts_close(&s);
 	puts(bad ? "tstore: FAILED" : "tstore: ok");
 	return bad != 0;

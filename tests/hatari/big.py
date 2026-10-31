@@ -15,7 +15,9 @@ EPDF's log (NatFeats):
   heap     the heap's size at the end, KB (libc's heap_st + heap_tt)
   oom      allocations the reader was refused
   failed   pages the reader couldn't read; lost: pages the store couldn't keep
-  pics     pictures shown, and failed (why: PIC_MEMORY and the rest)
+  pics     pictures shown, and failed (why: PIC_MEMORY and the rest); one
+           EPDF doesn't show at all (why 2: JPX, JBIG2) is a known limit,
+           listed, not a failure
   crash    a CRASH.LOG, or the emulator's bombs
 A document passes when nothing failed, was lost or crashed. Exit 1 if
 any didn't. Machines run --jobs at a time, each on a display of its own.
@@ -69,7 +71,10 @@ def one(work, machine, pdf, seconds, display):
     res["failed"] = sum(1 for m in pages if m.group(6))
     res["lost"] = con.count("EPDF page-lost")
     res["pics"] = con.count("EPDF picture ready")
-    res["picfail"] = re.findall(r"EPDF picture-failed (.*)", con)
+    failed = re.findall(r"EPDF picture-failed (.*)", con)
+    res["unsupported"] = [f for f in failed if f.rstrip().endswith("why 2")]
+    res["picfail"] = [f for f in failed if not f.rstrip().endswith("why 2")]
+    res["back"] = re.findall(r"EPDF memory-back (\S+) (\d+)", con)
     crash = [os.path.join(d, f) for d, _, fs in os.walk(r.hd) for f in fs if f.upper() == "CRASH.LOG"]
     res["crash"] = bool(crash) or "Panic" in con or "bombs" in con
     res["openfail"] = re.findall(r"EPDF open-failed .*", con)
@@ -116,6 +121,10 @@ def main(argv):
             notes.append("not opened " + "; ".join(res["openfail"]))
         if res["picfail"]:
             notes.append("pictures failed: " + "; ".join(res["picfail"][:3]))
+        if res["unsupported"]:
+            notes.append("%d not shown (JPX/JBIG2)" % len(res["unsupported"]))
+        if res["back"]:
+            notes.append("memory given back %s" % ", ".join("%s %d KB" % (w, int(b) // 1024) for w, b in res["back"]))
         if res["crash"]:
             notes.append("CRASH")
         ok = res["opened"] and not res["failed"] and not res["lost"] and not res["crash"] and not res["picfail"]

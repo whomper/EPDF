@@ -86,8 +86,10 @@ static int spill(TSTORE *s)
 {
 	long i;
 
-	if (!s->path[0] || s->pool_len == 0)
+	if (!s->path[0])
 		return -1;
+	if (s->pool_len == 0)
+		return 0;
 	if (append(s, s->pool, s->pool_len) != 0)
 		return -1;
 	for (i = 0; i < s->npages; i++)
@@ -98,6 +100,34 @@ static int spill(TSTORE *s)
 	s->file_len += s->pool_len;
 	s->pool_len = 0;
 	return 0;
+}
+
+long ts_shrink(TSTORE *s, long keep)
+{
+	long back = 0;
+	int i;
+
+	if (!s->path[0] || (s->pool_len && spill(s) != 0))
+		return 0;
+	for (i = 0; i < TS_SLOTS; i++)
+		if (s->slot[i].s) {
+			back += s->slot[i].len;
+			free(s->slot[i].s);
+			s->slot[i].s = NULL;
+			s->slot[i].page = -1;
+		}
+	if (keep < 1)
+		keep = 1;
+	if (s->budget > keep) {
+		char *p;
+
+		free(s->pool);
+		p = malloc((size_t)keep);
+		back += s->budget - (p ? keep : 0);
+		s->pool = p;
+		s->budget = p ? keep : 0;
+	}
+	return back;
 }
 
 int ts_put(TSTORE *s, long n, const char *text, long len)
@@ -118,7 +148,7 @@ int ts_put(TSTORE *s, long n, const char *text, long len)
 		s->pool = p;
 		s->budget = s->pool_len + len;
 	}
-	if (len > s->budget) {
+	if (len > s->budget || !s->pool) {
 		/* bigger than the pool: straight to the file */
 		if (append(s, text, len) != 0)
 			return -1;
