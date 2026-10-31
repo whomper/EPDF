@@ -19,6 +19,8 @@
 #include "iconify.h"
 #include "docview.h"
 #include "bidi.h"
+#include "pic.h"
+#include "pics.h"
 #include "epdf.h"
 
 /* the speed build (make speed-test) times a scroll's parts */
@@ -176,6 +178,7 @@ void win_layout(void)
 	get_work();
 	if (v) {
 		dv_set_cols(v, cols, settings_lines());
+		dv_set_pics(v, cols * cw, ch, pix_aspect);
 		dv_recount(v, rows + 2);	/* the pages in view at once, the rest later */
 		dv_scroll(v, 0, rows);
 	}
@@ -249,6 +252,72 @@ static int row_visual(const char *s, long n, const char **vis, short *x)
 	return 1;
 }
 
+/* where a picture of width w stands: in the middle of the text's width,
+   on a word (a copy that starts inside one is slow on TOS 1.04) */
+static short pic_x(int w)
+{
+	short x = (short)(work.x + MARGIN + (cols * cw - w) / 2);
+
+	if (x < work.x + MARGIN)
+		x = (short)(work.x + MARGIN);
+	return (short)(x & ~15) < work.x + MARGIN ? x : (short)(x & ~15);
+}
+
+/* a row of a picture: its bitmap's band, or, until it is decoded, its
+   frame with a word in it */
+static void draw_pic(const GRECT *c, short y, const DVPIC *pr)
+{
+	PICE *e = pics_get(pr->obj, pr->w, pr->h);
+	short x = pic_x(pr->w), right = (short)(c->x + c->w), tx = (short)(work.x + MARGIN);
+	long y0 = pr->row * ch, y1 = y0 + ch > pr->h ? pr->h : y0 + ch;
+
+	blank(c, tx, x, y, ch);
+	blank(c, (short)(x + pr->w), right, y, ch);
+	if (e && e->state == PICS_READY && y1 > y0) {
+		MFDB scr;
+		short pxy[8];
+
+		memset(&scr, 0, sizeof scr);
+		pxy[0] = 0;
+		pxy[1] = (short)y0;
+		pxy[2] = (short)(pr->w - 1);
+		pxy[3] = (short)(y1 - 1);
+		pxy[4] = x;
+		pxy[5] = y;
+		pxy[6] = (short)(x + pr->w - 1);
+		pxy[7] = (short)(y + (y1 - y0) - 1);
+		vro_cpyfm(vdi_h, 3, pxy, &e->bm, &scr);
+		if (y1 - y0 < ch)
+			blank(c, x, (short)(x + pr->w), (short)(y + (y1 - y0)), (short)(ch - (y1 - y0)));
+		vswr_mode(vdi_h, MD_REPLACE);
+		vst_color(vdi_h, 1);
+		return;
+	}
+	/* the frame, a part of it a row */
+	blank(c, x, (short)(x + pr->w), y, ch);
+	line_col(x, y, x, (short)(y + ch - 1), 1);
+	line_col((short)(x + pr->w - 1), y, (short)(x + pr->w - 1), (short)(y + ch - 1), 1);
+	if (pr->row == 0)
+		line_col(x, y, (short)(x + pr->w - 1), y, 1);
+	if (pr->row == pr->rows - 1)
+		line_col(x, (short)(y + ch - 1), (short)(x + pr->w - 1), (short)(y + ch - 1), 1);
+	if (pr->row == pr->rows / 2) {
+		const char *say = !e ? "Picture" : e->state == PICS_FAILED ? (e->why == PIC_UNSUPPORTED ? "A picture EPDF can't show" :
+			e->why == PIC_MEMORY || e->why == PIC_TOO_BIG ? "A picture too big for the memory" : "A damaged picture") : "Picture";
+		short n = (short)strlen(say);
+
+		if (n * cw < pr->w - 2 * cw) {
+			vswr_mode(vdi_h, MD_TRANS);
+			vst_color(vdi_h, 1);
+			vst_effects(vdi_h, 2);
+			text_n(vdi_h, (short)(x + (pr->w - n * cw) / 2), y, say, n);
+			vst_effects(vdi_h, 0);
+		}
+	}
+	vswr_mode(vdi_h, MD_REPLACE);
+	vst_color(vdi_h, 1);
+}
+
 /* the selected part of a row shown inverted (XOR), within the clip c */
 static void invert(const GRECT *c, short x1, short x2, short y)
 {
@@ -302,6 +371,10 @@ static void draw_rows(const GRECT *c, long r0, long r1)
 			continue;
 		if (!dv_row(v, r, &kind, &s, &n, &page, &off))
 			break;
+		if (kind == DV_PIC) {
+			draw_pic(c, y, &v->pic);
+			continue;
+		}
 		if (n > cols)
 			n = cols;
 		if (kind == DV_HEAD || n <= 0 || kind == DV_WAIT) {
@@ -528,9 +601,29 @@ void win_goto_page(long n)
 	if (!v || win < 0)
 		return;
 	dv_goto_page(v, n);		/* its head at the top, even near the end */
-	sliders();
+	sliders_due = 1;		/* when no key waits, as after a scroll */
 	win_info();
 	win_draw_all();
+}
+
+/* picture obj is ready (or can't be shown): its rows drawn again where they show */
+void win_pic_ready(long obj)
+{
+	DOCVIEW *v = doc_view();
+	long r, first = -1, last = -1, n, page, off;
+	int kind;
+	const char *s;
+
+	if (!v || win < 0 || iconified)
+		return;
+	for (r = 0; r <= rows && dv_row(v, r, &kind, &s, &n, &page, &off); r++)
+		if (kind == DV_PIC && v->pic.obj == obj) {
+			if (first < 0)
+				first = r;
+			last = r;
+		}
+	if (first >= 0)
+		win_draw_rows(first, last + 1);
 }
 
 /* page n's text came: its rows drawn again where it shows; the rest of
@@ -640,7 +733,7 @@ void win_show(long page, long off)
 	if (row <= 0)
 		return;
 	dv_show_row(v, page, row, rows / 3, rows);
-	sliders();
+	sliders_due = 1;
 	win_info();
 	win_draw_all();
 }

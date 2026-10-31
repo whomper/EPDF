@@ -31,11 +31,14 @@ int main(int argc, char **argv)
 	n = atol(argv[2]) - 1;
 	ptext_init(&t);
 	t.soft = 1;
+	t.pics = 1;
 	if (pdf_page_text(&d, n, &t) != 0)
 		fprintf(stderr, "pdftext: page %ld not read\n", n + 1);
 	for (i = 0; i < t.text.len; i++) {
 		if (t.text.s[i] == '\v')
 			fputs(argc > 3 ? " ~ " : " ", stdout);
+		else if (t.text.s[i] == 0x7F)
+			fputs("[picture ", stdout);
 		else
 			putchar(t.text.s[i]);
 	}

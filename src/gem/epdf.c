@@ -31,9 +31,11 @@
 #include "clip.h"
 #include "popup.h"
 #include "menu.h"
+#include "pics.h"
 #include "epdf.h"
 
 short ap_id;
+short pix_aspect = 16;
 short vdi_h, cw, ch, planes, gl_wchar, gl_hchar;
 short desk_x, desk_y, desk_w, desk_h;
 extern short scr_w, scr_h;
@@ -651,6 +653,7 @@ static void crash_quit(const char *what)
 
 /* the reading on for a piece of the slice; a page it finished shown */
 static long arrived = -1;		/* a page read, its rows still to draw */
+static long arrived_pic = -1;		/* a picture made, its rows still to draw */
 
 /* the reading on for a piece of the slice; 1 when a page came, whose rows
    are drawn in a turn of their own (a page's rows and the slice that read
@@ -685,6 +688,8 @@ int main(void)
 	}
 	scr_w = work_out[0] + 1;
 	scr_h = work_out[1] + 1;
+	if (work_out[3] > 0 && work_out[4] > 0)	/* a pixel's width and height, microns */
+		pix_aspect = (short)(work_out[4] * 16L / work_out[3]);
 	vq_extnd(vdi_h, 1, work_out);
 	planes = work_out[4];
 	vst_alignment(vdi_h, 0, 5);
@@ -755,13 +760,13 @@ int main(void)
 	while (!quit_now) {
 		short which, flags = MU_MESAG | MU_KEYBD | MU_BUTTON;
 		unsigned long t;
-		int pending = doc_pending() || find_dir;
+		int pending = doc_pending() || find_dir || doc_pic_busy() || pics_waiting();
 
 		/* the sliders after a scroll, once no key waits; the reading
 		   on while nothing else does */
-		if (win_sliders_due() || pending || arrived >= 0)
+		if (win_sliders_due() || pending || arrived >= 0 || arrived_pic >= 0)
 			flags |= MU_TIMER;
-		t = win_sliders_due() || arrived >= 0 ? 0 : bg_timer(pending, 1000);
+		t = win_sliders_due() || arrived >= 0 || arrived_pic >= 0 ? 0 : bg_timer(pending, 1000);
 		/* either button going down (0x100: the AES's "any of them"), two
 		   clicks counted */
 		which = evnt_multi_(flags, 0x102, 3, 0, t, msg, &ev);
@@ -783,8 +788,21 @@ int main(void)
 				win_page_ready(arrived);	/* the page read last turn */
 				win_info();
 				arrived = -1;
+			} else if (arrived_pic >= 0) {
+				win_pic_ready(arrived_pic);	/* the picture made last turn */
+				arrived_pic = -1;
 			} else if (win_sliders_due()) {
 				win_sliders();
+			} else if ((doc_pic_busy() || pics_waiting()) && bg_may_work()) {
+				long obj;
+
+				/* a picture the window shows first: the user sees its frame */
+				bg_begin();
+				if (doc_pic_busy() || doc_pic_start())
+					while (!doc_pic_slice(40, &obj) && bg_more())
+						;
+				if (!doc_pic_busy())
+					arrived_pic = obj;
 			} else if (pending && bg_may_work()) {
 				bg_begin();
 				/* a search first: the user waits for it; the reading after */
@@ -806,6 +824,7 @@ int main(void)
 		menu_bar(menu.tree, 0);
 	mbar_free(&menu);
 	doc_close();
+	pics_exit();
 	font_exit();
 	inf_free(&inf);
 	av_exit();

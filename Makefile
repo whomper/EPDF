@@ -38,6 +38,12 @@ build/pdfmeasure: tools/pdfmeasure.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $
 build/pdftext: tools/pdftext.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HDRS) | build
 	$(CC) $(HCFLAGS) -o $@ tools/pdftext.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC)
 
+HPIC_SRC = src/pdfimg.c src/ccitt.c src/rscale.c common/src/pic.c common/src/png.c common/src/jpegdc.c \
+           common/third_party/tjpgd/tjpgd.c common/third_party/nsgif/src/gif.c common/third_party/nsgif/src/lzw.c
+build/imgshow: tools/imgshow.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HPIC_SRC) $(HDRS) | build
+	$(CC) $(HCFLAGS) -Icommon/third_party/tjpgd -Icommon/third_party/nsgif/include -Icommon/third_party/nsgif/src -w \
+	  -o $@ tools/imgshow.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HPIC_SRC)
+
 build/glyphjob: tools/glyphjob.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HDRS) | build
 	$(CC) $(HCFLAGS) -o $@ tools/glyphjob.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC)
 
@@ -233,13 +239,14 @@ build/m68000/version.c: FORCE | build/m68000
 	@if cmp -s $@.new $@; then rm $@.new; else mv $@.new $@; fi
 FORCE:
 .PHONY: FORCE
-GEM_SRC = src/gem/epdf.c src/gem/doc.c src/gem/textwin.c src/gem/find.c src/gem/font.c src/gem/gemui.c src/gem/menu.c src/gem/about.c \
+GEM_SRC = src/gem/epdf.c src/gem/doc.c src/gem/textwin.c src/gem/find.c src/gem/font.c src/gem/pics.c src/gem/gemui.c src/gem/menu.c src/gem/about.c \
           src/view/textview.c src/view/docview.c src/view/tstore.c src/view/inf.c src/view/search.c common/ui/bgwork.c common/ui/twin.c \
+          src/pdfimg.c src/ccitt.c src/rscale.c $(PIC_SRC) \
           common/atari/gem.c common/atari/crash.c common/ui/mbar.c common/ui/aboutbox.c common/ui/aboutline.c \
           common/ui/alert.c common/ui/dialog.c common/ui/field.c common/ui/av.c common/ui/text.c common/ui/clip.c common/ui/iconify.c common/ui/help.c common/ui/dd.c common/ui/popup.c common/ui/fontsel.c \
           common/src/charset.c common/src/bidi.c common/ui/accmem.c common/atari/bigbuf.c
 GEM_OBJ = $(patsubst %.c,build/m68000/%.o,$(GEM_SRC)) build/m68000/version.o
-$(patsubst %.c,build/m68000/%.o,$(GEM_SRC)): XFLAGS += -Isrc/gem -Isrc/view -Icommon/ui
+$(patsubst %.c,build/m68000/%.o,$(GEM_SRC)): XFLAGS += -Isrc/gem -Isrc/view -Icommon/ui -I$(T)/tjpgd -I$(T)/nsgif/include -I$(T)/nsgif/src
 build/m68000/version.o: build/m68000/version.c
 	$(XCC) $(XFLAGS) -c -o $@ $<
 build/m68000/coro.o: src/gem/coro.S | build/m68000

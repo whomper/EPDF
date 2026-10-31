@@ -79,6 +79,10 @@ def main(argv):
         for k in mods:
             send("hatari-event keydown 0x%x" % k)
         send("hatari-event keypress 0x%x" % code)
+        if mods:
+            # held until the program has read the key: the AES gives the
+            # shift keys as they are then (the guidelines, 3.2)
+            time.sleep(0.6)
         for k in mods:
             send("hatari-event keyup 0x%x" % k)
 

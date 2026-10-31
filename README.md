@@ -10,7 +10,7 @@ every machine, and, from a later stage, its pages as they were made on the TT an
 **Highlights**
 
 - **Every page's text on any Atari, down to a 1 MB ST:** the paragraphs joined and wrapped to the
-  window, or each line as it is on the page. The text is read in the background, a page at a
+  window, or each line as it is on the page, with the pictures where they stand. The text is read in the background, a page at a
   time, while you read; a long document's text goes to a cache file when memory is short.
 - **Fast on the stock machines:** a scroll moves what stays on the screen and draws only what comes
   in; nothing waits for the reading.
@@ -116,6 +116,8 @@ It includes, under their own licences (compatible with the GPL), as `NOTICES.TXT
 
 - [BearSSL](common/third_party/bearssl) by Thomas Pornin (MD5, SHA-2, AES for encrypted PDFs): MIT
   licence
+- [TJpgDec](common/third_party/tjpgd) by ChaN (JPEG pictures): its own free licence
+- [libnsgif](common/third_party/nsgif) from NetSurf (GIF, in the family's picture code): MIT licence
 - [FreeType](third_party/freetype), the FreeType Project Licence or the GPL version 2 (used by the
   stage 0 measuring programs; the pages' drawing will use it)
 

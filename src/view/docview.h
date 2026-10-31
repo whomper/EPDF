@@ -11,6 +11,10 @@
  * pages before it are extracted and their number of rows changes. A page
  * not extracted yet has one row ("..."), a guess until it is.
  *
+ * A picture is a line of its own in the page's text, "\x7F<object>
+ * <w>x<h>" (its size in points, the extractor's PTEXT.pics), shown as as
+ * many rows as it takes at the window's width.
+ *
  * In reflow mode a paragraph's lines are joined and wrapped to the width
  * (the soft break is a space); in lines mode each line
  * of the page is a row, wrapped where it is too long.
@@ -23,7 +27,16 @@
 
 #define DV_LAID 4			/* pages kept laid out */
 
-enum { DV_TEXT, DV_HEAD, DV_WAIT };	/* a row of text, a page's head, a page still to come */
+enum { DV_TEXT, DV_HEAD, DV_WAIT, DV_PIC };	/* a row of text, a page's head, a page still to come,
+						   a row of a picture */
+
+/* a picture's row (dv_row's DV_PIC): which picture, the size it shows at
+   (pixels) and which of its rows this is */
+typedef struct {
+	long obj;			/* its image XObject */
+	int w, h;			/* shown at w x h pixels */
+	long row, rows;			/* this row, of rows */
+} DVPIC;
 
 typedef struct {
 	TSTORE *ts;
@@ -34,7 +47,10 @@ typedef struct {
 	long nstale;
 	long total;
 	long top_page, top_row;		/* the first row shown */
-	struct { long page; char *text; long len; TV tv; unsigned long used; } lay[DV_LAID];
+	struct { long page; char *text; long len; TV tv; long *lrow; unsigned long used; } lay[DV_LAID];
+	int pic_w, pic_ch, pic_aspect;	/* pictures: at most pic_w pixels wide, rows of pic_ch,
+					   pixels pic_aspect / 16 as tall as wide */
+	DVPIC pic;			/* the last DV_PIC row dv_row gave */
 	unsigned long tick;
 	/* the selection: from page p0, offset o0 in its text, to p1, o1
 	   (o1 not taken); none while p0 < 0 */
@@ -52,6 +68,11 @@ void dv_set_cols(DOCVIEW *v, int cols, int lines_mode);
    more are to count */
 int dv_recount(DOCVIEW *v, int max);
 
+/* the pictures' room: at most w pixels wide, rows ch pixels high, a pixel
+   aspect / 16 as tall as it is wide (16 square, 32 an ST's medium mode);
+   the pages laid out again as dv_set_cols does. Without it a picture is
+   one row */
+void dv_set_pics(DOCVIEW *v, int w, int ch, int aspect);
 /* the row r rows after the top (r >= 0): its kind, text and length, the
    page it is in and where its text starts in the page's (-1 for a head or
    a page to come); 0 past the end */

@@ -4,6 +4,47 @@
 #include <string.h>
 #include "docview.h"
 
+/* a picture's line: its object and size in points; 0 when it isn't one */
+static int pic_of(const char *s, long n, long *obj, long *w, long *h)
+{
+	long v[3] = { 0, 0, 0 };
+	int k = 0;
+	long i;
+
+	if (n < 4 || s[0] != 0x7F)
+		return 0;
+	for (i = 1; i < n && k < 3; i++) {
+		if (s[i] >= '0' && s[i] <= '9')
+			v[k] = v[k] * 10 + (s[i] - '0');
+		else if (s[i] == ' ' || s[i] == 'x')
+			k++;
+		else
+			return 0;
+	}
+	if (k < 2 || v[1] <= 0 || v[2] <= 0)
+		return 0;
+	*obj = v[0];
+	*w = v[1];
+	*h = v[2];
+	return 1;
+}
+
+/* the size a picture shows at, and the rows it takes */
+static long pic_rows(const DOCVIEW *v, long w, long h, int *pw, int *ph)
+{
+	long x, y;
+
+	if (v->pic_w <= 0 || v->pic_ch <= 0)
+		return 1;
+	x = w < v->pic_w ? w : v->pic_w;	/* a point a pixel, at most the width */
+	y = x * h / w * 16 / (v->pic_aspect > 0 ? v->pic_aspect : 16);
+	if (y < 1)
+		y = 1;
+	*pw = (int)x;
+	*ph = (int)y;
+	return (y + v->pic_ch - 1) / v->pic_ch;
+}
+
 /* page n laid out (its text copied: the store's pointer lasts only till
    its next call), or NULL when it isn't extracted or memory is short */
 static TV *laid(DOCVIEW *v, long n)
@@ -32,6 +73,8 @@ static TV *laid(DOCVIEW *v, long n)
 	while (len > 0 && t[len - 1] == '\n')
 		len--;
 	free(v->lay[best].text);
+	free(v->lay[best].lrow);
+	v->lay[best].lrow = NULL;
 	tv_free(&v->lay[best].tv);
 	v->lay[best].text = t;
 	v->lay[best].len = len;
@@ -42,14 +85,44 @@ static TV *laid(DOCVIEW *v, long n)
 		v->lay[best].page = -1;
 		return NULL;
 	}
+	/* where each line's rows start: a picture's line takes its rows */
+	{
+		TV *tv = &v->lay[best].tv;
+		long *lr = malloc((size_t)(tv->nlines + 1) * sizeof *lr), i, ln, o, w, h;
+		const char *ls;
+		int pw, ph;
+
+		if (!lr) {
+			v->lay[best].page = -1;
+			return NULL;
+		}
+		lr[0] = 0;
+		for (i = 0; i < tv->nlines; i++) {
+			ls = tv_line(tv, i, &ln);
+			lr[i + 1] = lr[i] + (ls && pic_of(ls, ln, &o, &w, &h) ? pic_rows(v, w, h, &pw, &ph) : 1);
+		}
+		v->lay[best].lrow = lr;
+	}
 	return &v->lay[best].tv;
+}
+
+/* the laid page's slot (after laid() gave its TV) */
+static long *lrow_of(DOCVIEW *v, TV *tv)
+{
+	int i;
+
+	for (i = 0; i < DV_LAID; i++)
+		if (&v->lay[i].tv == tv)
+			return v->lay[i].lrow;
+	return NULL;
 }
 
 static long count(DOCVIEW *v, long n)
 {
 	TV *tv = ts_have(v->ts, n) ? laid(v, n) : NULL;
+	long *lr = tv ? lrow_of(v, tv) : NULL;
 
-	return 1 + (tv ? (tv->nlines > 0 ? tv->nlines : 1) : 1);
+	return 1 + (tv && lr && lr[tv->nlines] > 0 ? lr[tv->nlines] : 1);
 }
 
 int dv_init(DOCVIEW *v, TSTORE *ts, long npages, int cols, int lines_mode)
@@ -87,6 +160,7 @@ void dv_free(DOCVIEW *v)
 
 	for (i = 0; i < DV_LAID; i++) {
 		free(v->lay[i].text);
+		free(v->lay[i].lrow);
 		tv_free(&v->lay[i].tv);
 	}
 	free(v->rows);
@@ -146,6 +220,23 @@ void dv_set_cols(DOCVIEW *v, int cols, int lines_mode)
 		v->top_row = v->rows[v->top_page] - 1;
 }
 
+void dv_set_pics(DOCVIEW *v, int w, int ch, int aspect)
+{
+	long i;
+
+	if (w == v->pic_w && ch == v->pic_ch && aspect == v->pic_aspect)
+		return;
+	v->pic_w = w;
+	v->pic_ch = ch;
+	v->pic_aspect = aspect;
+	forget(v, -1);
+	for (i = 0; i < v->npages; i++)
+		if (ts_have(v->ts, i) && !v->stale[i]) {
+			v->stale[i] = 1;
+			v->nstale++;
+		}
+}
+
 int dv_recount(DOCVIEW *v, int max)
 {
 	long d, n;
@@ -194,8 +285,36 @@ int dv_row(DOCVIEW *v, long r, int *kind, const char **s, long *n, long *page, l
 		*n = 3;
 		return 1;
 	}
-	*kind = DV_TEXT;
-	*s = tv_line(tv, row - 1, n);
+	{
+		long *lr = lrow_of(v, tv), lo = 0, hi = tv->nlines - 1, r = row - 1, obj, w, h;
+
+		*kind = DV_TEXT;
+		if (lr && tv->nlines > 0) {
+			/* the line whose rows hold r */
+			while (lo < hi) {
+				long mid = (lo + hi + 1) / 2;
+
+				if (lr[mid] <= r)
+					lo = mid;
+				else
+					hi = mid - 1;
+			}
+			*s = tv_line(tv, lo, n);
+			if (*s && pic_of(*s, *n, &obj, &w, &h)) {
+				*kind = DV_PIC;
+				v->pic.obj = obj;
+				v->pic.rows = pic_rows(v, w, h, &v->pic.w, &v->pic.h);
+				v->pic.row = r - lr[lo];
+				*off = (long)(*s - (const char *)tv->text);
+				*n = 0;
+				return 1;
+			}
+			if (r != lr[lo])
+				*s = NULL;
+		} else {
+			*s = tv_line(tv, r, n);
+		}
+	}
 	if (!*s) {
 		*s = "";
 		*n = 0;
@@ -210,6 +329,8 @@ long dv_row_of(DOCVIEW *v, long n, long off)
 	TV *tv = n >= 0 && n < v->npages && ts_have(v->ts, n) ? laid(v, n) : NULL;
 	long lo = 0, hi;
 
+	long *lr;
+
 	if (!tv || tv->nlines == 0)
 		return tv ? 1 : 0;
 	/* the last line that starts at or before off */
@@ -222,7 +343,8 @@ long dv_row_of(DOCVIEW *v, long n, long off)
 		else
 			hi = mid - 1;
 	}
-	return lo + 1;
+	lr = lrow_of(v, tv);
+	return (lr ? lr[lo] : lo) + 1;
 }
 
 void dv_show_row(DOCVIEW *v, long n, long row, long above, long window)

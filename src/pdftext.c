@@ -8,6 +8,7 @@
  * text state and the transformation matrices; it draws nothing, it counts
  * what drawing would take (paths, pictures, glyphs) for the measurement.
  */
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "pdf.h"
@@ -1204,6 +1205,7 @@ typedef struct {
 	long forms_run;
 	fx rm[4];			/* the chunk being shown: origin x, y and the advance direction */
 	fx rfs;
+	fx page_area;			/* the page's width x height / 65536 (points squared, 16.16) */
 } IX;
 
 static const fx IDENT[6] = { FX_ONE, 0, 0, FX_ONE, 0, 0 };
@@ -1525,15 +1527,22 @@ static void do_xobject(IX *x, const char *name)
 				fl = pdf_res(d, &fl->u.v[fl->a - 1]);
 			if (fl && fl->t == PO_NAME)
 				fn = fl->u.p;
-			if (x->t->rec && x->t->nimg < 64) {
+			if ((x->t->rec || x->t->pics) && x->t->nimg < 64) {
 				PIMG *im = &x->t->img[x->t->nimg++];
 				const fx *c = x->gs.ctm;
+				fx y0 = c[5], y1 = c[5] + c[1], y2 = c[5] + c[3], y3 = c[5] + c[1] + c[3];
 
 				im->obj = onum;
 				im->w = w;
 				im->h = h;
 				im->dw = fxabs(c[0]) + fxabs(c[1]);
 				im->dh = fxabs(c[2]) + fxabs(c[3]);
+				/* the unit square's highest corner */
+				im->top = y0 > y1 ? y0 : y1;
+				if (y2 > im->top)
+					im->top = y2;
+				if (y3 > im->top)
+					im->top = y3;
 				strncpy(im->filter, fn ? fn : "", sizeof im->filter - 1);
 				im->filter[sizeof im->filter - 1] = 0;
 			}
@@ -2143,6 +2152,35 @@ static int leader_line(const char *text, long len)
 	return 0;
 }
 
+/* the pictures sorted by their top, highest first (a page has few) */
+static void pic_order(PTEXT *t)
+{
+	int i, j;
+
+	for (i = 1; i < t->nimg; i++)
+		for (j = i; j > 0 && t->img[j].top > t->img[j - 1].top; j--) {
+			PIMG s = t->img[j];
+
+			t->img[j] = t->img[j - 1];
+			t->img[j - 1] = s;
+		}
+	t->pnext = 0;
+}
+
+/* a picture's line, a paragraph of its own: "\x7F<object> <w>x<h>" */
+static void pic_line(PTEXT *t, const PIMG *im)
+{
+	char b[48];
+	SBUF *o = &t->text;
+
+	if (im->obj < 0 || im->dw < FX_ONE * 8 || im->dh < FX_ONE * 8)
+		return;			/* an inline image, or a speck */
+	if (o->len && o->s[o->len - 1] != '\n')
+		sb_addc(o, '\n');
+	snprintf(b, sizeof b, "\x7F%ld %ldx%ld\n", im->obj, (long)(im->dw >> 16), (long)(im->dh >> 16));
+	sb_adds(o, b);
+}
+
 /* a line of the page: chunks [a, b), its baseline, size and extent */
 typedef struct {
 	long a, b;
@@ -2164,8 +2202,25 @@ static void assemble(IX *x, PTEXT *t)
 	LN *ln;
 	int pstart = 1;		/* the line before began a paragraph */
 
-	if (x->nch == 0)
+	if (x->nch == 0) {
+		/* a page of pictures alone (a scan): their lines only */
+		if (t->pics) {
+			pic_order(t);
+			while (t->pnext < t->nimg)
+				pic_line(t, &t->img[t->pnext++]);
+		}
 		return;
+	}
+	/* a picture over most of a page that has text is its background, or
+	   the scan behind its text layer: the text is what is read */
+	if (t->pics && x->page_area > 0) {
+		int i, j = 0;
+
+		for (i = 0; i < t->nimg; i++)
+			if ((fxmul(t->img[i].dw, t->img[i].dh >> 8) >> 8) * 5 < x->page_area * 3)
+				t->img[j++] = t->img[i];
+		t->nimg = j;
+	}
 	ch_sort(x->ch, x->nch, ch_cmp_y);
 	ln = pdf_malloc(x->d, x->nch * (long)sizeof(LN));
 	if (!ln)
@@ -2189,7 +2244,13 @@ static void assemble(IX *x, PTEXT *t)
 		ln[nl].x1 = x->ch[j - 1].x + x->ch[j - 1].dx;
 		nl++;
 	}
+	/* the pictures in the order they stand on the page, top first */
+	if (t->pics)
+		pic_order(t);
 	for (k = 0; k < nl; k++) {
+		if (t->pics)
+			while (t->pnext < t->nimg && t->img[t->pnext].top > ln[k].y + ln[k].fs)
+				pic_line(t, &t->img[t->pnext++]);
 		if (k > 0) {
 			LN *p = &ln[k - 1], *c = &ln[k];
 			fx fs = p->fs > c->fs ? p->fs : c->fs;
@@ -2233,6 +2294,8 @@ static void assemble(IX *x, PTEXT *t)
 			pause_point(x->d);	/* a page's lines take time too: the caller may want the machine */
 	}
 	sb_addc(&t->text, '\n');
+	while (t->pics && t->pnext < t->nimg)
+		pic_line(t, &t->img[t->pnext++]);
 	pdf_free(x->d, ln, x->nch * (long)sizeof(LN));
 }
 
@@ -2254,6 +2317,17 @@ int pdf_page_text(PDOC *d, long n, PTEXT *t)
 		return -1;
 	}
 	x.res = res;
+	if (box && box->t == PO_ARR && box->a >= 4) {
+		fx v[4];
+		int k;
+
+		for (k = 0; k < 4; k++) {
+			POBJ *e = pa_at(box, k);
+
+			v[k] = e->t == PO_INT ? e->a << 16 : e->a;
+		}
+		x.page_area = fxmul(fxabs(v[2] - v[0]), fxabs(v[3] - v[1]) >> 8) >> 8;	/* points squared / 65536 */
+	}
 	memcpy(x.gs.ctm, IDENT, sizeof x.gs.ctm);
 	rot = ((rot % 360) + 360) % 360;
 	if (rot == 90) { x.gs.ctm[0] = 0; x.gs.ctm[1] = -FX_ONE; x.gs.ctm[2] = FX_ONE; x.gs.ctm[3] = 0; }

@@ -10,6 +10,7 @@ struct DOCVIEW_s;
 
 extern const char app_version[];
 extern short ap_id;
+extern short pix_aspect;			/* a pixel's height / its width x 16 (16 square) */
 
 /* epdf.c */
 void log_event(const char *what, const char *a, const char *b);
@@ -30,6 +31,9 @@ long doc_read(void);			/* pages whose text is read */
 int doc_pending(void);			/* pages still to read */
 void doc_want(long page);		/* read from this page on next */
 long doc_slice(unsigned long ms);	/* the reading on for ms: the page it finished, or -1 */
+int doc_pic_start(void);		/* a picture the window wants: its decoding begun */
+int doc_pic_slice(unsigned long ms, long *obj);	/* 1 when it is done: *obj */
+int doc_pic_busy(void);
 const char *doc_status(void);		/* the About box's line */
 const char *doc_page_text(long n, long *len);	/* NULL when not read yet */
 #include "docview.h"
@@ -60,6 +64,7 @@ void win_status(const char *s);		/* after the info line's page, until cleared (N
 int win_hit(short mx, short my, long *page, long *off);
 void win_draw_span(long p0, long o0, long p1, long o1);
 void win_show(long page, long off);		/* that place in view */
+void win_pic_ready(long obj);		/* a picture decoded: its rows drawn */
 
 /* font.c: the text view's font (FONT= in EPDF.INF) */
 void font_init(const char *setting, const char *dir);

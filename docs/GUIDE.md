@@ -46,6 +46,13 @@ gives way to you at once.
   ⇧^Clr/Home).
 - **Help:** this guide.
 
+**Pictures** stand where they are on the page, as wide as the window lets them (a point of the
+page a pixel at most), in the screen's colours. A frame stands in the picture's place until it is
+decoded, which a big JPEG takes a while on an ST; the text goes on being read meanwhile. A
+picture over most of a page that has text (a background, or the scan behind a text layer) is left
+out: the text is what you read. Pictures EPDF can't show (JPEG 2000, JBIG2) keep their frame and
+say so.
+
 **Hebrew** shows in the Atari's own Hebrew letters, each line in the order it is read, and a line
 that starts in Hebrew is set at the right. A letter the Atari's character set doesn't have shows as
 "?".

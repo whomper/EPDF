@@ -23,6 +23,8 @@
 #include "docview.h"
 #include "epdf.h"
 #include "coro.h"
+#include "pdfimg.h"
+#include "pics.h"
 
 static PDOC *doc;
 static TSTORE store;
@@ -43,6 +45,13 @@ static int rdone;			/* the reader has finished rpage */
 static int abandon;			/* the document closes: stop the page */
 static unsigned long slice_end;		/* tos_ms() when the slice is up */
 static PTEXT rt;			/* the page read */
+/* or a picture: decoded and made the screen's standard bitmap there */
+static PICE *rpic;			/* the picture being decoded, NULL none */
+static int rpic_planes;
+static PIC_PAL *rpic_pal;
+static unsigned char *rpic_std;
+static long rpic_bytes;
+static int rpic_why;
 
 /* the reader's hook: the machine back to the event loop when the slice
    is up; 1 (stop the page) when the document is closing */
@@ -59,14 +68,35 @@ static int slice_up(void *ctx)
 	return 0;
 }
 
-/* the reading's stack: a page at a time, for good */
+/* pic.h's poll, while a picture is decoded there: the same hand-over */
+static int pic_turn(void)
+{
+	return !slice_up(NULL);
+}
+
+/* the reading's stack: a page or a picture at a time, for good */
 static void reader(void)
 {
 	for (;;) {
-		pdf_page_reset(doc);
-		ptext_init(&rt);
-		rt.soft = 1;
-		pdf_page_text(doc, rpage, &rt);
+		if (rpic) {
+			PIC *p;
+
+			rpic_std = NULL;
+			rpic_bytes = 0;
+			p = pdf_image(doc, rpic->obj, rpic->w, rpic->h, 2L << 20, &rpic_why);
+			if (p) {
+				rpic_std = pics_standard(p, rpic_planes, rpic_pal, &rpic_bytes);
+				if (!rpic_std)
+					rpic_why = abandon ? PIC_STOPPED : PIC_MEMORY;
+				pic_free(p);
+			}
+		} else {
+			pdf_page_reset(doc);
+			ptext_init(&rt);
+			rt.soft = 1;
+			rt.pics = 1;
+			pdf_page_text(doc, rpage, &rt);
+		}
 		rdone = 1;
 		coro_switch(&read_co, &main_co);
 	}
@@ -75,14 +105,57 @@ static void reader(void)
 /* the page being read given up (its memory freed as the reader unwinds) */
 static void stop_reading(void)
 {
-	if (rpage < 0)
+	if (rpage < 0 && !rpic)
 		return;
 	abandon = 1;
 	while (!rdone)
 		coro_switch(&main_co, &read_co);
 	abandon = 0;
-	ptext_free(&rt);
+	if (rpic) {
+		free(rpic_std);
+		rpic->state = PICS_FAILED;
+		rpic->why = PIC_STOPPED;
+		rpic = NULL;
+	} else {
+		ptext_free(&rt);
+	}
 	rpage = -1;
+}
+
+/* a picture the window wants, decoded next: between pages, not in one */
+int doc_pic_start(void)
+{
+	PICE *e;
+
+	if (!doc || rpage >= 0 || rpic || !(e = pics_next()))
+		return 0;
+	rpic = e;
+	rpic_planes = planes;
+	rpic_pal = pics_palette();
+	rdone = 0;
+	pic_poll = pic_turn;
+	return 1;
+}
+
+/* the picture on for ms milliseconds: 1 when it is done (the window's
+   bitmap made, or failed), its object in *obj */
+int doc_pic_slice(unsigned long ms, long *obj)
+{
+	if (!rpic)
+		return 0;
+	slice_end = tos_ms() + ms;
+	coro_switch(&main_co, &read_co);
+	if (!rdone)
+		return 0;
+	*obj = rpic->obj;
+	pics_done(rpic, rpic_std, rpic_bytes, rpic_why);
+	rpic = NULL;
+	return 1;
+}
+
+int doc_pic_busy(void)
+{
+	return rpic != NULL;
 }
 
 int doc_is_open(void)
@@ -200,7 +273,7 @@ long doc_slice(unsigned long ms)
 	long i, n = -1, len = 0;
 	char *a;
 
-	if (!doc_pending())
+	if (!doc_pending() || rpic)
 		return -1;
 	if (rpage < 0) {
 		/* the next page not yet read, from `next` on and round */

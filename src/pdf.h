@@ -181,6 +181,7 @@ typedef struct {
 	long obj;			/* the image XObject */
 	long w, h;			/* pixels */
 	fx dw, dh;			/* the size it is drawn at, page points */
+	fx top;				/* its top edge on the page (page points, y up) */
 	char filter[16];
 } PIMG;
 
@@ -199,6 +200,10 @@ typedef struct {
 	long fonts_nomap;		/* fonts with no ToUnicode and no usable encoding */
 	int failed;			/* the page could not be read */
 	int stopped;			/* d->stop said stop: the text is not whole */
+	int pnext;			/* the next picture to place (pdftext.c) */
+	int pics;			/* set by the caller: each picture drawn (an image XObject)
+					   gets a line of its own where it stands among the lines,
+					   "\x7F<object> <width>x<height>" (its size in points) */
 	int soft;			/* set by the caller: a line that goes on in the next ends
 					   in '\v' (a paragraph's soft break), else in '\n' */
 } PTEXT;

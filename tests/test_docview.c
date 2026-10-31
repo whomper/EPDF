@@ -19,6 +19,8 @@ static void rows(DOCVIEW *v, long nrows, const char *want)
 			snprintf(one, sizeof one, "#%ld", page + 1);
 		else if (kind == DV_WAIT)
 			snprintf(one, sizeof one, "?%ld", page + 1);
+		else if (kind == DV_PIC)
+			snprintf(one, sizeof one, "P%ld.%ld/%ld", v->pic.obj, v->pic.row, v->pic.rows);
 		else
 			snprintf(one, sizeof one, "%.*s", (int)n, s);
 		if (r)
@@ -100,6 +102,28 @@ int main(void)
 	}
 	dv_free(&v);
 	ts_close(&ts);
+
+	/* a picture: 100 x 50 points at most 200 pixels wide, rows of 10: 5 rows;
+	   in a medium mode (pixels twice as tall) 3 */
+	{
+		const char *pg = "Above\n\x7F" "12 100x50\nBelow\n";
+
+		ts_open(&ts, 1, 1000, "");
+		ts_put(&ts, 0, pg, (long)strlen(pg));
+		dv_init(&v, &ts, 1, 20, 0);
+		dv_set_pics(&v, 200, 10, 16);
+		while (dv_recount(&v, 5))
+			;
+		rows(&v, 9, "#1|Above|P12.0/5|P12.1/5|P12.2/5|P12.3/5|P12.4/5|Below");
+		eq("pic total", v.total, 8);
+		eq("row of Below", dv_row_of(&v, 0, (long)strlen("Above\n\x7F" "12 100x50\n")), 7);
+		dv_set_pics(&v, 200, 10, 32);
+		while (dv_recount(&v, 5))
+			;
+		rows(&v, 9, "#1|Above|P12.0/3|P12.1/3|P12.2/3|Below");
+		dv_free(&v);
+		ts_close(&ts);
+	}
 	puts(bad ? "docview: FAILED" : "docview: ok");
 	return bad != 0;
 }
