@@ -29,6 +29,7 @@
 #include "inf.h"
 #include "search.h"
 #include "clip.h"
+#include "popup.h"
 #include "menu.h"
 #include "epdf.h"
 
@@ -46,6 +47,7 @@ static int lines_mode;
 static char open_dir[160] = "";		/* where Open looks first (FOLDER=) */
 static int find_dir;			/* a search runs: 1 forwards, -1 back; 0 none */
 static void menu_states(void);
+static void command(int c);
 
 #ifndef BEG_MCTRL
 #define BEG_MCTRL 3			/* wind_update: the mouse is ours while a selection is dragged */
@@ -364,6 +366,72 @@ static void click(short mx, short my, short kstate)
 	menu_states();
 }
 
+/* a double-click: the word there selected (letters, digits and the
+   Atari's accented letters up to the next blank or mark) */
+static void select_word(short mx, short my)
+{
+	long p, o, len, a, e;
+	const char *t;
+
+	if (!win_hit(mx, my, &p, &o) || !(t = doc_page_text(p, &len)))
+		return;
+	a = e = o;
+#define WORDCH(c) (((c) >= 'a' && (c) <= 'z') || ((c) >= 'A' && (c) <= 'Z') || ((c) >= '0' && (c) <= '9') || \
+		   (unsigned char)(c) >= 0x80 || (c) == '\'' || (c) == '-')
+	while (a > 0 && WORDCH(t[a - 1]))
+		a--;
+	while (e < len && WORDCH(t[e]))
+		e++;
+#undef WORDCH
+	if (e > a)
+		select_span(p, a, p, e);
+}
+
+/*
+ * The context menu (the guidelines, 3.3): the right button, or Insert for
+ * the selection. Only the menu bar's commands, with their keys; Copy
+ * first, as a double-click is a selection's.
+ */
+static void context_menu(short mx, short my)
+{
+	static const struct { const char *label; int cmd; } all[] = {
+		{ "  Copy                   ^C ", CMD_COPY },
+		{ "  Select all             ^A ", CMD_SELALL },
+		{ "-", CMD_NONE },
+		{ "  Find...                ^F ", CMD_FIND },
+		{ "  Find next              ^G ", CMD_FINDNEXT },
+		{ "-", CMD_NONE },
+		{ "  Previous page       ^Left ", CMD_PREV },
+		{ "  Next page          ^Right ", CMD_NEXT },
+		{ "-", CMD_NONE },
+		{ "  The page's lines          ", CMD_LINES }
+	};
+	enum { N = sizeof all / sizeof all[0] };
+	static char alt[N][40];
+	const char *lab[N];
+	DOCVIEW *v = doc_view();
+	short i, r;
+
+	for (i = 0; i < N; i++) {
+		int c = all[i].cmd, grey = !v && c != CMD_LINES;
+
+		if (c == CMD_COPY && (!v || v->sel_p0 < 0))
+			grey = 1;
+		if (c == CMD_FINDNEXT && !find_text[0])
+			grey = 1;
+		lab[i] = all[i].label;
+		if (grey || (c == CMD_LINES && lines_mode)) {
+			alt[i][0] = grey ? '~' : '\x08';	/* greyed, or ticked (popup.h) */
+			strncpy(alt[i] + 1, all[i].label + (grey ? 0 : 1), sizeof alt[i] - 2);
+			lab[i] = alt[i];
+		}
+	}
+	log_event("menu", "popup", NULL);
+	r = popup(mx, my, lab, N);
+	if (r >= 0 && all[r].cmd != CMD_NONE)
+		command(all[r].cmd);
+}
+
 /* ---------------------------------------------------------------- commands and keys */
 
 static void page_step(long d)
@@ -492,6 +560,13 @@ static void key(short kstate, short k)
 	case 0x62:			/* Help: EPDF.HYP in the viewer that runs (4.3) */
 		command(CMD_GUIDE);
 		return;
+	case 0x52: {			/* Insert: the context menu, for the selection (3.3) */
+		short x, y, w, h;
+
+		wind_get(win_handle(), WF_WORKXYWH, &x, &y, &w, &h);
+		context_menu((short)(x + w / 3), (short)(y + h / 3));
+		return;
+	}
 	case 0x48:			/* Up; Shift: a window up */
 		win_scroll(shift(kstate) ? -(rows - 1) : -1);
 		return;
@@ -674,12 +749,20 @@ int main(void)
 		if (win_sliders_due() || pending)
 			flags |= MU_TIMER;
 		t = win_sliders_due() ? 0 : bg_timer(pending, 1000);
-		which = evnt_multi_(flags, 1, 1, 1, t, msg, &ev);
+		/* either button going down (0x100: the AES's "any of them"), two
+		   clicks counted */
+		which = evnt_multi_(flags, 0x102, 3, 0, t, msg, &ev);
 		bg_tick();
 		if (which & MU_KEYBD)
 			key(ev.kstate, ev.kreturn);
-		if ((which & MU_BUTTON) && !win_iconified() && wind_find(ev.mx, ev.my) == win_handle())
-			click(ev.mx, ev.my, ev.kstate);
+		if ((which & MU_BUTTON) && !win_iconified() && wind_find(ev.mx, ev.my) == win_handle()) {
+			if (ev.mbutton & 2)
+				context_menu(ev.mx, ev.my);
+			else if (ev.breturn >= 2)
+				select_word(ev.mx, ev.my);
+			else
+				click(ev.mx, ev.my, ev.kstate);
+		}
 		if (which & MU_MESAG)
 			message(msg);
 		if (which == MU_TIMER) {

@@ -26,7 +26,7 @@ from pdfgen import make_pdf  # noqa: E402
 
 DOWN, UP, HOME, SPACE, CTRL = 0x50, 0x48, 0x47, 0x39, 0x1D
 RIGHT, LEFT, Q = 0x4D, 0x4B, 0x10
-F, G, A, C, RETURN, UNDO, ESC, SHIFT = 0x21, 0x22, 0x1E, 0x2E, 0x1C, 0x61, 0x01, 0x2A
+F, G, A, C, RETURN, UNDO, ESC, SHIFT, INSERT = 0x21, 0x22, 0x1E, 0x2E, 0x1C, 0x61, 0x01, 0x2A, 0x52
 
 
 def main(argv):
@@ -143,6 +143,13 @@ def main(argv):
         key(A, [CTRL])
         key(C, [CTRL])
         wait("EPDF copied")
+        # Insert: the context menu; Esc closes it with nothing chosen
+        key(INSERT)
+        wait("EPDF menu popup")
+        time.sleep(2)
+        shot("context")
+        key(ESC)
+        time.sleep(2)
     finally:
         h.kill()
         h.wait()
