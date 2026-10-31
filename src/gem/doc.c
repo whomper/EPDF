@@ -65,6 +65,11 @@ static PIC_PAL *rpic_pal;
 static unsigned char *rpic_std;
 static long rpic_bytes;
 static int rpic_why;
+/* memory refused (0.3): the store gives its pool back and the page or the
+   picture is tried again, once */
+static long retried_page = -1;
+static long retried_obj = -1;
+#define STORE_KEEP (16L * 1024)
 
 /* the reader's hook: the machine back to the event loop when the slice
    is up; 1 (stop) when the document is closing */
@@ -85,6 +90,20 @@ static int slice_up(void *ctx)
 static int pic_turn(void)
 {
 	return !slice_up(NULL);
+}
+
+/* the text store's memory given back for a page or a picture refused it:
+   1 when there is enough to try again */
+static int give_back(const char *what)
+{
+	long b = ts_shrink(&store, STORE_KEEP);
+	char a[24];
+
+	snprintf(a, sizeof a, "%ld", b);
+	log_event("memory-back", what, a);
+	if (b > 0)
+		cache_kb = store.budget / 1024;
+	return b >= 4096;
 }
 
 /* the pages' stack: a page at a time, for good */
@@ -113,6 +132,24 @@ static void decoder(void)
 
 		rpic_std = NULL;
 		rpic_bytes = 0;
+		{
+			/* a scan or samples: a row at a time into the bitmap (never the
+			   whole picture in memory); a JPEG: whole, then dithered */
+			int how;
+
+			rpic_std = pics_rows(doc, rpic->obj, rpic->w, rpic->h, rpic_planes, rpic_pal, &rpic_bytes, &rpic_why, &how);
+			if (how >= 0) {
+				static char a[48];
+
+				if (!rpic_std && abandon)
+					rpic_why = PIC_STOPPED;
+				snprintf(a, sizeof a, "rows %lu", tos_ms() - t0);
+				log_event("picture-ms", a, NULL);
+				pdone = 1;
+				coro_switch(&pic_co, &main_co);
+				continue;
+			}
+		}
 		p = pdf_image(doc, rpic->obj, rpic->w, rpic->h, 2L << 20, &rpic_why);
 		t1 = tos_ms();
 		if (p) {
@@ -189,6 +226,11 @@ int doc_pic_slice(unsigned long ms, long *obj)
 	coro_switch(&main_co, &pic_co);
 	if (!pdone)
 		return 0;
+	if (!rpic_std && rpic_why == PIC_MEMORY && retried_obj != rpic->obj && give_back("picture")) {
+		retried_obj = rpic->obj;
+		pdone = 0;		/* the decoder starts it again in the next slice */
+		return 0;
+	}
 	*obj = rpic->obj;
 	pics_done(rpic, rpic_std, rpic_bytes, rpic_why);
 	rpic = NULL;
@@ -299,6 +341,7 @@ int doc_open(const char *path, int cols, int lines_mode, const char *cache)
 		return -1;
 	}
 	cache_kb = budget / 1024;
+	retried_page = retried_obj = -1;
 	base = strrchr(path, '\\');
 	strncpy(name, base ? base + 1 : path, sizeof name - 1);
 	name[sizeof name - 1] = '\0';
@@ -351,6 +394,12 @@ long doc_slice(unsigned long ms)
 	if (!rdone)
 		return -1;
 	n = rpage;
+	if (rt.failed && doc->st.oom != rpage_oom && retried_page != n && give_back("page")) {
+		retried_page = n;
+		ptext_free(&rt);
+		rdone = 0;		/* the reader reads it again in the next slice */
+		return -1;
+	}
 	rpage = -1;
 	rt_failed = rt.failed;
 	/* the soft break as CR in the store: the conversion keeps CR, LF and Tab only */

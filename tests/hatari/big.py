@@ -19,7 +19,8 @@ EPDF's log (NatFeats):
            EPDF doesn't show at all (why 2: JPX, JBIG2) is a known limit,
            listed, not a failure
   crash    a CRASH.LOG, or the emulator's bombs
-A document passes when nothing failed, was lost or crashed. Exit 1 if
+A document passes when nothing failed, was lost or crashed; one whose
+first page isn't read in SECONDS (a map's on a 68000) is noted. Exit 1 if
 any didn't. Machines run --jobs at a time, each on a display of its own.
 """
 import argparse
@@ -127,6 +128,8 @@ def main(argv):
             notes.append("memory given back %s" % ", ".join("%s %d KB" % (w, int(b) // 1024) for w, b in res["back"]))
         if res["crash"]:
             notes.append("CRASH")
+        if res["opened"] and not res["read"]:
+            notes.append("no page read in %d s" % a.seconds)
         ok = res["opened"] and not res["failed"] and not res["lost"] and not res["crash"] and not res["picfail"]
         bad += not ok
         print("  %-26s %5d %6d %6d %4d %6d %4d %5d %s%s" % (res["name"], res["read"], res["peak"], res["heap"], res["oom"],

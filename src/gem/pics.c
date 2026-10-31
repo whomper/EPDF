@@ -19,6 +19,7 @@
 #include "pic.h"
 #include "epdf.h"
 #include "pics.h"
+#include "pdfimg.h"
 
 #define NPICS 8
 
@@ -135,10 +136,95 @@ unsigned char *pics_standard(const PIC *p, int nplanes, PIC_PAL *pl, long *bytes
 	return std;
 }
 
+/* ---- a picture a row at a time (phase 0.3: a scan on a 1 MB ST) ---- */
+
+/* the standard bitmap being made, and a row's pens */
+typedef struct {
+	int nplanes;
+	long w, wd, plane;
+	unsigned char *std, *pens;
+	PIC_DITHER *dt;
+	long size;			/* std's, made at the first row (a JPEG or JPX gives none) */
+	int nomem;			/* it couldn't be had: the rows go nowhere */
+} SINK;
+
+/* a row of the picture (5-6-5) dithered and laid into the standard
+   bitmap, as pics_standard does a whole picture's */
+static void sink_row(void *u, long y, const unsigned short *px)
+{
+	SINK *k = u;
+	long x;
+	int p;
+
+	if (!k->std && !k->nomem && !(k->std = calloc(1, (size_t)k->size)))
+		k->nomem = 1;
+	if (k->nomem)
+		return;
+	if (k->nplanes == 16) {
+		memcpy(k->std + y * k->wd * 32, px, (size_t)k->w * 2);
+		return;
+	}
+	pic_dither_row(k->dt, px, NULL, k->pens);
+	for (p = 0; p < k->nplanes; p++) {
+		unsigned char *o = k->std + p * k->plane + y * k->wd * 2;
+		int bit = 1 << p;
+
+		for (x = 0; x < k->w; x++)
+			if (k->pens[x] & bit)
+				o[x >> 3] |= (unsigned char)(0x80 >> (x & 7));
+	}
+}
+
+/* image obj at w x h straight to the standard bitmap a row at a time
+   (pdfimg.c's pdf_image_rows): never the whole picture in memory, only
+   the bitmap the screen gets and a few rows. *how: 1 made, 0 not (*why),
+   -1 not a picture made this way (a JPEG: pdf_image and pics_standard) */
+unsigned char *pics_rows(PDOC *d, long obj, int w, int h, int nplanes, PIC_PAL *pl, long *bytes, int *why, int *how)
+{
+	SINK k;
+	long size;
+
+	memset(&k, 0, sizeof k);
+	k.nplanes = nplanes;
+	k.w = w;
+	k.wd = (w + 15) / 16;
+	k.plane = k.wd * 2 * h;
+	size = nplanes == 16 ? k.wd * 32 * h : k.plane * nplanes;
+	k.size = size;
+	if (nplanes != 16) {
+		k.pens = malloc((size_t)w);
+		k.dt = pic_dither_open(w, pl);
+	}
+	if (nplanes != 16 && (!k.pens || !k.dt)) {
+		free(k.pens);
+		pic_dither_close(k.dt);
+		*why = PIC_MEMORY;
+		*how = 0;
+		return NULL;
+	}
+	*how = pdf_image_rows(d, obj, w, h, sink_row, &k, 2L << 20, why);
+	free(k.pens);
+	pic_dither_close(k.dt);
+	if (*how > 0 && (k.nomem || !k.std)) {
+		*why = PIC_MEMORY;
+		*how = 0;
+	}
+	if (*how <= 0) {
+		free(k.std);
+		return NULL;
+	}
+	*bytes = size;
+	return k.std;
+}
+
 static void let_go(PICE *e)
 {
-	if (e->bm.fd_addr)
-		Mfree(e->bm.fd_addr);
+	if (e->bm.fd_addr) {
+		if (e->heap)
+			free(e->bm.fd_addr);
+		else
+			Mfree(e->bm.fd_addr);
+	}
 	memset(e, 0, sizeof *e);
 }
 
@@ -195,6 +281,24 @@ PICE *pics_next(void)
 	return NULL;
 }
 
+static int in_st_ram(const void *p)
+{
+	return (unsigned long)p < 0x01000000UL;
+}
+
+/* no TT or Fast RAM (TOS 1.x has no Mxalloc: none) */
+static int st_only(void)
+{
+	static int only = -1;
+
+	if (only < 0) {
+		long tt = (long)Mxalloc(-1L, 1);
+
+		only = tt == -32 || tt <= 0;
+	}
+	return only;
+}
+
 /* the reading's answer: the standard bitmap made the screen's own, in
    ST RAM (the screen can't be copied from TT RAM) */
 void pics_done(PICE *e, unsigned char *std, long bytes, int why)
@@ -211,10 +315,32 @@ void pics_done(PICE *e, unsigned char *std, long bytes, int why)
 		log_event("picture-failed", a, NULL);	/* the rigs count them */
 		return;
 	}
-	dst = Mxalloc(bytes, 0);
-	if ((long)dst <= 0)
-		dst = Malloc(bytes);		/* TOS 1.x: no Mxalloc, and no TT RAM */
-	if ((long)dst <= 0) {
+	e->heap = 1;
+	if (in_st_ram(std) && (planes == 1 || planes == 16)) {
+		/* one plane, or pixels: the standard bitmap is the screen's own */
+		dst = std;
+		std = NULL;
+	} else if (st_only()) {
+		/* no TT RAM: the heap is ST RAM, and what it holds free is used
+		   before GEMDOS is asked for more (a 1 MB ST, phase 0.3) */
+		dst = malloc((size_t)bytes);
+	} else {
+		dst = Mxalloc(bytes, 0);
+		if ((long)dst <= 0)
+			dst = NULL;
+		else
+			e->heap = 0;
+	}
+	if (!dst) {
+		/* GEMDOS's ST RAM taken: the heap's, if it is ST RAM */
+		dst = malloc((size_t)bytes);
+		if (dst && !in_st_ram(dst)) {
+			free(dst);
+			dst = NULL;
+		}
+		e->heap = 1;
+	}
+	if (!dst) {
 		char a[40];
 
 		free(std);
@@ -225,18 +351,18 @@ void pics_done(PICE *e, unsigned char *std, long bytes, int why)
 		return;
 	}
 	memset(&src, 0, sizeof src);
-	src.fd_addr = std;
 	src.fd_w = (short)(((e->w + 15) / 16) * 16);
 	src.fd_h = (short)e->h;
 	src.fd_wdwidth = (short)((e->w + 15) / 16);
 	src.fd_nplanes = planes;
 	src.fd_stand = 1;
+	src.fd_addr = std ? std : dst;
 	e->bm = src;
 	e->bm.fd_addr = dst;
 	e->bm.fd_stand = 0;
-	if (planes == 1 || planes == 16)
-		memcpy(dst, std, (size_t)bytes);	/* one plane, or pixels: the standard is the screen's */
-	else
+	if (std && (planes == 1 || planes == 16))
+		memcpy(dst, std, (size_t)bytes);	/* in TT RAM: copied to ST RAM as it is */
+	else if (std)
 		vr_trnfm(vdi_h, &src, &e->bm);
 	free(std);
 	e->state = PICS_READY;

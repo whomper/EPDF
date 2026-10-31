@@ -12,6 +12,7 @@ typedef struct {
 	int w, h;
 	int state, why;
 	MFDB bm;			/* PICS_READY: the screen's own bitmap, in ST RAM */
+	int heap;			/* bm's memory is malloc's (else GEMDOS's) */
 	unsigned long used;
 } PICE;
 
@@ -21,6 +22,10 @@ PICE *pics_next(void);			/* one to decode, marked decoding */
 void pics_done(PICE *e, unsigned char *std, long bytes, int why);
 PIC_PAL *pics_palette(void);		/* NULL on a 16-bit screen */
 unsigned char *pics_standard(const PIC *p, int nplanes, PIC_PAL *pl, long *bytes);
+/* image obj made straight into the standard bitmap a row at a time; *how
+   1 made, 0 not (*why), -1 not this way (pdf_image, pics_standard) */
+struct pdoc;
+unsigned char *pics_rows(struct pdoc *d, long obj, int w, int h, int nplanes, PIC_PAL *pl, long *bytes, int *why, int *how);
 void pics_forget(void);
 void pics_exit(void);
 
