@@ -103,6 +103,28 @@ at first. This section is kept up to date: the build, the tests, what a release 
   JPEG on a 68000 shows its 1/8 preview with a note, never 24 s without a turn; the Liberation (OFL
   1.1) licence is cleared before a release carries it; the first GEM release gets the speed rig and
   `acc_all` with EPDF in front.
+- **The road to 1.0, and EConvert (Erez, 31 Oct 2026):**
+  - **1.0 is the text view, complete:** 0.2 speed on an 8 MHz ST (the guidelines' times), 0.3 big
+    documents on ST-1 (streamed content, pictures' memory), 0.4 pictures (DSP JPEG on the Falcon, the
+    1/8 preview on a 68000), 0.5 the rest (GDOS font on hardware, AES-256 on a 68000, reports), then 1.0.
+    Full pages drawn by the Falcon itself (stage 2) are not part of it.
+  - **EConvert** (`ECONVERT.PRG`), the AERA PDF converter, after 1.0, for the Falcon and TT (68030;
+    an ST is told so). It writes a **converted PDF**: still a valid PDF, its metadata saying it was
+    prepared for the Atari by EConvert (Producer and an AERA entry naming what is prepared), holding
+    each page's text already reflowed in the Atari's character set, the pictures at the size an
+    Atari shows them (JPX and JBIG2 too), the drawings (vector graphics) as pictures with their labels
+    out of the text, and, as a setting per batch (none / mono / mono and colour; mono on), each page
+    whole as a 640-pixel picture. Measured (31 Oct): a typical page of text and pictures is a few
+    hundred KB as it is, 17-33 KB converted, plus 8-17 KB for the mono page, 11-34 KB in 16 colours.
+  - **Two modes:** direct (the conversion on the Falcon/TT, the DSP for JPEG) and gateway (the PDF
+    sent to a converter service on the Pi, AERA-Gateway, the same C code built for Linux; the
+    converted file comes back). Input: many files or a whole folder, then the folder to write to. A
+    progress window with two bars, the current file and the batch, each with its percentage and the
+    time left, and Stop.
+  - **EPDF reads both:** a standard PDF as now; a converted one from its prepared parts, with a green
+    rounded badge **"Optimised"** (British spelling) at the right end of each page's heading line
+    (mono: black). A standard PDF shows no badge.
+  - Order: EPDF 1.0; the format and EPDF reading it (1.1); EConvert direct; then gateway mode.
 - **Decisions in the code:** a program only, so `EPDF.INF` is beside it (6.1), not in the boot root.
   One window: ^U quits, ^W does nothing (3.2). Find next is ^G and Find previous Shift+^G (the Mac's
   keys, 3.2). The extractor's text is UTF-8; the view's is the Atari character set with the soft
