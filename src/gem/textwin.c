@@ -557,14 +557,30 @@ static void moved(long d)
 		text_clip(vdi_h, clip);		/* the VDI clips raster copies too */
 		vro_cpyfm(vdi_h, 3, pxy, &scr, &scr);
 		text_noclip(vdi_h);
+		T_MARK("copy");
+		{
+			/* the rows that came in, drawn while the screen and the
+			   mouse are still held (the whole work area shows: one
+			   rectangle): at the foot the cut row and the one above it,
+			   at the top those that came in */
+			long r0 = d > 0 ? keep : 0, r1 = d > 0 ? rows + 1 : rows - keep;
+			GRECT a;
+
+			a.x = work.x;
+			a.w = work.w;
+			a.y = (short)(work.y + r0 * ch);
+			a.h = (short)((r1 - r0) * ch);
+			if (a.y + a.h > work.y + work.h)
+				a.h = (short)(work.y + work.h - a.y);
+			if (doc_view() && doc_view()->nstale)
+				dv_recount(doc_view(), rows + 2);
+			if (a.h > 0)
+				draw_rows(&a, r0, r1);
+		}
 		graf_mouse(M_ON, NULL);
 		wind_update(END_UPDATE);
-		T_MARK("copy");
+		log_event("drawn", NULL, NULL);
 	}
-	if (d > 0)
-		win_draw_rows(keep, rows + 1);	/* the rows that came in, and the cut one */
-	else
-		win_draw_rows(0, rows - keep);	/* the rows that came in at the top */
 	T_MARK("rows");
 }
 
