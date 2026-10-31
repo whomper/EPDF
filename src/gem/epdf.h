@@ -64,7 +64,8 @@ int win_message(const short *msg);
 void win_status(const char *s);		/* after the info line's page, until cleared (NULL) */
 int win_hit(short mx, short my, long *page, long *off);
 void win_draw_span(long p0, long o0, long p1, long o1);
-void win_xor_span(long p0, long o0, long p1, long o1);	/* those cells inverted where they show */
+/* the selection changed from span q to span p (p0 or q0 < 0: none): the rows whose look changed drawn */
+void win_sel_change(long q0, long r0, long q1, long r1, long p0, long o0, long p1, long o1);
 void win_show(long page, long off);		/* that place in view */
 void win_pic_ready(long obj);		/* a picture decoded: its rows drawn */
 

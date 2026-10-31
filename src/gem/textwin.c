@@ -349,6 +349,68 @@ static void invert(const GRECT *c, short x1, short x2, short y)
 }
 
 /*
+ * A row's selection as it shows under the span (p0, o0)-(p1, o1), in order
+ * (p0 < 0: none): 0 none; 1 its cells [a, b); 2 the whole row, every letter
+ * of it selected, shown to the text's right edge (Erez, 31 Oct 2026), so a
+ * run of such rows is one box to invert (Select all on an ST).
+ */
+static int sel_shape(long p0, long o0, long p1, long o1, long page, long off, long n, long *a, long *b)
+{
+	long s, e;
+
+	if (p0 < 0 || off < 0 || n <= 0 || page < p0 || page > p1)
+		return 0;
+	s = page == p0 ? o0 - off : 0;
+	e = page == p1 ? o1 - off : n;
+	if (s < 0)
+		s = 0;
+	if (e > n)
+		e = n;
+	if (e <= s)
+		return 0;
+	*a = s;
+	*b = e;
+	return s == 0 && e == n ? 2 : 1;
+}
+
+/* a row's cells [a, b) inverted: in a row of Hebrew letter by letter (it runs back) */
+static void cells_xor(const GRECT *c, const char *s, long n, long a, long b, short y)
+{
+	const char *vis;
+	short x;
+	long i;
+
+	if (!row_visual(s, n, &vis, &x))
+		invert(c, (short)(x + a * cw), (short)(x + b * cw), y);
+	else
+		for (i = a; i < b; i++)
+			invert(c, (short)(x + vpos[i] * cw), (short)(x + (vpos[i] + 1) * cw), y);
+}
+
+/* whole rows y0..y1 (screen) inverted from the text's left edge to its right: one box */
+static void rows_xor(const GRECT *c, short y0, short y1)
+{
+	short p[4], x1 = (short)(work.x + MARGIN), x2 = (short)(work.x + MARGIN + cols * cw);
+
+	if (x1 < c->x)
+		x1 = c->x;
+	if (x2 > c->x + c->w)
+		x2 = (short)(c->x + c->w);
+	if (y0 < c->y)
+		y0 = c->y;
+	if (y1 > c->y + c->h - 1)
+		y1 = (short)(c->y + c->h - 1);
+	if (x2 <= x1 || y1 < y0)
+		return;
+	p[0] = x1;
+	p[1] = y0;
+	p[2] = (short)(x2 - 1);
+	p[3] = y1;
+	fill_set = 0;
+	scr_xor(vdi_h, p);
+}
+
+/*
  * Rows [r0, r1) of the view, within clip c (the AES's rectangle). Text is
  * drawn in MD_REPLACE, which paints its own cells white: only what no
  * text covers is filled (the margin, a row's end, empty rows), not the
@@ -358,7 +420,7 @@ static void draw_rows(const GRECT *c, long r0, long r1)
 {
 	DOCVIEW *v = doc_view();
 	short clip[4], tx = (short)(work.x + MARGIN), right = (short)(c->x + c->w);
-	short y = (short)(work.y + r0 * ch);
+	short y = (short)(work.y + r0 * ch), box_y0 = -1, box_y1 = 0;	/* whole selected rows to invert as one box */
 	long r;
 
 	clip[0] = c->x;
@@ -404,14 +466,24 @@ static void draw_rows(const GRECT *c, long r0, long r1)
 		{
 			const char *vis;
 			short x;
-			int bi = row_visual(s, n, &vis, &x);
+			int bi = row_visual(s, n, &vis, &x), k;
 			long a, b, i;
 
 			if (x > tx)
 				blank(c, tx, x, y, ch);
 			text_plain(vdi_h, x, y, vis, n);	/* MD_REPLACE, pen 1, no effects: set above */
 			blank(c, (short)(x + n * cw), right, y, ch);
-			if (dv_sel_cols(v, page, off, n, &a, &b)) {
+			k = sel_shape(v->sel_p0, v->sel_o0, v->sel_p1, v->sel_o1, page, off, n, &a, &b);
+			if (k == 2) {
+				/* a whole row: with the rows of it just above, one box */
+				if (box_y0 >= 0 && y != box_y1 + ch) {
+					rows_xor(c, box_y0, (short)(box_y1 + ch - 1));
+					box_y0 = -1;
+				}
+				if (box_y0 < 0)
+					box_y0 = y;
+				box_y1 = y;
+			} else if (k == 1) {
 				if (!bi)
 					invert(c, (short)(x + a * cw), (short)(x + b * cw), y);
 				else
@@ -420,6 +492,8 @@ static void draw_rows(const GRECT *c, long r0, long r1)
 			}
 		}
 	}
+	if (box_y0 >= 0)
+		rows_xor(c, box_y0, (short)(box_y1 + ch - 1));
 	/* below the last row */
 	if (y < c->y + c->h)
 		blank(c, tx, right, y, (short)(c->y + c->h - y));
@@ -754,7 +828,24 @@ void win_draw_span(long p0, long o0, long p1, long o1)
  * again (Select all on a whole window: 445 ms drawn again on an ST, a few
  * filled boxes this way). The screen must show the view as it is now.
  */
-void win_xor_span(long p0, long o0, long p1, long o1)
+/* a span in order (p0 < 0 stays none) */
+static void in_order(long *p0, long *o0, long *p1, long *o1)
+{
+	if (*p0 >= 0 && (*p1 < *p0 || (*p1 == *p0 && *o1 < *o0))) {
+		long t;
+
+		t = *p0, *p0 = *p1, *p1 = t;
+		t = *o0, *o0 = *o1, *o1 = t;
+	}
+}
+
+/*
+ * The selection changed from the span q to the span p (either may be none,
+ * q0 or p0 < 0): only the rows whose shape changed are drawn, by inverting
+ * the old shape off and the new one on; whole rows to invert one after
+ * another go as one box (Select all: a window's rows in one).
+ */
+void win_sel_change(long q0, long r0, long q1, long r1, long p0, long o0, long p1, long o1)
 {
 	DOCVIEW *v = doc_view();
 	GRECT r, c;
@@ -762,51 +853,52 @@ void win_xor_span(long p0, long o0, long p1, long o1)
 	int kind;
 	const char *s;
 
-	if (!v || win < 0 || iconified || p0 < 0)
+	if (!v || win < 0 || iconified || (q0 < 0 && p0 < 0))
 		return;
-	if (p1 < p0 || (p1 == p0 && o1 < o0)) {
-		long t;
-
-		t = p0, p0 = p1, p1 = t;
-		t = o0, o0 = o1, o1 = t;
-	}
+	in_order(&q0, &r0, &q1, &r1);
+	in_order(&p0, &o0, &p1, &o1);
 	wind_update(BEG_UPDATE);
 	graf_mouse(M_OFF, NULL);
 	wind_get(win, WF_FIRSTXYWH, &r.x, &r.y, &r.w, &r.h);
 	while (r.w > 0 && r.h > 0) {
 		if (overlap(&r, &work, &c)) {
-			short clip[4];
+			short clip[4], box = -1, y = work.y;	/* box: the first row of a run of whole rows, -1 none */
 
 			clip[0] = c.x;
 			clip[1] = c.y;
 			clip[2] = (short)(c.x + c.w - 1);
 			clip[3] = (short)(c.y + c.h - 1);
 			text_clip(vdi_h, clip);		/* scr_xor cuts to it */
-			for (row = 0; row <= rows && dv_row(v, row, &kind, &s, &n, &page, &off); row++) {
-				long a, b, i;
-				const char *vis;
-				short x, y = (short)(work.y + row * ch);
-				int bi;
+			for (row = 0; row <= rows; row++, y = (short)(y + ch)) {
+				long oa = 0, ob = 0, na = 0, nb = 0;
+				int ko = 0, kn = 0;
 
-				if (kind != DV_TEXT || off < 0 || page < p0 || page > p1)
+				if (dv_row(v, row, &kind, &s, &n, &page, &off) && kind == DV_TEXT) {
+					if (n > cols)
+						n = cols;	/* as draw_rows shows it */
+					ko = sel_shape(q0, r0, q1, r1, page, off, n, &oa, &ob);
+					kn = sel_shape(p0, o0, p1, o1, page, off, n, &na, &nb);
+				}
+				if (ko == kn && (ko != 1 || (oa == na && ob == nb))) {
+					if (box >= 0)
+						rows_xor(&c, box, (short)(y - 1));
+					box = -1;
 					continue;
-				if (n > cols)
-					n = cols;	/* as draw_rows shows it */
-				a = page == p0 ? o0 - off : 0;
-				b = page == p1 ? o1 - off : n;
-				if (a < 0)
-					a = 0;
-				if (b > n)
-					b = n;
-				if (b <= a)
-					continue;
-				bi = row_visual(s, n, &vis, &x);
-				if (!bi)
-					invert(&c, (short)(x + a * cw), (short)(x + b * cw), y);
-				else
-					for (i = a; i < b; i++)
-						invert(&c, (short)(x + vpos[i] * cw), (short)(x + (vpos[i] + 1) * cw), y);
+				}
+				if (ko == 1)
+					cells_xor(&c, s, n, oa, ob, y);
+				if (kn == 1)
+					cells_xor(&c, s, n, na, nb, y);
+				if ((ko == 2) != (kn == 2)) {
+					if (box < 0)
+						box = y;	/* the whole row on or off: in a box with the next */
+				} else if (box >= 0) {
+					rows_xor(&c, box, (short)(y - 1));
+					box = -1;
+				}
 			}
+			if (box >= 0)
+				rows_xor(&c, box, (short)(y - 1));
 			text_noclip(vdi_h);
 		}
 		wind_get(win, WF_NEXTXYWH, &r.x, &r.y, &r.w, &r.h);
