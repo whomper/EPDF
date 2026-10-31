@@ -319,12 +319,12 @@ static int find_step(void)
  * Copy: the selection's text to the clipboard, lines ending CR LF; the
  * soft breaks as spaces (or line ends, showing the page's lines). A job
  * of its own between event calls (the guidelines' Speed: a whole book is
- * a normal thing to copy, 8.5 s on an ST in one go): 2 KB of the text a
+ * a normal thing to copy, 8.5 s on an ST in one go): 1 KB of the text a
  * step, handed to common's sliced clipboard writer (clip_put_step, which
  * writes it 16 KB at a time), its progress on the info line, Esc or Undo
  * to stop it (the clipboard as it was, or no half-written one).
  */
-#define COPY_STEP 2048
+#define COPY_STEP 1024
 static struct {
 	int on;
 	long p, at;			/* the page and offset it goes on from */
@@ -365,10 +365,10 @@ static void copy(void)
 	win_status("copying...");
 }
 
-/* the copy on by up to 2 KB of text; 1 while it goes on */
+/* the copy on by up to 1 KB of text; 1 while it goes on */
 static int copy_step(void)
 {
-	long len, e, i, end;
+	long len, e, end;
 	const char *t;
 	char *q;
 
@@ -402,23 +402,28 @@ static int copy_step(void)
 		*q++ = '\r';
 		*q++ = '\n';
 	}
-	for (i = cp.at; i < e; i++) {
-		char c = t[i];
+	{
+		/* the step's text, its state in locals: the loop in registers,
+		   not in cp's fields (40 ms for 2 KB on an ST with them) */
+		const char *sp = t + cp.at, *stop = t + e;
+		int skip = cp.skip, lm = lines_mode;
+		char prev = cp.at > 0 ? t[cp.at - 1] : '\n';
 
-		if (cp.skip) {			/* a picture's line, and its line end */
-			cp.skip = c != '\n';
-			continue;
+		while (sp < stop) {
+			char c = *sp++;
+
+			if (skip)			/* a picture's line, and its line end */
+				skip = c != '\n';
+			else if (c == 0x7F && prev == '\n')
+				skip = 1;
+			else if (c == '\n' || (c == '\r' && lm)) {
+				*q++ = '\r';
+				*q++ = '\n';
+			} else
+				*q++ = c == '\r' ? ' ' : c;
+			prev = c;
 		}
-		if (c == 0x7F && (i == 0 || t[i - 1] == '\n')) {
-			cp.skip = 1;
-			continue;
-		}
-		if (c == '\n' || (c == '\r' && lines_mode)) {
-			*q++ = '\r';
-			*q++ = '\n';
-		} else {
-			*q++ = c == '\r' ? ' ' : c;
-		}
+		cp.skip = skip;
 	}
 	if (q > cp.piece && !clip_put_step(cp.piece, (long)(q - cp.piece))) {
 		cp.on = 0;
@@ -629,6 +634,7 @@ static void command(int c)
 			find_start(1);
 		break;
 	case CMD_FONT:
+		log_event("dialog", "font", NULL);	/* the rigs type into it once it is open */
 		if (font_dialog()) {
 			setting("FONT", font_setting(), "the text's font and its size: \"System font,16\", or a fixed-width GDOS font's name and points");
 			win_layout();
@@ -921,10 +927,19 @@ int main(void)
 			} else if (win_sliders_due()) {
 				win_sliders();
 			} else if (cp.on) {
-				/* a copy the user asked for: before the reading and the pictures */
+				/* a copy the user asked for: before the reading and the
+				   pictures; a step starts only if one as long as the last
+				   still fits in the slice (bg_room: the slice not overrun) */
+				unsigned long t0 = tos_ms();
+
 				bg_begin();
-				while (copy_step() && bg_more())
-					;
+				while (copy_step()) {
+					unsigned long t1 = tos_ms();
+
+					if (!bg_room((int)(t1 - t0)))
+						break;
+					t0 = t1;
+				}
 			} else if ((doc_pic_busy() || pics_waiting()) && bg_may_work() && ((pic_turn ^= 1) || !doc_pending())) {
 				long obj = -1;
 

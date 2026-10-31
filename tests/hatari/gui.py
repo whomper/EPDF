@@ -113,6 +113,18 @@ def main(argv):
     def count(what):
         return sum(what in e for e in events())
 
+    def wait_count(what, n, timeout=120):
+        """until WHAT has come N times"""
+        end = time.time() + timeout
+        while time.time() < end:
+            if count(what) >= n:
+                return True
+            if h.poll() is not None:
+                break
+            time.sleep(0.3)
+        bad.append("%r not %d times (events: %s)" % (what, n, events()[-5:]))
+        return False
+
     def shot(name):
         settle()
         time.sleep(4)               # Hatari shows the last row of a redraw late
@@ -155,13 +167,18 @@ def main(argv):
         key(A, [CTRL])
         key(C, [CTRL])
         wait("EPDF copied")
-        # the Font dialog: Esc cancels it; then the system font's 8 x 8
+        # the Font dialog: Esc cancels it; then the system font's 8 x 8.
+        # The keys go in once EPDF says the dialog opens (on an ST it may
+        # still be decoding the picture when ^F comes), and a moment after
+        n = count("EPDF dialog font")
         key(F, [CTRL, SHIFT])
-        time.sleep(4)
+        wait_count("EPDF dialog font", n + 1)
+        time.sleep(2)
         key(ESC)
         wait("EPDF dialog-closed font cancel")
         key(F, [CTRL, SHIFT])
-        time.sleep(4)
+        wait_count("EPDF dialog font", n + 2)
+        time.sleep(2)
         key(TAB)
         key(TAB)
         key(UP)
