@@ -30,7 +30,7 @@ BSSL_SRC = $(addprefix $(BSSL)/src/, hash/md5.c hash/sha2small.c hash/sha2big.c 
 HDRS     = $(wildcard src/*.h src/gem/*.h src/view/*.h common/src/*.h common/ui/*.h common/atari/*.h common/atari/include/*.h)
 
 .PHONY: all test measure dist help clean atari measure-atari fttest imgbench gui-test files-test
-all: build/pdfmeasure build/pdftext build/glyphjob build/imgdump binary/EPDF.PRG
+all: build/pdfmeasure build/pdftext build/pdfmem build/glyphjob build/imgdump binary/EPDF.PRG
 build:
 	mkdir -p build
 build/pdfmeasure: tools/pdfmeasure.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HDRS) | build
@@ -44,6 +44,10 @@ HPIC_SRC = src/pdfimg.c src/ccitt.c src/rscale.c common/src/pic.c common/src/png
 build/imgshow: tools/imgshow.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HPIC_SRC) $(HDRS) | build
 	$(CC) $(HCFLAGS) -Icommon/third_party/tjpgd -Icommon/third_party/nsgif/include -Icommon/third_party/nsgif/src -w \
 	  -o $@ tools/imgshow.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HPIC_SRC)
+
+# the reader's memory a page (phase 0.3: a 1 MB ST); PDF_MEMCAP=KB refuses past it
+build/pdfmem: tools/pdfmem.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HDRS) | build
+	$(CC) $(HCFLAGS) -o $@ tools/pdfmem.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC)
 
 build/glyphjob: tools/glyphjob.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HDRS) | build
 	$(CC) $(HCFLAGS) -o $@ tools/glyphjob.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC)

@@ -10,9 +10,40 @@
 #include "pdfint.h"
 
 /* ------------------------------------------------------------------ memory */
+#ifndef PDF_TOS
+/* the host's tools: PDF_MEMCAP=KB refuses what would take the reader past
+   it, as a 1 MB ST would, and says each refusal and who asked
+   (addr2line -f -e TOOL ADDR) */
+#include <stdio.h>
+#include <execinfo.h>
+static long memcap = -1;
+
+static int over_cap(PDOC *d, long n)
+{
+	if (memcap < 0) {
+		const char *c = getenv("PDF_MEMCAP");
+
+		memcap = c ? atol(c) * 1024 : 0;
+	}
+	if (memcap > 0 && d->st.mem + n > memcap) {
+		void *bt[4];
+		int k = backtrace(bt, 4), i;
+
+		fprintf(stderr, "pdf: refused %ld bytes, %ld in use; from", n, d->st.mem);
+		for (i = 1; i < k; i++)
+			fprintf(stderr, " %p", bt[i]);
+		fprintf(stderr, "\n");
+		return 1;
+	}
+	return 0;
+}
+#else
+#define over_cap(d, n) 0
+#endif
+
 void *pdf_malloc(PDOC *d, long n)
 {
-	void *p = malloc((size_t)n);
+	void *p = over_cap(d, n) ? NULL : malloc((size_t)n);
 
 	if (p) {
 		d->st.mem += n;
@@ -25,7 +56,7 @@ void *pdf_malloc(PDOC *d, long n)
 
 void *pdf_realloc(PDOC *d, void *p, long oldn, long n)
 {
-	void *q = realloc(p, (size_t)n);
+	void *q = over_cap(d, n - oldn) ? NULL : realloc(p, (size_t)n);
 
 	if (q) {
 		d->st.mem += n - oldn;
