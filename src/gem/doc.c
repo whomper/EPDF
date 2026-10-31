@@ -35,18 +35,28 @@ static long next;			/* where the reading goes on */
 static long done;			/* pages read */
 static long cache_kb;			/* the store's memory */
 
-/* the reading's own stack: a page's text is read there, a slice at a time */
+/*
+ * Two stacks of their own, each worked a slice at a time: the pages' text
+ * is read on one, a picture the window shows is decoded on the other, so
+ * the text goes on being read while a big JPEG takes minutes on an ST.
+ * They share the document: a picture uses its objects only before its
+ * first turn is handed back (then it works on its own buffers), and a page
+ * holding objects keeps them across a picture's lookups (the page's memory
+ * goes only when the next page starts).
+ */
 #define READ_STACK 32768L
-static CORO main_co, read_co;
-static char *read_stack;
-static int read_started;		/* read_co is set up */
+#define PIC_STACK  24576L
+static CORO main_co, read_co, pic_co;
+static CORO *running;			/* the stack working now */
+static char *read_stack, *pic_stack;
+static int read_started, pic_started;
 static long rpage = -1;			/* the page being read, -1 none */
 static int rdone;			/* the reader has finished rpage */
-static int abandon;			/* the document closes: stop the page */
+static int abandon;			/* the document closes: stop the page and the picture */
 static unsigned long slice_end;		/* tos_ms() when the slice is up */
 static PTEXT rt;			/* the page read */
-/* or a picture: decoded and made the screen's standard bitmap there */
 static PICE *rpic;			/* the picture being decoded, NULL none */
+static int pdone;			/* the decoder has finished rpic */
 static int rpic_planes;
 static PIC_PAL *rpic_pal;
 static unsigned char *rpic_std;
@@ -54,85 +64,111 @@ static long rpic_bytes;
 static int rpic_why;
 
 /* the reader's hook: the machine back to the event loop when the slice
-   is up; 1 (stop the page) when the document is closing */
+   is up; 1 (stop) when the document is closing */
 static int slice_up(void *ctx)
 {
 	(void)ctx;
 	if (abandon)
 		return 1;
 	if (tos_ms() >= slice_end) {
-		coro_switch(&read_co, &main_co);
+		coro_switch(running, &main_co);
 		if (abandon)
 			return 1;
 	}
 	return 0;
 }
 
-/* pic.h's poll, while a picture is decoded there: the same hand-over */
+/* pic.h's poll, while a picture is decoded: the same hand-over */
 static int pic_turn(void)
 {
 	return !slice_up(NULL);
 }
 
-/* the reading's stack: a page or a picture at a time, for good */
+/* the pages' stack: a page at a time, for good */
 static void reader(void)
 {
 	for (;;) {
-		if (rpic) {
-			PIC *p;
-
-			rpic_std = NULL;
-			rpic_bytes = 0;
-			p = pdf_image(doc, rpic->obj, rpic->w, rpic->h, 2L << 20, &rpic_why);
-			if (p) {
-				rpic_std = pics_standard(p, rpic_planes, rpic_pal, &rpic_bytes);
-				if (!rpic_std)
-					rpic_why = abandon ? PIC_STOPPED : PIC_MEMORY;
-				pic_free(p);
-			}
-		} else {
-			pdf_page_reset(doc);
-			ptext_init(&rt);
-			rt.soft = 1;
-			rt.pics = 1;
-			pdf_page_text(doc, rpage, &rt);
-		}
+		pdf_page_reset(doc);
+		ptext_init(&rt);
+		rt.soft = 1;
+		rt.pics = 1;
+		pdf_page_text(doc, rpage, &rt);
 		rdone = 1;
 		coro_switch(&read_co, &main_co);
 	}
 }
 
-/* the page being read given up (its memory freed as the reader unwinds) */
+/* the pictures' stack: one at a time, decoded, dithered and laid out as
+   the standard bitmap */
+static void decoder(void)
+{
+	for (;;) {
+		unsigned long t0 = tos_ms(), t1;
+		PIC *p;
+
+		rpic_std = NULL;
+		rpic_bytes = 0;
+		p = pdf_image(doc, rpic->obj, rpic->w, rpic->h, 2L << 20, &rpic_why);
+		t1 = tos_ms();
+		if (p) {
+			static char a[48];
+
+			rpic_std = pics_standard(p, rpic_planes, rpic_pal, &rpic_bytes);
+			if (!rpic_std)
+				rpic_why = abandon ? PIC_STOPPED : PIC_MEMORY;
+			pic_free(p);
+			snprintf(a, sizeof a, "decode %lu dither %lu", t1 - t0, tos_ms() - t1);
+			log_event("picture-ms", a, NULL);	/* wall clock: the turns between included */
+		}
+		pdone = 1;
+		coro_switch(&pic_co, &main_co);
+	}
+}
+
+/* the page and the picture under way given up (their memory freed as
+   they unwind) */
 static void stop_reading(void)
 {
-	if (rpage < 0 && !rpic)
-		return;
 	abandon = 1;
-	while (!rdone)
-		coro_switch(&main_co, &read_co);
-	abandon = 0;
+	if (rpage >= 0) {
+		running = &read_co;
+		while (!rdone)
+			coro_switch(&main_co, &read_co);
+		ptext_free(&rt);
+		rpage = -1;
+	}
 	if (rpic) {
+		running = &pic_co;
+		while (!pdone)
+			coro_switch(&main_co, &pic_co);
 		free(rpic_std);
 		rpic->state = PICS_FAILED;
 		rpic->why = PIC_STOPPED;
 		rpic = NULL;
-	} else {
-		ptext_free(&rt);
 	}
-	rpage = -1;
+	abandon = 0;
 }
 
-/* a picture the window wants, decoded next: between pages, not in one */
+/* a picture the window wants: its decoding begun */
 int doc_pic_start(void)
 {
 	PICE *e;
 
-	if (!doc || rpage >= 0 || rpic || !(e = pics_next()))
+	if (!doc || rpic || !(e = pics_next()))
 		return 0;
+	if (!pic_stack && !(pic_stack = malloc(PIC_STACK))) {
+		e->state = PICS_FAILED;
+		e->why = PIC_MEMORY;
+		return 0;
+	}
+	if (!pic_started) {
+		coro_start(&pic_co, pic_stack, PIC_STACK, decoder);
+		pic_started = 1;
+	}
 	rpic = e;
 	rpic_planes = planes;
 	rpic_pal = pics_palette();
-	rdone = 0;
+	pdone = 0;
 	pic_poll = pic_turn;
 	return 1;
 }
@@ -144,8 +180,9 @@ int doc_pic_slice(unsigned long ms, long *obj)
 	if (!rpic)
 		return 0;
 	slice_end = tos_ms() + ms;
-	coro_switch(&main_co, &read_co);
-	if (!rdone)
+	running = &pic_co;
+	coro_switch(&main_co, &pic_co);
+	if (!pdone)
 		return 0;
 	*obj = rpic->obj;
 	pics_done(rpic, rpic_std, rpic_bytes, rpic_why);
@@ -273,7 +310,7 @@ long doc_slice(unsigned long ms)
 	long i, n = -1, len = 0;
 	char *a;
 
-	if (!doc_pending() || rpic)
+	if (!doc_pending())
 		return -1;
 	if (rpage < 0) {
 		/* the next page not yet read, from `next` on and round */
@@ -288,6 +325,7 @@ long doc_slice(unsigned long ms)
 		rdone = 0;
 	}
 	slice_end = tos_ms() + ms;
+	running = &read_co;
 	coro_switch(&main_co, &read_co);
 	if (!rdone)
 		return -1;

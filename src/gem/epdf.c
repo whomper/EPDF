@@ -678,6 +678,7 @@ static void crash_quit(const char *what)
 /* the reading on for a piece of the slice; a page it finished shown */
 static long arrived = -1;		/* a page read, its rows still to draw */
 static long arrived_pic = -1;		/* a picture made, its rows still to draw */
+static int pic_turn;			/* pictures and pages take turns */
 
 /* the reading on for a piece of the slice; 1 when a page came, whose rows
    are drawn in a turn of their own (a page's rows and the slice that read
@@ -817,15 +818,18 @@ int main(void)
 				arrived_pic = -1;
 			} else if (win_sliders_due()) {
 				win_sliders();
-			} else if ((doc_pic_busy() || pics_waiting()) && bg_may_work()) {
-				long obj;
+			} else if ((doc_pic_busy() || pics_waiting()) && bg_may_work() && ((pic_turn ^= 1) || !doc_pending())) {
+				long obj = -1;
 
-				/* a picture the window shows first: the user sees its frame */
+				/* a picture the window shows, every other turn (it has a
+				   stack of its own): the user sees its frame, and the text goes
+				   on being read in the turns between (a big JPEG takes minutes
+				   on an ST) */
 				bg_begin();
 				if (doc_pic_busy() || doc_pic_start())
 					while (!doc_pic_slice(40, &obj) && bg_more())
 						;
-				if (!doc_pic_busy())
+				if (!doc_pic_busy() && obj >= 0)
 					arrived_pic = obj;
 			} else if (pending && bg_may_work()) {
 				bg_begin();

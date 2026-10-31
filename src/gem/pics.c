@@ -57,6 +57,14 @@ PIC_PAL *pics_palette(void)
 		return &pal;
 	n = 1 << planes;
 	memset(rgb, 0, sizeof rgb);
+	if (planes == 1) {
+		/* white and black, without asking: EmuTOS's mono screen answers
+		   vq_color with colours that made the dither run away */
+		rgb[0][0] = rgb[0][1] = rgb[0][2] = 255;
+		pic_pal_init(&pal, 2, (const unsigned char (*)[3])rgb);
+		pal_planes = planes;
+		return &pal;
+	}
 	for (pen = 0; pen < n; pen++) {
 		short c[3];
 		int r = pen_reg(pen, planes);

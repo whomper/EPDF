@@ -22,7 +22,7 @@ TOP = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(TOP, "common", "tools"))
 import machines  # noqa: E402
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from pdfgen import make_pdf  # noqa: E402
+from pdfgen import make_pdf, jpeg  # noqa: E402
 
 DOWN, UP, HOME, SPACE, CTRL = 0x50, 0x48, 0x47, 0x39, 0x1D
 RIGHT, LEFT, Q = 0x4D, 0x4B, 0x10
@@ -40,7 +40,9 @@ def main(argv):
     if os.environ.get("EPDF_PRG"):          # another build of it (the speed build's AESGAP lines)
         shutil.copy(os.environ["EPDF_PRG"], os.path.join(hd, "EPDF.PRG"))
     one = ["Page one, line %d of the text that is long enough to wrap in a narrow window." % i for i in range(1, 60)]
-    make_pdf(os.path.join(hd, "TWO.PDF"), [one, ["The second page", "has two lines."]])
+    # page 2 has a small JPEG under its lines: decoded, dithered, drawn
+    make_pdf(os.path.join(hd, "TWO.PDF"), [one, ["The second page", "has two lines."]],
+             pictures={1: (jpeg(160, 100), 160, 100, 240, 150)})
     with open(os.path.join(hd, "LAUNCH.TXT"), "w", newline="") as f:
         f.write("C:\\EPDF.PRG\r\nC:\\TWO.PDF\r\n")
     m = machines.Machine(spec, hd)
@@ -127,6 +129,7 @@ def main(argv):
         shot("scrolled")
         key(RIGHT, [CTRL])
         wait("EPDF top 2")
+        wait("EPDF picture ready", 180)
         shot("page2")
         # Find: Undo cancels the dialog; the text found on page 2, and again
         # with ^G (round the document); then everything copied
