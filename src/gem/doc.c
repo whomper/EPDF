@@ -44,8 +44,10 @@ static long cache_kb;			/* the store's memory */
  * holding objects keeps them across a picture's lookups (the page's memory
  * goes only when the next page starts).
  */
-#define READ_STACK 32768L
-#define PIC_STACK  24576L
+/* four times the most they were seen to use (an EPDF_STACKS build on the
+   corpus: the reading 4 KB, a JPEG 2.3 KB; make build/stk/EPDF.PRG) */
+#define READ_STACK 16384L
+#define PIC_STACK  12288L
 static CORO main_co, read_co, pic_co;
 static CORO *running;			/* the stack working now */
 static char *read_stack, *pic_stack;
@@ -195,6 +197,18 @@ int doc_pic_busy(void)
 	return rpic != NULL;
 }
 
+#ifdef EPDF_STACKS
+/* a test build's report: how much of each stack has been used */
+static void stacks_used(void)
+{
+	char a[64];
+
+	snprintf(a, sizeof a, "read %ld of %ld, pictures %ld of %ld", read_started ? coro_used(read_stack, READ_STACK) : 0L,
+		 READ_STACK, pic_started ? coro_used(pic_stack, PIC_STACK) : 0L, PIC_STACK);
+	log_event("stacks", a, NULL);
+}
+#endif
+
 int doc_is_open(void)
 {
 	return doc != NULL;
@@ -225,6 +239,9 @@ void doc_close(void)
 	if (!doc)
 		return;
 	stop_reading();
+#ifdef EPDF_STACKS
+	stacks_used();
+#endif
 	dv_free(&view);
 	ts_close(&store);
 	pdf_close(doc);
@@ -344,6 +361,10 @@ long doc_slice(unsigned long ms)
 	free(a);
 	ptext_free(&rt);
 	done++;
+#ifdef EPDF_STACKS
+	if (done % 25 == 0)
+		stacks_used();
+#endif
 	next = n + 1 < npages ? n + 1 : 0;
 	dv_page_ready(&view, n);
 	{

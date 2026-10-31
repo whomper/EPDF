@@ -249,16 +249,21 @@ GEM_OBJ = $(patsubst %.c,build/m68000/%.o,$(GEM_SRC)) build/m68000/version.o
 $(patsubst %.c,build/m68000/%.o,$(GEM_SRC)): XFLAGS += -Isrc/gem -Isrc/view -Icommon/ui -I$(T)/tjpgd -I$(T)/nsgif/include -I$(T)/nsgif/src
 build/m68000/version.o: build/m68000/version.c
 	$(XCC) $(XFLAGS) -c -o $@ $<
+# EPDF's own start: a 16 KB main stack (the reading and the pictures have
+# stacks of their own; GEM work alone needs a few KB: EHypView found 3.2 KB
+# at its deepest), not the measuring programs' 48 KB
+build/m68000/crt0_epdf.o: common/atari/crt0.S | build/m68000
+	$(XCC) -m68000 -DSTACK_SIZE=16384 -c -o $@ $<
 build/m68000/coro.o: src/gem/coro.S | build/m68000
 	$(XCC) -m68000 -c -o $@ $<
 build/m68000/crash_s.o: common/atari/crash.S | build/m68000
 	$(XCC) $(XCPU) -c -o $@ $<
 binary/EPDF.PRG: XCPU = -m68000 -mstrict-align -fdisable-tree-bswap
 EPDF_OBJS = $(GEM_OBJ) $(addprefix build/m68000/,$(patsubst %.c,%.o,$(RT_C))) $(addprefix build/m68000/,$(patsubst %.c,%.o,$(PDF_SRC) src/pdfio_tos.c $(COMMON_SRC))) $(addprefix build/m68000/,$(patsubst %.c,%.o,$(BSSL_SRC)))
-binary/EPDF.PRG: $(EPDF_OBJS) build/m68000/crt0.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o common/atari/link.ld | binary
+binary/EPDF.PRG: $(EPDF_OBJS) build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o common/atari/link.ld | binary
 	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68000/epdf.elf \
-	  build/m68000/crt0.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o $(filter-out %/crt0.o %/nf.o %/crash_s.o %/coro.o %/link.ld,$(filter build/%,$^)) -lgcc
+	  build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o $(filter-out %/crt0_epdf.o %/nf.o %/crash_s.o %/coro.o %/link.ld,$(filter build/%,$^)) -lgcc
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/m68000/epdf.elf $@
 
 # starts a program with a command line, for the rigs (atari/launch.c)
@@ -323,10 +328,23 @@ build/aprof/textwin.o: src/gem/textwin.c $(HDRS) | build
 build/aprof/EPDF.PRG: binary/EPDF.PRG build/aprof/gem.o build/aprof/textwin.o
 	$(XCC) -m68000 -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/aprof/epdf.elf \
-	  build/m68000/crt0.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o \
+	  build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o \
 	  $(filter-out build/m68000/common/atari/gem.o build/m68000/src/gem/textwin.o,$(filter build/%.o,$(EPDF_OBJS))) \
 	  build/aprof/gem.o build/aprof/textwin.o -lgcc
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/aprof/epdf.elf $@
 speed-test: build/aprof/EPDF.PRG binary/LAUNCH.PRG
 	python3 tests/hatari/speed.py build/speed
 .PHONY: speed-test
+
+# the stacks' use (EPDF.PRG with doc.c built -DEPDF_STACKS): "EPDF stacks ..."
+# every 25 pages and at the end, for sizing READ_STACK and PIC_STACK
+build/stk/doc.o: src/gem/doc.c $(HDRS) | build
+	mkdir -p build/stk
+	$(XCC) $(XFLAGS) -m68000 -mstrict-align -fdisable-tree-bswap -Isrc/gem -Isrc/view -Icommon/ui -I$(T)/tjpgd \
+	  -DEPDF_STACKS -c -o $@ $<
+build/stk/EPDF.PRG: binary/EPDF.PRG build/stk/doc.o
+	$(XCC) -m68000 -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
+	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/stk/epdf.elf \
+	  build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o \
+	  $(filter-out build/m68000/src/gem/doc.o,$(filter build/%.o,$(EPDF_OBJS))) build/stk/doc.o -lgcc
+	PRGFLAGS=7 python3 common/tools/elf2tos.py build/stk/epdf.elf $@
