@@ -21,14 +21,96 @@
 
 static short dx, dy, dw, dh;
 
+/* while the box is drawn in its buffer (draw_off) on a machine whose pen 1
+   sets every plane and pen 0 clears them (the probes'): the buffer's row
+   0 as the screen's, and the clip; the frame's lines are put in by the
+   CPU, a word a plane at a time (TOS 1.04's v_pline took an ST 1.3 ms a
+   line, 18 of them, 23 ms of the box's 200) */
+static unsigned char *cpu_base;		/* 0: the VDI draws */
+static long cpu_bpl;
+static short cpu_planes, cpu_clip[4];
+
+/* x1..x2 by y1..y2 (inclusive) set (pen 1) or cleared, in the buffer: one
+   multiply for the first row, then a line on (a multiply a row made it
+   slower than the VDI) */
+static void cpu_rect(short x1, short y1, short x2, short y2, short pen)
+{
+	short t, g, n, p, y, np = cpu_planes;
+	unsigned short lm, rm;
+	unsigned short *row;
+	long step = cpu_bpl >> 1;
+
+	if (x1 > x2)
+		t = x1, x1 = x2, x2 = t;
+	if (y1 > y2)
+		t = y1, y1 = y2, y2 = t;
+	if (x1 < cpu_clip[0])
+		x1 = cpu_clip[0];
+	if (y1 < cpu_clip[1])
+		y1 = cpu_clip[1];
+	if (x2 > cpu_clip[2])
+		x2 = cpu_clip[2];
+	if (y2 > cpu_clip[3])
+		y2 = cpu_clip[3];
+	if (x1 > x2 || y1 > y2)
+		return;
+	n = (short)((x2 >> 4) - (x1 >> 4));		/* the groups after the first */
+	lm = (unsigned short)(0xFFFFu >> (x1 & 15));
+	rm = (unsigned short)(0xFFFFu << (15 - (x2 & 15)));
+	if (!n)
+		lm &= rm;
+	row = (unsigned short *)(cpu_base + (long)y1 * cpu_bpl) + (x1 >> 4) * np;
+	if (!n) {
+		/* a vertical line (or a strip in one group): down each plane's
+		   words, one or (pen 0) and a step a row */
+		short rows = (short)(y2 - y1);
+
+		for (p = 0; p < np; p++) {
+			unsigned short *w = row + p;
+			short r = rows;
+
+			if (pen)
+				do {
+					*w |= lm;
+					w += step;
+				} while (--r >= 0);
+			else
+				do {
+					*w &= (unsigned short)~lm;
+					w += step;
+				} while (--r >= 0);
+		}
+		return;
+	}
+	for (y = y1; y <= y2; y++, row += step) {
+		unsigned short *w = row;
+
+		for (p = 0; p < np; p++, w++)
+			*w = pen ? (unsigned short)(*w | lm) : (unsigned short)(*w & ~lm);
+		for (g = 1; g < n; g++)
+			for (p = 0; p < np; p++, w++)
+				*w = pen ? 0xFFFF : 0;
+		if (n)
+			for (p = 0; p < np; p++, w++)
+				*w = pen ? (unsigned short)(*w | rm) : (unsigned short)(*w & ~rm);
+	}
+}
+
 static void line(short x1, short y1, short x2, short y2)
 {
-	line_col(x1, y1, x2, y2, 1);
+	if (cpu_base && (x1 == x2 || y1 == y2))
+		cpu_rect(x1, y1, x2, y2, 1);
+	else
+		line_col(x1, y1, x2, y2, 1);
 }
 
 static void rect_fill(short x1, short y1, short x2, short y2, short color)
 {
 	GRECT r;
+	if (cpu_base && (color == 0 || color == 1)) {
+		cpu_rect(x1, y1, x2, y2, color);	/* in the buffer: the shadow's strips (vr_recfl's 15 ms) */
+		return;
+	}
 	r.x = x1;
 	r.y = y1;
 	r.w = x2 - x1 + 1;
@@ -458,6 +540,7 @@ static long xb_setscreen(void *log)
 
 static int off_ok;		/* 1 the logical screen moves the VDI's drawing, -1 it doesn't */
 static int white_ok;		/* 1 pen 0 is every plane clear: the box's ground made by the CPU */
+static int black_ok;		/* 1 pen 1 is every plane set: the frame's lines by the CPU */
 
 /* the screen's bytes a line, as the VDI has them (Line-A's v_lin_wr) */
 static long screen_bpl(void)
@@ -597,6 +680,16 @@ static int draw_off(void (*draw)(int framed))
 		for (q = 0; q < planes && q < 16; q++)
 			if (w[q] & bit)
 				white_ok = -1;
+		/* and pen 1 every plane set (the frame's lines by the CPU) */
+		xb_setscreen(base);
+		clip_on(&px);
+		fill(&px, 1);
+		clip_off();
+		xb_setscreen(scr);
+		black_ok = 1;
+		for (q = 0; q < planes && q < 16; q++)
+			if (!(w[q] & bit))
+				black_ok = -1;
 	}
 	{
 		/* where the box leaves the screen showing: the shadow's rows
@@ -655,7 +748,17 @@ static int draw_off(void (*draw)(int framed))
 	c.h = ob.rows;
 	xb_setscreen(base);
 	clip_on(&c);				/* nothing past the buffer's rows */
+	if (white_ok > 0 && black_ok > 0 && planes <= 8) {
+		cpu_base = base;
+		cpu_bpl = ob.bpl;
+		cpu_planes = planes;
+		cpu_clip[0] = c.x;
+		cpu_clip[1] = c.y;
+		cpu_clip[2] = c.x + c.w - 1;
+		cpu_clip[3] = c.y + c.h - 1;
+	}
 	draw(1);
+	cpu_base = 0;
 	off_white = 0;
 	clip_off();
 	xb_setscreen(scr);
