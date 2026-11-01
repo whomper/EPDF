@@ -45,10 +45,17 @@ static void start_crypt(PDOC *d)
 
 int pdf_open(PDOC *d, const char *path)
 {
+	return pdf_open_hook(d, path, NULL, NULL);
+}
+
+int pdf_open_hook(PDOC *d, const char *path, int (*stop)(void *ctx), void *ctx)
+{
 	unsigned char head[1024];
 	long n, i;
 
 	memset(d, 0, sizeof *d);
+	d->stop = stop;
+	d->stop_ctx = ctx;
 	d->os_num = -1;
 	d->h = pdf_os_open(path, &d->size);
 	if (!d->h) {

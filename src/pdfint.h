@@ -58,6 +58,14 @@ int objstm_register(PDOC *d, long snum);
 /* ---- crypt ---- */
 int pc_open(PDOC *d, POBJ *enc, POBJ *id);		/* 0 ok, 1 needs a password or unsupported */
 long pc_decrypt(PDOC *d, long num, long gen, int is_stream, unsigned char *buf, long n);	/* new length */
+/* a stream decrypted as it is read: NULL when it isn't encrypted (or no
+   memory); run decrypts n bytes in place (AES: whole blocks, the first 16
+   of the stream its IV, not given back) and gives how many came out */
+typedef struct pcstream PCSTREAM;
+PCSTREAM *pc_stream_open(PDOC *d, long num, long gen);
+int pc_stream_is_aes(const PCSTREAM *x);
+long pc_stream_run(PCSTREAM *x, unsigned char *buf, long n);
+void pc_stream_close(PCSTREAM *x);
 void pc_close(PDOC *d);
 
 void pdf_text_cleanup(PDOC *d);

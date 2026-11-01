@@ -132,9 +132,16 @@ def run(work, machine):
         # the start is AESSTART and the stretches until the window is first
         # drawn: after that the screen keeps changing as the pages are read
         # (the info line), which the family's rig would count as the start too
+        for _ in range(60):
+            if "EPDF opened" in r.console():
+                break
+            time.sleep(1)
         con = r.console()
         s = con.find("EPDF started")
-        d = con.find("EPDF drawn", s)
+        # (the document opens in the reader's slices since 0.5: the start
+        # is until its window is drawn, after "opened")
+        o = con.find("EPDF opened", s)
+        d = con.find("EPDF drawn", o if o >= 0 else s)
         if s >= 0 and d >= 0:
             r.start_end = len(con[:d].encode("utf-8", "replace"))
         r.act("a line scrolled, pages being read", speed.LINE, lambda: r.key("Down"))

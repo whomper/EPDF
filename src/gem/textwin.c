@@ -104,6 +104,7 @@ void win_title(void)
 
 /* the info line: the page at the top, and how the reading goes */
 static long info_page = -1, info_read = -1;	/* what the info line says */
+static int info_opening;
 static char status[64];				/* and after it, until the next key */
 
 void win_status(const char *st)
@@ -125,11 +126,14 @@ void win_info(void)
 	if (win < 0)
 		return;
 	/* the AES draws the line again at each wind_set: only when it changed */
-	if (p == info_page && r == info_read && winfo[0])
+	if (p == info_page && r == info_read && doc_opening() == info_opening && winfo[0])
 		return;
 	info_page = p;
 	info_read = r;
-	if (!v)
+	info_opening = doc_opening();
+	if (!v && doc_opening())
+		snprintf(winfo, sizeof winfo, " Opening %s...", doc_name());	/* (the open goes on in slices) */
+	else if (!v)
 		snprintf(winfo, sizeof winfo, " Open a PDF with File > Open (^O), or drop one here.");
 	else if (doc_read() < doc_pages())
 		snprintf(winfo, sizeof winfo, " Page %ld of %ld  \xF9  reading the text: %ld of %ld%s%s",

@@ -55,6 +55,12 @@ static int read_started, pic_started;
 static long rpage = -1;			/* the page being read, -1 none */
 static int rdone;			/* the reader has finished rpage */
 static int abandon;			/* the document closes: stop the page and the picture */
+/* a document being opened, on the reader's stack (pdf_open_hook with the
+   slices' hook): doc stays NULL until it is done */
+static PDOC *odoc;
+static char opath[256], ocache[256];
+static int opening, open_ok, ocols, olines;
+static long onpages;
 static unsigned long slice_end;		/* tos_ms() when the slice is up */
 static PTEXT *rt;			/* the page read (taken with the document) */
 static long rpage_oom;			/* the reader's refused allocations before it */
@@ -81,6 +87,8 @@ static int slice_up(void *ctx)
 	(void)ctx;
 	if (abandon)
 		return 1;
+	if (!running)
+		return 0;	/* on the main stack (a document's object read there): nothing to hand back */
 	if (tos_ms() >= slice_end) {
 		coro_switch(running, &main_co);
 		if (abandon)
@@ -113,6 +121,12 @@ static int give_back(const char *what)
 static void reader(void)
 {
 	for (;;) {
+		if (opening) {
+			open_ok = pdf_open_hook(odoc, opath, slice_up, NULL) == 0 && (onpages = pdf_pages(odoc)) > 0;
+			rdone = 1;
+			coro_switch(&read_co, &main_co);
+			continue;
+		}
 		pdf_page_reset(doc);
 		doc->st.mem_peak = doc->st.mem;	/* this page's own peak, for the log */
 		rpage_oom = doc->st.oom;
@@ -186,16 +200,19 @@ static void stop_reading(void)
 {
 	abandon = 1;
 	if (rpage >= 0) {
-		running = &read_co;
-		while (!rdone)
+		while (!rdone) {
+			running = &read_co;
 			coro_switch(&main_co, &read_co);
+			running = NULL;
+		}
 		ptext_free(rt);
 		rpage = -1;
 	}
 	if (rpic) {
-		running = &pic_co;
 		while (!pdone) {
+			running = &pic_co;
 			coro_switch(&main_co, &pic_co);
+			running = NULL;
 			pics_band();		/* (a band waiting is let go on) */
 		}
 		free(rpic_std);
@@ -251,6 +268,7 @@ int doc_pic_slice(unsigned long ms, long *obj)
 	slice_end = tos_ms() + ms;
 	running = &pic_co;
 	coro_switch(&main_co, &pic_co);
+	running = NULL;			/* back on the main stack: slice_up hands nothing back */
 	pics_band();			/* a band of colour rows to the screen's format */
 	if (!pdone)
 		return 0;
@@ -327,8 +345,34 @@ DOCVIEW *doc_view(void)
 	return doc ? &view : NULL;
 }
 
+/* an open under way given up: the reader stops at its next piece */
+static void stop_opening(void)
+{
+	if (!opening)
+		return;
+	abandon = 1;
+	while (!rdone) {
+		running = &read_co;
+		coro_switch(&main_co, &read_co);
+		running = NULL;
+	}
+	abandon = 0;
+	rdone = 0;
+	opening = 0;
+	pdf_close(odoc);
+	free(odoc);
+	odoc = NULL;
+	name[0] = '\0';
+}
+
+int doc_opening(void)
+{
+	return opening;
+}
+
 void doc_close(void)
 {
+	stop_opening();
 	if (!doc)
 		return;
 	stop_reading();
@@ -347,30 +391,45 @@ void doc_close(void)
 int doc_open(const char *path, int cols, int lines_mode, const char *cache)
 {
 	const char *base;
-	long free_mem, budget;
 
 	doc_close();
-	if (!(doc = malloc(sizeof *doc)))
+	if ((!read_stack && !(read_stack = malloc(READ_STACK))) || (!rt && !(rt = calloc(1, sizeof *rt))) ||
+	    !(odoc = malloc(sizeof *odoc)))
 		return -1;
-	if (pdf_open(doc, path) != 0 || (npages = pdf_pages(doc)) <= 0) {
-		log_event("open-failed", path, doc->err);
-		pdf_close(doc);
-		free(doc);
-		doc = NULL;
-		npages = 0;
-		return -1;
-	}
-	doc->stop = slice_up;
-	if ((!read_stack && !(read_stack = malloc(READ_STACK))) || (!rt && !(rt = calloc(1, sizeof *rt)))) {
-		pdf_close(doc);
-		free(doc);
-		doc = NULL;
-		npages = 0;
-		return -1;
-	}
 	if (!read_started) {
 		coro_start(&read_co, read_stack, READ_STACK, reader);
 		read_started = 1;
+	}
+	strncpy(opath, path, sizeof opath - 1);
+	opath[sizeof opath - 1] = '\0';
+	strncpy(ocache, cache ? cache : "", sizeof ocache - 1);
+	ocache[sizeof ocache - 1] = '\0';
+	ocols = cols;
+	olines = lines_mode;
+	base = strrchr(path, '\\');
+	strncpy(name, base ? base + 1 : path, sizeof name - 1);
+	name[sizeof name - 1] = '\0';
+	opening = 1;
+	rdone = 0;
+	log_event("opening", name, NULL);
+	return 0;
+}
+
+/* the reader has opened odoc (or not): the store and the view made, and
+   it is the document */
+static long open_done(void)
+{
+	long free_mem, budget;
+
+	opening = 0;
+	rdone = 0;
+	if (!open_ok) {
+		log_event("open-failed", opath, odoc->err);
+		pdf_close(odoc);
+		free(odoc);
+		odoc = NULL;
+		name[0] = '\0';
+		return DOC_FAILED;
 	}
 	/* a quarter of the memory free keeps text, at most 256 KB; the rest
 	   goes to the cache file */
@@ -380,19 +439,19 @@ int doc_open(const char *path, int cols, int lines_mode, const char *cache)
 		budget = 256L * 1024;
 	if (budget < 16L * 1024)
 		budget = 16L * 1024;
-	if (ts_open(&store, npages, budget, cache) != 0 || dv_init(&view, &store, npages, cols, lines_mode) != 0) {
+	if (ts_open(&store, onpages, budget, ocache) != 0 || dv_init(&view, &store, onpages, ocols, olines) != 0) {
 		ts_close(&store);
-		pdf_close(doc);
-		free(doc);
-		doc = NULL;
-		npages = 0;
-		return -1;
+		pdf_close(odoc);
+		free(odoc);
+		odoc = NULL;
+		name[0] = '\0';
+		return DOC_FAILED;
 	}
+	doc = odoc;
+	odoc = NULL;
+	npages = onpages;
 	cache_kb = budget / 1024;
 	retried_page = retried_obj = -1;
-	base = strrchr(path, '\\');
-	strncpy(name, base ? base + 1 : path, sizeof name - 1);
-	name[sizeof name - 1] = '\0';
 	next = done = 0;
 	{
 		char n[16];
@@ -400,12 +459,12 @@ int doc_open(const char *path, int cols, int lines_mode, const char *cache)
 		snprintf(n, sizeof n, "%ld", npages);
 		log_event("opened", name, n);
 	}
-	return 0;
+	return DOC_OPENED;
 }
 
 int doc_pending(void)
 {
-	return doc && done < npages;
+	return opening || (doc && done < npages);
 }
 
 void doc_want(long page)
@@ -424,6 +483,13 @@ long doc_slice(unsigned long ms)
 
 	if (!doc_pending())
 		return -1;
+	if (opening) {
+		slice_end = tos_ms() + ms;
+		running = &read_co;
+		coro_switch(&main_co, &read_co);
+		running = NULL;
+		return rdone ? open_done() : -1;
+	}
 	if (rpage < 0) {
 		/* the next page not yet read, from `next` on and round */
 		for (i = 0; i < npages; i++) {
@@ -439,6 +505,7 @@ long doc_slice(unsigned long ms)
 	slice_end = tos_ms() + ms;
 	running = &read_co;
 	coro_switch(&main_co, &read_co);
+	running = NULL;
 	if (!rdone)
 		return -1;
 	n = rpage;

@@ -78,15 +78,23 @@ static void aes_cbc_dec(unsigned char *key, int klen, unsigned char *iv, unsigne
 	br_aes_big_cbcdec_run(&c, iv, data, (size_t)n);
 }
 
-static void aes_cbc_enc(unsigned char *key, int klen, unsigned char *iv, unsigned char *data, long n)
+/* d's stop hook between pieces of a long hash (an AES-256 file's key: a
+   minute and more on a 68000): 1 when the document is closing */
+static int crypt_pause(PDOC *d)
 {
-	br_aes_big_cbcenc_keys c;
-
-	br_aes_big_cbcenc_init(&c, key, (size_t)klen);
-	br_aes_big_cbcenc_run(&c, iv, data, (size_t)n);
+	if (d->stop && !d->stopping && d->stop(d->stop_ctx))
+		d->stopping = 1;
+	return d->stopping;
 }
 
-/* ISO 32000-2, algorithm 2.B (revision 6) / 2.A (revision 5): the hash of the (empty) password */
+/* the pieces: about 30 ms each on an 8 MHz ST (AES some 900 cycles a
+   byte, SHA-384/512 some 2000) */
+#define PIECE_AES 256
+#define PIECE_SHA 128
+
+/* ISO 32000-2, algorithm 2.B (revision 6) / 2.A (revision 5): the hash of
+   the (empty) password; -1 out of memory or the document closing (its
+   stop hook, between pieces) */
 static int hash_r56(PDOC *d, int r, const unsigned char *salt, const unsigned char *udata, long un, unsigned char *out)
 {
 	unsigned char k[64], e_last = 0;
@@ -108,8 +116,14 @@ static int hash_r56(PDOC *d, int r, const unsigned char *salt, const unsigned ch
 	do {
 		long m = klen + un, rep = 64 * m, j;
 		unsigned char *k1 = pdf_malloc(d, rep + 16);
-		unsigned char iv[16], kk[16];
+		unsigned char iv[16];
 		int mod = 0;
+		union {
+			br_aes_big_cbcenc_keys a;
+			br_sha256_context s256;
+			br_sha384_context s384;
+			br_sha512_context s512;
+		} c;
 
 		if (!k1)
 			return -1;
@@ -118,33 +132,47 @@ static int hash_r56(PDOC *d, int r, const unsigned char *salt, const unsigned ch
 			if (un)
 				memcpy(k1 + j * m + klen, udata, (size_t)un);
 		}
-		memcpy(kk, k, 16);
 		memcpy(iv, k + 16, 16);
-		aes_cbc_enc(kk, 16, iv, k1, rep);
+		br_aes_big_cbcenc_init(&c.a, k, 16);
+		for (j = 0; j < rep; j += PIECE_AES) {
+			if (crypt_pause(d)) {
+				pdf_free(d, k1, rep + 16);
+				return -1;
+			}
+			br_aes_big_cbcenc_run(&c.a, iv, k1 + j, (size_t)(rep - j < PIECE_AES ? rep - j : PIECE_AES));
+		}
 		for (j = 0; j < 16; j++)
 			mod += k1[j];
 		mod %= 3;
 		e_last = k1[rep - 1];
-		if (mod == 0) {
-			br_sha256_context c;
+		if (mod == 0)
+			br_sha256_init(&c.s256);
+		else if (mod == 1)
+			br_sha384_init(&c.s384);
+		else
+			br_sha512_init(&c.s512);
+		for (j = 0; j < rep; j += PIECE_SHA) {
+			size_t n = (size_t)(rep - j < PIECE_SHA ? rep - j : PIECE_SHA);
 
-			br_sha256_init(&c);
-			br_sha256_update(&c, k1, (size_t)rep);
-			br_sha256_out(&c, k);
+			if (crypt_pause(d)) {
+				pdf_free(d, k1, rep + 16);
+				return -1;
+			}
+			if (mod == 0)
+				br_sha256_update(&c.s256, k1 + j, n);
+			else if (mod == 1)
+				br_sha384_update(&c.s384, k1 + j, n);
+			else
+				br_sha512_update(&c.s512, k1 + j, n);
+		}
+		if (mod == 0) {
+			br_sha256_out(&c.s256, k);
 			klen = 32;
 		} else if (mod == 1) {
-			br_sha384_context c;
-
-			br_sha384_init(&c);
-			br_sha384_update(&c, k1, (size_t)rep);
-			br_sha384_out(&c, k);
+			br_sha384_out(&c.s384, k);
 			klen = 48;
 		} else {
-			br_sha512_context c;
-
-			br_sha512_init(&c);
-			br_sha512_update(&c, k1, (size_t)rep);
-			br_sha512_out(&c, k);
+			br_sha512_out(&c.s512, k);
 			klen = 64;
 		}
 		pdf_free(d, k1, rep + 16);
@@ -339,15 +367,11 @@ int pc_open(PDOC *d, POBJ *enc, POBJ *id)
 	return 0;
 }
 
-long pc_decrypt(PDOC *d, long num, long gen, int is_stream, unsigned char *buf, long n)
+/* the object's own key (algorithm 1; revision 5 and 6: the file's) */
+static int obj_key(PCRYPT *c, int method, long num, long gen, unsigned char *k)
 {
-	PCRYPT *c = d->crypt;
-	int method = is_stream ? c->stm : c->str;
-	unsigned char k[32];
 	int kl;
 
-	if (method == M_NONE || n <= 0)
-		return n;
 	if (c->v >= 5) {
 		memcpy(k, c->key, 32);
 		kl = 32;
@@ -373,6 +397,19 @@ long pc_decrypt(PDOC *d, long num, long gen, int is_stream, unsigned char *buf, 
 		kl = c->klen + 5 > 16 ? 16 : c->klen + 5;
 		memcpy(k, h, (size_t)kl);
 	}
+	return kl;
+}
+
+long pc_decrypt(PDOC *d, long num, long gen, int is_stream, unsigned char *buf, long n)
+{
+	PCRYPT *c = d->crypt;
+	int method = is_stream ? c->stm : c->str;
+	unsigned char k[32];
+	int kl;
+
+	if (method == M_NONE || n <= 0)
+		return n;
+	kl = obj_key(c, method, num, gen, k);
 	if (method == M_RC4) {
 		rc4(k, kl, buf, n);
 		return n;
@@ -386,7 +423,21 @@ long pc_decrypt(PDOC *d, long num, long gen, int is_stream, unsigned char *buf, 
 
 		memcpy(iv, buf, 16);
 		memmove(buf, buf + 16, (size_t)m);
-		aes_cbc_dec(k, kl, iv, buf, m);
+		if (!is_stream)
+			aes_cbc_dec(k, kl, iv, buf, m);
+		else {
+			/* a stream in pieces, the stop hook between them: a page's
+			   content of 13 KB was 1.5 s of AES-256 on an ST in one go */
+			br_aes_big_cbcdec_keys ck;
+			long j;
+
+			br_aes_big_cbcdec_init(&ck, k, (size_t)kl);
+			for (j = 0; j < m; j += PIECE_AES) {
+				if (j && crypt_pause(d))
+					return 0;	/* (the document closing) */
+				br_aes_big_cbcdec_run(&ck, iv, buf + j, (size_t)(m - j < PIECE_AES ? m - j : PIECE_AES));
+			}
+		}
 		if (buf[m - 1] >= 1 && buf[m - 1] <= 16)
 			m -= buf[m - 1];
 		return m;
@@ -397,4 +448,90 @@ void pc_close(PDOC *d)
 {
 	free(d->crypt);
 	d->crypt = NULL;
+}
+
+/*
+ * A stream decrypted as it is read (pdffilt.c's pieces): RC4 keeps its
+ * state from call to call; AES takes the first 16 bytes as its IV and
+ * chains the blocks (the caller gives whole blocks and strips the
+ * padding at the end). A page's content was decrypted whole, then
+ * unpacked whole: seconds on an ST without a turn.
+ */
+struct pcstream {
+	int method;
+	unsigned char s[256];		/* RC4 */
+	int si, sj;
+	br_aes_big_cbcdec_keys ck;	/* AES */
+	unsigned char iv[16];
+	int ivn;			/* the IV's bytes taken */
+};
+
+PCSTREAM *pc_stream_open(PDOC *d, long num, long gen)
+{
+	PCRYPT *c = d->crypt;
+	PCSTREAM *x;
+	unsigned char k[32];
+	int kl, i, j = 0;
+
+	if (!c || c->stm == M_NONE || !(x = calloc(1, sizeof *x)))
+		return NULL;
+	x->method = c->stm;
+	kl = obj_key(c, c->stm, num, gen, k);
+	if (x->method == M_RC4) {
+		for (i = 0; i < 256; i++)
+			x->s[i] = (unsigned char)i;
+		for (i = 0; i < 256; i++) {
+			unsigned char a = x->s[i];
+
+			j = (j + a + k[i % kl]) & 255;
+			x->s[i] = x->s[j];
+			x->s[j] = a;
+		}
+	} else
+		br_aes_big_cbcdec_init(&x->ck, k, (size_t)kl);
+	return x;
+}
+
+int pc_stream_is_aes(const PCSTREAM *x)
+{
+	return x->method != M_RC4;
+}
+
+long pc_stream_run(PCSTREAM *x, unsigned char *buf, long n)
+{
+	long k;
+
+	if (x->method == M_RC4) {
+		int i = x->si, j = x->sj;
+
+		for (k = 0; k < n; k++) {
+			unsigned char a;
+
+			i = (i + 1) & 255;
+			a = x->s[i];
+			j = (j + a) & 255;
+			x->s[i] = x->s[j];
+			x->s[j] = a;
+			buf[k] ^= x->s[(a + x->s[i]) & 255];
+		}
+		x->si = i;
+		x->sj = j;
+		return n;
+	}
+	k = 0;
+	while (x->ivn < 16 && k < n)
+		x->iv[x->ivn++] = buf[k++];
+	if (k) {
+		memmove(buf, buf + k, (size_t)(n - k));
+		n -= k;
+	}
+	n &= ~15L;
+	if (n > 0)
+		br_aes_big_cbcdec_run(&x->ck, x->iv, buf, (size_t)n);
+	return n;
+}
+
+void pc_stream_close(PCSTREAM *x)
+{
+	free(x);
 }

@@ -23,6 +23,12 @@ void app_icon_redraw(short h, const GRECT *area, const char *status);
 
 /* doc.c: the open document */
 int doc_open(const char *path, int cols, int lines_mode, const char *cache);
+/* the open goes on in doc_slice, on the reader's stack (an AES-256 file's
+   key: a minute on a 68000): DOC_OPENED when it is done, DOC_FAILED when
+   the file can't be read; doc_opening() 1 meanwhile */
+#define DOC_OPENED (-2)
+#define DOC_FAILED (-3)
+int doc_opening(void);
 void doc_close(void);
 int doc_is_open(void);
 const char *doc_name(void);

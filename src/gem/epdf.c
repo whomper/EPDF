@@ -135,22 +135,35 @@ static void window_place_save(void)
 
 static void copy_end(const char *say);
 
+/* the document couldn't be read (or opened at all) */
+static void open_failed(void)
+{
+	alert(1, "[3][EPDF can't read this file as a PDF.][ OK ]");
+	win_title();
+	win_info();
+	win_layout();
+	win_draw_all();
+}
+
+/* the open begun: it goes on in the reader's slices (doc_slice), the
+   window saying so, and opened() follows when it is done */
 static void open_doc(const char *p)
 {
 	copy_end(NULL);			/* a copy of the old document's text: given up */
-	graf_mouse(BUSYBEE, NULL);
 	if (doc_open(p, win_cols(), lines_mode, cache_path) != 0) {
-		graf_mouse(ARROW, NULL);
-		alert(1, "[3][EPDF can't read this file as a PDF.][ OK ]");
-		win_title();
-		win_info();
-		win_layout();
-		win_draw_all();
+		open_failed();
 		return;
 	}
-	graf_mouse(ARROW, NULL);
 	find_dir = 0;
 	win_status(NULL);
+	win_title();
+	menu_states();
+	win_layout();
+	win_draw_all();
+}
+
+static void opened(void)
+{
 	bg_opened();
 	win_title();
 	menu_states();
@@ -825,6 +838,16 @@ static int read_on(void)
 {
 	long n = doc_slice(40);
 
+	if (n == DOC_OPENED || n == DOC_FAILED) {
+		/* the window laid out and drawn: the turn ends there, the
+		   reading goes on in the next (its first page, read in the same
+		   turn, made it 880 ms on an ST) */
+		if (n == DOC_OPENED)
+			opened();
+		else
+			open_failed();
+		return 1;
+	}
 	if (n < 0)
 		return 0;
 	arrived = n;

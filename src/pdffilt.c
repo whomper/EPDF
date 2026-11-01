@@ -583,11 +583,15 @@ struct PCSRC {
 	const unsigned char *pp;	/* inflate_piece's piece, and what is left of it */
 	long pn;
 	int pend;			/* inflate_piece said the end (0) or damage (-1) */
+	PCSTREAM *cs;			/* encrypted: decrypted as it is read, else NULL */
+	unsigned char *q;		/* AES: what came out, the last block held back */
+	int qh, qn, qfin;		/* until the end (its padding) */
 };
 
-static int pcsrc_get(void *u, unsigned char *buf, long n)
+#define PCQ 512				/* AES: the raw bytes taken at a time, about 60 ms on an ST */
+
+static int raw_get(PCSRC *s, unsigned char *buf, long n)
 {
-	PCSRC *s = u;
 	long k;
 
 	if (n > s->left)
@@ -603,6 +607,77 @@ static int pcsrc_get(void *u, unsigned char *buf, long n)
 	return (int)k;
 }
 
+/* the reader's stop hook between pieces of decryption (as the content's
+   interpreter has it) */
+static int src_pause(PDOC *d)
+{
+	if (d->stop && !d->stopping && d->stop(d->stop_ctx))
+		d->stopping = 1;
+	return d->stopping;
+}
+
+/* the stream's bytes, decrypted when it is encrypted */
+static int pcsrc_get(void *u, unsigned char *buf, long n)
+{
+	PCSRC *s = u;
+	long out = 0;
+
+	if (!s->cs)
+		return raw_get(s, buf, n);
+	if (!pc_stream_is_aes(s->cs)) {
+		long k = raw_get(s, buf, n);
+
+		if (k > 0)
+			pc_stream_run(s->cs, buf, k);
+		return (int)k;
+	}
+	while (out < n) {
+		/* the last block is its padding's: held until the end */
+		long rel = s->qfin ? s->qn : s->qn - 16, k;
+
+		if (rel > 0) {
+			k = n - out < rel ? n - out : rel;
+			memcpy(buf + out, s->q + s->qh, (size_t)k);
+			s->qh += (int)k;
+			s->qn -= (int)k;
+			out += k;
+			continue;
+		}
+		if (s->left <= 0) {
+			if (s->qfin)
+				break;
+			s->qfin = 1;
+			if (s->qn > 0) {
+				int pad = s->q[s->qh + s->qn - 1];
+
+				if (pad >= 1 && pad <= 16 && pad <= s->qn)
+					s->qn -= pad;
+			}
+			continue;
+		}
+		if (out && src_pause(s->d))
+			break;
+		memmove(s->q, s->q + s->qh, (size_t)s->qn);
+		s->qh = 0;
+		k = raw_get(s, s->q + s->qn, s->left < PCQ ? s->left : PCQ);
+		if (k <= 0) {
+			s->left = 0;
+			continue;
+		}
+		s->qn += (int)pc_stream_run(s->cs, s->q + s->qn, k);
+	}
+	return (int)out;
+}
+
+/* a source given up before it is open (its decryption only) */
+static void src_free(PCSRC *s)
+{
+	if (s->cs)
+		pc_stream_close(s->cs);
+	free(s->q);
+	pdf_free(s->d, s, (long)sizeof *s);
+}
+
 /* a picture's own filter, which the caller decodes: a scan's or a JPEG's */
 static int is_coded(const POBJ *f)
 {
@@ -612,14 +687,14 @@ static int is_coded(const POBJ *f)
 
 /* image: the stream's last filter is a scan's or a JPEG's, left to the
    caller: the bytes before it */
-static PCSRC *src_open(PDOC *d, POBJ *o, int image)
+static PCSRC *src_open(PDOC *d, POBJ *o, int image, long onum)
 {
 	POBJ *filter, *parms;
 	PCSRC *s;
 	long off, len;
-	int flate = 0;
+	int flate = 0, crypt = 0;
 
-	if (!o || o->t != PO_DICT || !o->flag || d->crypt)
+	if (!o || o->t != PO_DICT || !o->flag)
 		return NULL;
 	filter = pd_get(d, o, "Filter");
 	if (!filter)
@@ -651,29 +726,51 @@ static PCSRC *src_open(PDOC *d, POBJ *o, int image)
 	}
 	if (stream_span(d, o, &off, &len))
 		return NULL;
-	if (flate) {
-		/* zlib's two bytes before the DEFLATE data (no preset dictionary) */
-		unsigned char h[2];
-
-		if (len < 2 || pdf_rd(d, off, h, 2) != 2 || (h[0] & 0x0F) != 8 || ((h[0] << 8) | h[1]) % 31 || (h[1] & 0x20))
+	if (d->crypt) {
+		/* as pdf_stream_in decrypts: not an xref stream, not Identity */
+		if (onum < 0)
 			return NULL;
-		off += 2;
-		len -= 2;
+		crypt = !pdf_is_name(pd_getraw(o, "Type"), "XRef") && !crypt_identity(d, pd_get(d, o, "Filter"), pd_get(d, o, "DecodeParms"));
 	}
 	s = pdf_malloc(d, (long)sizeof *s);
 	if (!s)
 		return NULL;
+	memset(s, 0, sizeof *s);
 	s->d = d;
 	s->off = off;
 	s->left = len;
-	s->z = NULL;
+	if (crypt) {
+		uint32_t ea = 0;
+		uint16_t eb = 0;
+
+		if (d->xe && onum < d->nxe && xe_get(d, onum, &ea, &eb) != 1)
+			eb = 0;
+		s->cs = pc_stream_open(d, onum, eb);
+		if (s->cs && pc_stream_is_aes(s->cs) && !(s->q = malloc(PCQ + 32))) {
+			pc_stream_close(s->cs);
+			s->cs = NULL;
+		}
+		if (!s->cs) {
+			pdf_free(d, s, (long)sizeof *s);
+			return NULL;	/* (the caller decodes it whole) */
+		}
+	}
+	if (flate) {
+		/* zlib's two bytes before the DEFLATE data (no preset dictionary) */
+		unsigned char h[2];
+
+		if (pcsrc_get(s, h, 2) != 2 || (h[0] & 0x0F) != 8 || ((h[0] << 8) | h[1]) % 31 || (h[1] & 0x20)) {
+			src_free(s);
+			return NULL;
+		}
+	}
 	if (flate) {
 		s->z = inflate_open_piece(pcsrc_get, s);
 		s->pn = 0;
 		s->pend = 1;
 		if (!s->z) {
 			d->st.oom++;
-			pdf_free(d, s, (long)sizeof *s);
+			src_free(s);
 			return NULL;
 		}
 		d->st.mem += PCSRC_INFLATE;
@@ -686,14 +783,12 @@ static PCSRC *src_open(PDOC *d, POBJ *o, int image)
 
 PCSRC *pdf_stream_open(PDOC *d, POBJ *o, long onum)
 {
-	(void)onum;
-	return src_open(d, o, 0);
+	return src_open(d, o, 0, onum);
 }
 
 PCSRC *pdf_stream_open_coded(PDOC *d, POBJ *o, long onum)
 {
-	(void)onum;
-	return src_open(d, o, 1);
+	return src_open(d, o, 1, onum);
 }
 
 /*
@@ -712,7 +807,10 @@ static long piece_read(PCSRC *s, unsigned char *out, long n)
 		if (s->pn <= 0) {
 			if (s->pend <= 0)
 				return k ? k : s->pend;
-			s->pn = inflate_piece(s->z, &s->pp, 32768L, 0);
+			/* no more than asked (the reader's refill), as inflate_read
+			   gave: a piece of 32 KB unpacked in one go was a long
+			   stretch on an ST */
+			s->pn = inflate_piece(s->z, &s->pp, n - k < 32768L ? n - k : 32768L, 0);
 			if (s->pn <= 0) {
 				s->pend = (int)s->pn;
 				s->pn = 0;
@@ -745,5 +843,5 @@ void pdf_stream_close(PCSRC *s)
 		inflate_close(s->z);
 		s->d->st.mem -= PCSRC_INFLATE;
 	}
-	pdf_free(s->d, s, (long)sizeof *s);
+	src_free(s);
 }

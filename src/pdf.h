@@ -150,6 +150,10 @@ typedef struct pdoc {
 
 /* ------------------------------------------------------------------ files */
 int pdf_open(PDOC *d, const char *path);	/* 0 ok; sets err */
+/* the same with the stop hook set from the start: an open that takes long
+   (an AES-256 file's key) calls it between pieces, and fails when it says
+   stop */
+int pdf_open_hook(PDOC *d, const char *path, int (*stop)(void *ctx), void *ctx);
 void pdf_close(PDOC *d);
 void pdf_page_reset(PDOC *d);			/* drop the page arena and cache */
 
