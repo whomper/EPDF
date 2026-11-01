@@ -20,6 +20,8 @@ void tv_init(TV *v);
 void tv_free(TV *v);
 /* lay text[0..len) out for cols characters a line; 0, or -1 out of memory */
 int tv_layout(TV *v, const char *text, long len, int cols);
+/* where c is in p's n characters (its offset), or -1 */
+long tv_find(const char *p, long n, char c);
 /* line i: its first character and length, the end of line and the blank
    it broke at left out; NULL beyond the last */
 const char *tv_line(const TV *v, long i, long *n);

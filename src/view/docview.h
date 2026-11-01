@@ -47,7 +47,7 @@ typedef struct {
 	long nstale;
 	long total;
 	long top_page, top_row;		/* the first row shown */
-	struct { long page; char *text; long len; TV tv; long *lrow; unsigned long used; } lay[DV_LAID];
+	struct { long page; char *text, *mem; long len; TV tv; long *lrow; unsigned long used; } lay[DV_LAID];	/* mem: text's allocation */
 	int pic_w, pic_ch, pic_aspect;	/* pictures: at most pic_w pixels wide, rows of pic_ch,
 					   pixels pic_aspect / 16 as tall as wide */
 	DVPIC pic;			/* the last DV_PIC row dv_row gave */

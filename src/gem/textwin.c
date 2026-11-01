@@ -256,13 +256,33 @@ static char vbuf[BIDI_MAX];
 static short vpos[BIDI_MAX];
 static unsigned char vodd[BIDI_MAX];
 
+/* a byte from 0xC2 on (where Hebrew is) in s's n: one compare a byte
+   with dbhi (18 cycles), where bidi_has_rtl's two were 10 ms of a window
+   of rows on an ST (gemprof.py, 1 Nov 2026); then bidi_has_rtl itself */
+static int maybe_rtl(const char *s, short n)
+{
+	short f = 0;
+
+	if (n <= 0)
+		return 0;
+	__asm__("subq.w #1,%1\n\t"
+		"moveq #-63,%%d1\n"		/* 0xC1 */
+		"1:\tcmp.b (%0)+,%%d1\n\t"
+		"dbcs %1,1b\n\t"
+		"scs %2"
+		: "+a"(s), "+d"(n), "+d"(f)
+		:
+		: "d1", "cc");
+	return f != 0;
+}
+
 static int row_visual(const char *s, long n, const char **vis, short *x)
 {
 	int rtl;
 
 	*vis = s;
 	*x = (short)(work.x + MARGIN);
-	if (n <= 0 || n > BIDI_MAX || !bidi_has_rtl(s, (short)n))
+	if (n <= 0 || n > BIDI_MAX || !maybe_rtl(s, (short)n) || !bidi_has_rtl(s, (short)n))
 		return 0;
 	rtl = bidi_is_rtl(s, (short)n);
 	bidi_visual_map(s, (short)n, (short)rtl, vbuf, vpos, vodd);
@@ -438,10 +458,27 @@ static void rows_xor(const GRECT *c, short y0, short y1)
  * text covers is filled (the margin, a row's end, empty rows), not the
  * whole area first (a whole window's fill took EmuTOS 60 ms on an ST).
  */
+/*
+ * The left margin and the strip right of the text's columns are white
+ * and nothing draws there; what is drawn again for new content in the
+ * same layout (a scroll's rows, a page that came in, a page jump) needn't
+ * clear them: edges_clean. A redraw the AES asks for, or one after the
+ * layout changed (a font, a size, the page's lines), clears them. They
+ * were most of a window's clearing on an ST, a narrow box a pixel row at
+ * a time (box_op: 34 ms of a page scrolled, gemprof.py, 1 Nov 2026).
+ */
+static int edges_clean;
+
+/* a row's text with its tail as spaces, drawn with it (a tail of up to
+   PAD_MAX cells costs less than clearing it, a pixel row at a time) */
+#define PAD_MAX 16
+static char padded[512];
+
 static void draw_rows(const GRECT *c, long r0, long r1)
 {
 	DOCVIEW *v = doc_view();
 	short clip[4], tx = (short)(work.x + MARGIN), right = (short)(c->x + c->w);
+	short text_right = (short)(tx + cols * cw);
 	short y = (short)(work.y + r0 * ch), box_y0 = -1, box_y1 = 0;	/* whole selected rows to invert as one box */
 	long r;
 
@@ -452,7 +489,11 @@ static void draw_rows(const GRECT *c, long r0, long r1)
 	text_clip(vdi_h, clip);
 	T_START();
 	fill_set = 0;				/* others may have changed the fill since */
-	blank(c, c->x, tx, c->y, c->h);		/* the left margin */
+	if (edges_clean) {
+		if (right > text_right)
+			right = text_right;	/* the strip after the columns is white */
+	} else
+		blank(c, c->x, tx, c->y, c->h);	/* the left margin */
 	vswr_mode(vdi_h, MD_REPLACE);		/* once for the rows of text */
 	vst_color(vdi_h, 1);
 	for (r = r0; v && r < r1; r++, y = (short)(y + ch)) {
@@ -473,7 +514,7 @@ static void draw_rows(const GRECT *c, long r0, long r1)
 		if (kind == DV_HEAD || n <= 0 || kind == DV_WAIT) {
 			blank(c, tx, right, y, ch);
 			if (kind == DV_HEAD)
-				draw_head(work.x, y, work.w, page);
+				draw_head(work.x, y, (short)(cols * cw + 2 * MARGIN), page);	/* to the text's right edge: nothing in the strip after it */
 			else if (n > 0) {
 				vswr_mode(vdi_h, MD_TRANS);
 				vst_color(vdi_h, 1);
@@ -493,8 +534,18 @@ static void draw_rows(const GRECT *c, long r0, long r1)
 
 			if (x > tx)
 				blank(c, tx, x, y, ch);
-			text_plain(vdi_h, x, y, vis, n);	/* MD_REPLACE, pen 1, no effects: set above */
-			blank(c, (short)(x + n * cw), right, y, ch);
+			{
+				short end = (short)(x + n * cw), pad = end < right ? (short)((right - end + cw - 1) / cw) : 0;
+
+				if (pad > 0 && pad <= PAD_MAX && n + pad <= (long)sizeof padded) {
+					memcpy(padded, vis, (size_t)n);
+					memset(padded + n, ' ', (size_t)pad);
+					text_plain(vdi_h, x, y, padded, n + pad);	/* MD_REPLACE, pen 1, no effects: set above */
+				} else {
+					text_plain(vdi_h, x, y, vis, n);
+					blank(c, end, right, y, ch);
+				}
+			}
 			k = sel_shape(v->sel_p0, v->sel_o0, v->sel_p1, v->sel_o1, page, off, n, &a, &b);
 			if (k == 2) {
 				/* a whole row: with the rows of it just above, one box */
@@ -596,8 +647,11 @@ void win_draw_rows(long r0, long r1)
 	a.h = (short)((r1 - r0) * ch);
 	if (a.y + a.h > work.y + work.h)
 		a.h = (short)(work.y + work.h - a.y);
-	if (a.h > 0)
+	if (a.h > 0) {
+		edges_clean = 1;	/* a page that came in: the same layout */
 		win_redraw(&a);
+		edges_clean = 0;
+	}
 }
 
 /*
@@ -632,7 +686,9 @@ static void moved(long d)
 	wind_get(win, WF_FIRSTXYWH, &r.x, &r.y, &r.w, &r.h);
 	if (keep <= 0 || r.x > work.x || r.y > work.y || r.x + r.w < work.x + work.w || r.y + r.h < work.y + work.h ||
 	    work.x < desk_x || work.y < desk_y || work.x + work.w > desk_x + desk_w || work.y + work.h > desk_y + desk_h) {
+		edges_clean = 1;	/* scrolled: the same layout */
 		win_draw_all();
+		edges_clean = 0;
 		return;
 	}
 	{
@@ -677,8 +733,11 @@ static void moved(long d)
 				a.h = (short)(work.y + work.h - a.y);
 			if (doc_view() && doc_view()->nstale)
 				dv_recount_view(doc_view(), rows + 1);
-			if (a.h > 0)
+			if (a.h > 0) {
+				edges_clean = 1;
 				draw_rows(&a, r0, r1);
+				edges_clean = 0;
+			}
 		}
 		graf_mouse(M_ON, NULL);
 		wind_update(END_UPDATE);
@@ -725,7 +784,9 @@ void win_goto_page(long n)
 	dv_goto_page(v, n);		/* its head at the top, even near the end */
 	sliders_due = 1;		/* when no key waits, as after a scroll */
 	win_info();
+	edges_clean = 1;		/* the same layout */
 	win_draw_all();
+	edges_clean = 0;
 }
 
 /* picture obj is ready (or can't be shown): its rows drawn again where they show */
@@ -967,7 +1028,9 @@ void win_show(long page, long off)
 	dv_show_row(v, page, row, rows / 3, rows);
 	sliders_due = 1;
 	win_info();
+	edges_clean = 1;		/* the same layout */
 	win_draw_all();
+	edges_clean = 0;
 }
 
 int win_open(short x, short y, short w, short h)

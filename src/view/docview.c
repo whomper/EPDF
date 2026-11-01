@@ -52,7 +52,7 @@ static TV *laid(DOCVIEW *v, long n)
 	int i, best = 0;
 	const char *s;
 	long len, k;
-	char *t;
+	char *t, *m;
 
 	v->tick++;
 	for (i = 0; i < DV_LAID; i++)
@@ -65,17 +65,32 @@ static TV *laid(DOCVIEW *v, long n)
 	for (i = 1; i < DV_LAID; i++)
 		if (v->lay[i].used < v->lay[best].used)
 			best = i;
-	if (!(t = malloc((size_t)(len > 0 ? len : 1))))
+	/* the copy at the stored text's byte parity: memcpy moves longs
+	   between two even addresses or two odd ones, else a byte at a time
+	   (13 ms a page on an ST, gemprof.py) */
+	if (!(m = malloc((size_t)(len > 0 ? len : 1) + 1)))
 		return NULL;
-	for (k = 0; k < len; k++)
-		t[k] = s[k] == '\r' ? (v->lines_mode ? '\n' : ' ') : s[k];
+	t = m + ((unsigned long)s & 1);
+	/* the soft breaks: a space, or a line end showing the page's lines
+	   (copied whole, then each CR found and changed: a character at a
+	   time with a long index was 54 ms a page on an ST, gemprof.py) */
+	memcpy(t, s, (size_t)len);
+	for (k = 0; k < len; k++) {
+		long f = tv_find(t + k, len - k, '\r');
+
+		if (f < 0)
+			break;
+		k += f;
+		t[k] = v->lines_mode ? '\n' : ' ';
+	}
 	/* the page's last line end makes no empty row */
 	while (len > 0 && t[len - 1] == '\n')
 		len--;
-	free(v->lay[best].text);
+	free(v->lay[best].mem);
 	free(v->lay[best].lrow);
 	v->lay[best].lrow = NULL;
 	tv_free(&v->lay[best].tv);
+	v->lay[best].mem = m;
 	v->lay[best].text = t;
 	v->lay[best].len = len;
 	v->lay[best].page = n;
@@ -159,7 +174,7 @@ void dv_free(DOCVIEW *v)
 	int i;
 
 	for (i = 0; i < DV_LAID; i++) {
-		free(v->lay[i].text);
+		free(v->lay[i].mem);
 		free(v->lay[i].lrow);
 		tv_free(&v->lay[i].tv);
 	}

@@ -30,7 +30,7 @@ BSSL_SRC = $(addprefix $(BSSL)/src/, hash/md5.c hash/sha2small.c hash/sha2big.c 
            codec/dec32be.c codec/enc32be.c codec/dec32le.c codec/enc32le.c codec/dec64be.c codec/enc64be.c)
 HDRS     = $(wildcard src/*.h src/gem/*.h src/view/*.h common/src/*.h common/ui/*.h common/atari/*.h common/atari/include/*.h)
 
-.PHONY: all test measure dist help clean atari measure-atari fttest imgbench gui-test files-test
+.PHONY: all test measure dist help clean atari measure-atari fttest imgbench gui-test files-test viewtest
 all: build/pdfmeasure build/pdftext build/pdfmem build/glyphjob build/imgdump binary/EPDF.PRG
 build:
 	mkdir -p build
@@ -193,6 +193,18 @@ binary/FTTEST30.PRG: $(addprefix build/m68030/,$(FT_OBJS)) $(addprefix build/m68
 	  build/m68030/crt0.o build/m68030/nf.o $(addprefix build/m68030/,$(patsubst %.c,%.o,$(FTTEST_SRC))) \
 	  $(addprefix build/m68030/,$(FT_OBJS)) -lgcc
 	python3 common/tools/elf2tos.py build/m68030/fttest.elf $@
+# the text view's 68000 code on the machine (its assembler halves; make test runs the C):
+# tests/hatari/viewtest.py
+VT_SRC     = atari/viewtest.c src/view/textview.c $(RT_C)
+binary/VIEWTEST.PRG: XCPU = -m68000 -mstrict-align -fdisable-tree-bswap
+binary/VIEWTEST.PRG: $(addprefix build/m68000/,$(patsubst %.c,%.o,$(VT_SRC))) build/m68000/crt0.o build/m68000/nf.o common/atari/link.ld | binary
+	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
+	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68000/viewtest.elf \
+	  build/m68000/crt0.o build/m68000/nf.o $(addprefix build/m68000/,$(patsubst %.c,%.o,$(VT_SRC))) -lgcc
+	python3 common/tools/elf2tos.py build/m68000/viewtest.elf $@
+viewtest: binary/VIEWTEST.PRG
+	python3 tests/hatari/viewtest.py
+
 # the picture test: CCITT, the shrinker and common's pic.c (TJpgDec, PNG, GIF)
 T         := common/third_party
 PIC_SRC    = common/src/pic.c common/src/png.c common/src/jpegdc.c $(T)/tjpgd/tjpgd.c $(T)/nsgif/src/gif.c $(T)/nsgif/src/lzw.c
