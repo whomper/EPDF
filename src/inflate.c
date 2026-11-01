@@ -32,6 +32,7 @@ typedef struct {
 	SBUF *out;
 	long max;			/* what out may grow to */
 	int bad;			/* 1 damaged, 2 too big */
+	struct huff2 *dyn;		/* a dynamic block's codes, taken for the call */
 } ST;
 
 static int need(ST *s, int n)
@@ -324,15 +325,25 @@ out:
 	return r;
 }
 
-static HUFF lit, dst;
-static HUFF flit, fdst;			/* the fixed codes (type 1 blocks) */
+/* the codes, 5.4 KB a pair, taken when they are used, not resident (a
+   program's start on a full machine: EPDF under NVDI, 1 Nov 2026): a
+   dynamic block's for an inflate_raw call, the fixed ones at the first
+   type 1 block, kept */
+struct huff2 {
+	HUFF l, d;
+};
+static struct huff2 *fx;
+#define flit (fx->l)
+#define fdst (fx->d)
 
-static void fixed_tables(void)
+/* 0, or -1 out of memory */
+static int fixed_tables(void)
 {
-	static int ready;
-	if (!ready) {
+	if (fx == NULL) {
 		unsigned char l[320];
 		int i;
+		if ((fx = malloc(sizeof *fx)) == NULL)
+			return -1;
 		for (i = 0; i < 144; i++)
 			l[i] = 8;
 		for (; i < 256; i++)
@@ -345,13 +356,16 @@ static void fixed_tables(void)
 		for (i = 0; i < 30; i++)
 			l[i] = 5;
 		build(&fdst, l, 30);
-		ready = 1;
 	}
+	return 0;
 }
 
 static int fixed(ST *s)
 {
-	fixed_tables();
+	if (fixed_tables()) {
+		s->bad = 2;		/* (no memory: as too big) */
+		return -1;
+	}
 	return codes(s, &flit, &fdst);
 }
 
@@ -360,6 +374,13 @@ static int dynamic(ST *s)
 	static const unsigned char order[19] = { 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 };
 	unsigned char len[320];
 	int nlen, ndist, ncode, i;
+	HUFF *lit, *dst;
+	if (s->dyn == NULL && (s->dyn = malloc(sizeof *s->dyn)) == NULL) {
+		s->bad = 2;		/* (no memory: as too big) */
+		return -1;
+	}
+	lit = &s->dyn->l;
+	dst = &s->dyn->d;
 	nlen = (int)take(s, 5) + 257;
 	ndist = (int)take(s, 5) + 1;
 	ncode = (int)take(s, 4) + 4;
@@ -368,10 +389,10 @@ static int dynamic(ST *s)
 	memset(len, 0, sizeof(len));
 	for (i = 0; i < ncode; i++)
 		len[order[i]] = (unsigned char)take(s, 3);
-	if (s->bad || build(&lit, len, 19))
+	if (s->bad || build(lit, len, 19))
 		return -1;
 	for (i = 0; i < nlen + ndist;) {
-		int sym = decode(s, &lit), rep = 0, val = 0;
+		int sym = decode(s, lit), rep = 0, val = 0;
 		if (sym < 0)
 			return -1;
 		if (sym < 16) {
@@ -393,9 +414,9 @@ static int dynamic(ST *s)
 		while (rep--)
 			len[i++] = (unsigned char)val;
 	}
-	if (!len[256] || build(&lit, len, nlen) || build(&dst, len + nlen, ndist))
+	if (!len[256] || build(lit, len, nlen) || build(dst, len + nlen, ndist))
 		return -1;
-	return codes(s, &lit, &dst);
+	return codes(s, lit, dst);
 }
 
 static int stored(ST *s)
@@ -425,7 +446,7 @@ static int stored(ST *s)
 int inflate_raw(const unsigned char *in, long n, SBUF *out, long max)
 {
 	ST s;
-	int last;
+	int last, r = 0;
 	memset(&s, 0, sizeof(s));
 	if (n < 0)
 		return 0;
@@ -434,15 +455,18 @@ int inflate_raw(const unsigned char *in, long n, SBUF *out, long max)
 	s.out = out;
 	s.max = max;
 	do {
-		int type, r;
+		int type;
 		last = (int)take(&s, 1);
 		type = (int)take(&s, 2);
-		if (s.bad)
-			return 0;
+		if (s.bad) {
+			r = -1;
+			break;
+		}
 		r = type == 0 ? stored(&s) : type == 1 ? fixed(&s) : type == 2 ? dynamic(&s) : -1;
-		if (r < 0)
-			return s.bad == 2 ? -1 : 0;
-	} while (!last);
+	} while (r >= 0 && !last);
+	free(s.dyn);
+	if (r < 0)
+		return s.bad == 2 ? -1 : 0;
 	return 1;
 }
 
@@ -677,7 +701,8 @@ static int z_head(INFLATE *z)
 		return 0;
 	}
 	if (type == 1) {
-		fixed_tables();
+		if (fixed_tables())
+			return -1;
 		z->lc = &flit;
 		z->dc = &fdst;
 	} else if (type != 2 || z_dynamic(z)) {

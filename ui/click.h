@@ -26,11 +26,14 @@
  * handled as the loop would); either may be 0. It sets evnt_multi's first
  * rectangle, which the loop sets again for its own use.
  *
- * Programs and accessories alike ask evnt_multi for one click and time
- * the double click here. A double click begun while the app is inside a
- * stretch loses its second press (the first is fetched after it was let
- * go and the AES hands over no other; ECal, EContact, TOS 1.04 and 4.04):
- * short stretches keep that window small.
+ * Programs ask evnt_multi for one click and time the double click here.
+ * An accessory under TOS using press_track keeps asking for two and uses
+ * evnt_multi's count (breturn): after press_track's wait for the release
+ * as an event, a one-click accessory lost a double click's second press
+ * most times (ECal, TOS 1.04, 1 Nov 2026; waiting by graf_mkstate didn't
+ * cure it).
+ * A double click begun while the app is inside a stretch can lose its
+ * second press either way: short stretches keep that window small.
  *
  * Draw the press between press_update_begin() and press_update_end(),
  * not inside wind_update(BEG_UPDATE) of your own: TOS's AES (1.04 and
