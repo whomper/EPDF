@@ -17,6 +17,7 @@
 #include "pdftab.h"
 
 static void pause_point(PDOC *d);
+static void pd_sort(PDOC *d, void *base, long n, long size, int (*cmp)(const void *, const void *));
 
 /* ------------------------------------------------------------------ fonts */
 typedef struct { uint32_t lo, hi, dst; } TUR;	/* dst: index into the pool (a length, then UTF-16 units) */
@@ -347,7 +348,7 @@ static void tounicode_parse(PDOC *d, PFONT *f, const unsigned char *s, long n)
 		}
 	}
 	if (f->ntu > 1)
-		qsort(f->tu, (size_t)f->ntu, sizeof(TUR), tu_cmp);
+		pd_sort(d, f->tu, f->ntu, (long)sizeof(TUR), tu_cmp);
 }
 
 /* ToUnicode lookup: the UTF-16 units into u, their count (0: none) */
@@ -1095,7 +1096,7 @@ static PFONT *font_load_in(PDOC *d, POBJ *fd, long objnum, PTEXT *t)
 			}
 		}
 		if (f->nwr > 1)
-			qsort(f->wr, (size_t)f->nwr, sizeof(WR), wr_cmp);
+			pd_sort(d, f->wr, f->nwr, (long)sizeof(WR), wr_cmp);
 	} else {
 		POBJ *enc = pd_get(d, fd, "Encoding"), *wa = pd_get(d, fd, "Widths"), *diff = NULL;
 		const unsigned short *base_tab = NULL;
@@ -1955,6 +1956,7 @@ static int run_content_pieces(IX *x, POBJ *cont, POBJ *ref)
 	if (x->win && x->sb) {
 		x->src = &c;
 		x->src_end = 0;
+		pause_point(d);
 		rc = run_content_in(x, x->win, 0, x->win, x->win, nm);
 		x->src = NULL;
 	} else
@@ -2445,6 +2447,119 @@ static void ch_sort(PDOC *d, CH *c, long n, int (*cmp)(const void *, const void 
 			}
 		}
 		c[j] = t;
+	}
+}
+
+/*
+ * The same for a font's ToUnicode ranges and widths (elements of up to
+ * SORT_MAX bytes, moved by memcpy): mostly in order already; a CID font's
+ * thousands of ranges went to the libc's heap sort (hebrew-idf-guide's
+ * first page: 170 ms of a stretch of 320 on an ST).
+ */
+#define SORT_MAX 32			/* an element's bytes at most */
+
+static void pd_msort(PDOC *d, void *base, long n, long size, int (*cmp)(const void *, const void *))
+{
+	/* pointers, not numbers: a number times the size is a multiply a
+	   merge step on a 68000 */
+	char *c = base, **m = pdf_malloc(d, 2 * n * (long)sizeof(char *)), **a = m, **b, *at;
+	long w, i, moved = 0;
+	unsigned char t[SORT_MAX];
+
+	if (!m) {
+		qsort(base, (size_t)n, (size_t)size, cmp);
+		return;
+	}
+	b = a + n;
+	for (i = 0, at = c; i < n; i++, at += size)
+		a[i] = at;
+	for (w = 1; w < n; w <<= 1) {
+		char **x;
+
+		for (i = 0; i < n; i += 2 * w) {
+			long mid = i + w < n ? i + w : n, hi = i + 2 * w < n ? i + 2 * w : n;
+			char **p = a + i, **pe = a + mid, **q = a + mid, **qe = a + hi, **k = b + i;
+
+			while (p < pe && q < qe)
+				*k++ = cmp(*q, *p) < 0 ? *q++ : *p++;
+			while (p < pe)
+				*k++ = *p++;
+			while (q < qe)
+				*k++ = *q++;
+			if (!((i + 2 * w) & 1023))
+				pause_point(d);
+		}
+		x = a;
+		a = b;
+		b = x;
+		pause_point(d);
+	}
+	/* a[k]: the element that goes to place k; moved there a cycle at a
+	   time (each element's place found once, from its pointer) */
+	for (i = 0, at = c; i < n; i++, at += size) {
+		long j = i;
+		char *jp = at, *src;
+
+		if (a[i] == at)
+			continue;
+		memcpy(t, at, (size_t)size);
+		for (;;) {
+			src = a[j];
+			a[j] = jp;
+			if (src == at) {
+				memcpy(jp, t, (size_t)size);
+				break;
+			}
+			memcpy(jp, src, (size_t)size);
+			j = (src - c) / size;
+			jp = src;
+			if (!(++moved & 255))
+				pause_point(d);
+		}
+	}
+	pdf_free(d, m, 2 * n * (long)sizeof(char *));
+}
+
+static void pd_sort(PDOC *d, void *base, long n, long size, int (*cmp)(const void *, const void *))
+{
+	char *c = base, *e, *f;
+	long i, moves = 0, limit = n * 2 + 64, down = 0;
+	unsigned char t[SORT_MAX];
+
+	if (size > SORT_MAX) {
+		qsort(base, (size_t)n, (size_t)size, cmp);
+		return;
+	}
+	/* how far from the order: the pairs out of it */
+	for (i = 1, e = c; i < n; i++, e += size) {
+		if (cmp(e, e + size) > 0)
+			down++;
+		if (!(i & 511))
+			pause_point(d);
+	}
+	if (!down)
+		return;
+	if (down > 16 + n / 64) {
+		pd_msort(d, base, n, size, cmp);
+		return;
+	}
+	for (i = 1, f = c + size; i < n; i++, f += size) {
+		e = f;
+		if (cmp(e - size, e) <= 0)
+			continue;
+		memcpy(t, e, (size_t)size);
+		do {
+			memcpy(e, e - size, (size_t)size);
+			e -= size;
+			if (!(++moves & 255))
+				pause_point(d);
+			if (moves > limit) {
+				memcpy(e, t, (size_t)size);
+				pd_msort(d, base, n, size, cmp);
+				return;
+			}
+		} while (e > c && cmp(e - size, t) > 0);
+		memcpy(e, t, (size_t)size);
 	}
 }
 
@@ -2969,6 +3084,7 @@ int pdf_page_text(PDOC *d, long n, PTEXT *t)
 	x.gs.fs = 0;
 	memcpy(x.tm, IDENT, sizeof x.tm);
 	memcpy(x.tlm, IDENT, sizeof x.tlm);
+	pause_point(d);			/* the page found: its content next */
 	cont = pd_get(d, pg, "Contents");
 	if (cont && (cont->t == PO_DICT || cont->t == PO_ARR))
 		/* a stream, or the pieces of one (an operator doesn't straddle two),
