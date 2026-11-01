@@ -136,8 +136,14 @@ at first. This section is kept up to date: the build, the tests, what a release 
   (dv_recount_view: ST 4.3 s -> 0.4 s). Resident 440,772 (0.3: 419,428). Still to do on the ST's
   speed (TOS 1.04, v0.4): a line 80, next page 315, a page while reading 160, Select all 65, View >
   The page's lines 415, About 260; the interpreter's per-glyph cost (the two maps and
-  photo-nasa-sunda read no page in 200 s on ST-1). The rig's Courier 14 rows for View and About
-  (40, <20 under NVDI) still look like a missed menu click.
+  photo-nasa-sunda read no page in 200 s on ST-1). 0.4.1 went out the same day (v0.4.1 on
+  85d8f4d2, cleared on bd825652): the menu bar built with the AES's cell (gl_wchar/gl_hchar), not the
+  document font's (with a GDOS font its titles spread and its menus didn't open, 0.3 and 0.4; the
+  speed rig compares a FONT= run's menu bar with the system font's), and text set a glyph at a time
+  (Erez's EDOS_01.PDF from Calamus SL: the fonts' widths their ink; a gap is a space only from 0.8 em
+  on such lines, a tight heading's spaces sorted before the next letter, the gutter found by every
+  bin a gap covers or a strip few lines cross; `tests/glyphwise.py`). Resident 442,088. A release
+  that fixes is X.Y.Z (the hub's "0.4.1"; the workflow takes any VERSION its tag matches).
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
   checks: `tools/nofpu.sh`); decode streams with `inflate_open`/`inflate_read` so a page needn't fit
   in memory; reuse `common/atari/dspjpeg.c` with `PIC_LIBJPEG` for JPEG on the Falcon; a progressive
