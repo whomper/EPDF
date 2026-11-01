@@ -13,6 +13,7 @@
 #include "dialog.h"
 #include "crash.h"
 #include "tos.h"
+#include "text.h"
 
 #define ICON_W 32
 #define ICON_H 32
@@ -466,42 +467,13 @@ static long screen_bpl(void)
 	return la[1];		/* v_lin_wr */
 }
 
-/* n bytes (even, the rows even too) of each row: memcpy's 16-byte
-   longs, then the rest a word at a time (memcpy's last bytes went one at
-   a time: some 16 ms of an ST's About box) */
+/* n bytes (even, the rows even too) of each row: text.c's every-row
+   loop (the counts in registers); a row at a time in C was some 400
+   cycles a row of overhead, half of rows_copy's 46 ms of an ST's About
+   box (EPDF's gemprof.py, 1 Nov 2026) */
 static void rows_copy(unsigned char *d, long ds, const unsigned char *s, long ss, short rows, long n)
 {
-	/* each row in longs, eight to a turn and the rest by a jump into the
-	   last ones, then a word: memcpy called for each row (its checks, its
-	   loop of four) took an 8 MHz ST 38 ms for the About box's 347 rows
-	   of 52 bytes, some 890 cycles a row */
-	short nl = (short)(n >> 2), tail = (short)(n & 2);
-	for (; rows > 0; rows--, d += ds, s += ss) {
-		unsigned long *dl = (unsigned long *)d;
-		const unsigned long *sl = (const unsigned long *)s;
-		short k = nl;
-		for (; k >= 8; k -= 8) {
-			*dl++ = *sl++;
-			*dl++ = *sl++;
-			*dl++ = *sl++;
-			*dl++ = *sl++;
-			*dl++ = *sl++;
-			*dl++ = *sl++;
-			*dl++ = *sl++;
-			*dl++ = *sl++;
-		}
-		switch (k) {
-		case 7: *dl++ = *sl++;	/* fall through */
-		case 6: *dl++ = *sl++;	/* fall through */
-		case 5: *dl++ = *sl++;	/* fall through */
-		case 4: *dl++ = *sl++;	/* fall through */
-		case 3: *dl++ = *sl++;	/* fall through */
-		case 2: *dl++ = *sl++;	/* fall through */
-		case 1: *dl++ = *sl++;
-		}
-		if (tail)
-			*(unsigned short *)dl = *(const unsigned short *)sl;
-	}
+	scr_copy_rows(d, ds, s, ss, rows, (short)n);
 }
 
 /* the box's rows: the screen under it kept (to put back) and the box
@@ -645,35 +617,26 @@ static int draw_off(void (*draw)(int framed))
 			short in = (short)(dx + dw - gx);		/* the box's pixels in it */
 			rkeep[i] = in >= 16 ? 0 : in <= 0 ? 0xFFFF : (unsigned short)(0xFFFFu >> in);
 		}
-		for (r = 0; r < ob.rows; r++, d += ds, u += us) {
-			if (white && r < dh) {
+		r = 0;
+		if (white) {
+			/* the box's rows: their edge words a row at a time, then
+			   the middle of every row at once (text.c's scr_set_rows:
+			   a row at a time in C was some 400 cycles a row more) */
+			short nw = dh < ob.rows ? dh : ob.rows;
+			unsigned short *dd = d;
+			const unsigned short *uu = u;
+
+			for (r = 0; r < nw; r++, dd += ds, uu += us) {
 				for (i = 0; i < lw; i++)
-					d[i] = u[i] & lkeep;
-				{
-					/* the middle cleared in longs, as rows_copy
-					   copies (memset a row: some 25 ms of an ST) */
-					unsigned long *z = (unsigned long *)(d + lw);
-					short m = (short)((rw - lw) >> 1);
-					for (; m >= 8; m -= 8) {
-						z[0] = 0;
-						z[1] = 0;
-						z[2] = 0;
-						z[3] = 0;
-						z[4] = 0;
-						z[5] = 0;
-						z[6] = 0;
-						z[7] = 0;
-						z += 8;
-					}
-					while (m-- > 0)
-						*z++ = 0;
-					if ((rw - lw) & 1)
-						*(unsigned short *)z = 0;
-				}
+					dd[i] = uu[i] & lkeep;
 				for (i = rw; i < rw + 2 * g; i++)
-					d[i] = u[i] & rkeep[(i - rw) >= g];
-				continue;
+					dd[i] = uu[i] & rkeep[(i - rw) >= g];
 			}
+			scr_set_rows((unsigned char *)(d + lw), ds * 2, nw, (short)((rw - lw) * 2), 0);
+			d += (long)nw * ds;
+			u += (long)nw * us;
+		}
+		for (; r < ob.rows; r++, d += ds, u += us) {
 			if (r < 3 || r >= ob.rows - 3) {
 				memcpy(d, u, ob.n);
 				continue;
