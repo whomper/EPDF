@@ -584,6 +584,7 @@ struct PCSRC {
 	long pn;
 	int pend;			/* inflate_piece said the end (0) or damage (-1) */
 	PCSTREAM *cs;			/* encrypted: decrypted as it is read, else NULL */
+	long ask;			/* bytes the caller will take in all (0: all of it), less those given */
 	unsigned char *q;		/* AES: what came out, the last block held back */
 	int qh, qn, qfin;		/* until the end (its padding) */
 };
@@ -598,7 +599,7 @@ static int raw_get(PCSRC *s, unsigned char *buf, long n)
 		n = s->left;
 	if (n <= 0)
 		return 0;
-	k = pdf_rd(s->d, s->off, buf, n);
+	k = pdf_rd_seq(s->d, s->off, buf, n);
 	if (k <= 0)
 		return 0;
 	s->off += k;
@@ -796,7 +797,21 @@ PCSRC *pdf_stream_open_coded(PDOC *d, POBJ *o, long onum)
  * assembly on the Atari (atari/inflate_fast.S, INFLATE_ASM), where
  * inflate_read's C took a map's page 89 s of 232 on an ST; 46 s now. Its
  * buffer is the window too: 72 KB a stream open, inflate_open's 40.
+ *
+ * A piece is 32 KB (or what the caller will take, less), with the
+ * reader's stop hook after each 1 KB of it (inflate_piece's turn): each
+ * piece moves the 32 KB window down first, and pieces the size of the
+ * reader's 2 KB refills did that 16 times as often (an EDOS_01.PDF page 3 s
+ * longer on an ST).
  */
+static PDOC *turn_doc;			/* the document whose stream is being unpacked */
+
+static void piece_turn(void)
+{
+	if (turn_doc)
+		src_pause(turn_doc);
+}
+
 static long piece_read(PCSRC *s, unsigned char *out, long n)
 {
 	long k = 0;
@@ -805,12 +820,15 @@ static long piece_read(PCSRC *s, unsigned char *out, long n)
 		long m;
 
 		if (s->pn <= 0) {
+			long ask = s->ask > 0 && s->ask < 32768L ? s->ask : 32768L;
+
 			if (s->pend <= 0)
 				return k ? k : s->pend;
-			/* no more than asked (the reader's refill), as inflate_read
-			   gave: a piece of 32 KB unpacked in one go was a long
-			   stretch on an ST */
-			s->pn = inflate_piece(s->z, &s->pp, n - k < 32768L ? n - k : 32768L, 0);
+			if (ask < n - k)
+				ask = n - k < 32768L ? n - k : 32768L;
+			turn_doc = s->d;	/* (one document at a time: left set, as a stream on
+						   another stack may be unpacked in a turn) */
+			s->pn = inflate_piece(s->z, &s->pp, ask, piece_turn);
 			if (s->pn <= 0) {
 				s->pend = (int)s->pn;
 				s->pn = 0;
@@ -830,8 +848,11 @@ long pdf_stream_read(PCSRC *s, unsigned char *out, long n)
 {
 	long k = s->z ? piece_read(s, out, n) : pcsrc_get(s, out, n);
 
-	if (k > 0)
+	if (k > 0) {
 		s->d->st.out += k;
+		if (s->ask > 0)
+			s->ask = s->ask > k ? s->ask - k : 1;
+	}
 	return k;
 }
 
@@ -844,4 +865,66 @@ void pdf_stream_close(PCSRC *s)
 		s->d->st.mem -= PCSRC_INFLATE;
 	}
 	src_free(s);
+}
+
+/*
+ * The first want bytes of a stream (all of it when it is shorter): read a
+ * piece at a time with the reader's stop hook between pieces, where the
+ * stream can be (pdf_stream_open), else decoded whole. *whole: 1 when out
+ * holds all of the stream. 0, or -1 (damaged, out of memory, the document
+ * closing). A font program's encoding is in its first few KB: decoding all
+ * of a font was a stretch of 600 ms on an ST.
+ */
+#define HEAD_PIECE 2048L
+
+int pdf_stream_head(PDOC *d, POBJ *o, long onum, long want, SBUF *out, int *whole)
+{
+	PCSRC *s = pdf_stream_open(d, o, onum);
+
+	*whole = 1;
+	if (s)
+		s->ask = want + 1;	/* (the byte that says whether there is more) */
+	if (!s) {
+		const char *term = NULL;
+
+		if (pdf_stream(d, o, onum, out, &term, 4L << 20) != 0 || term) {
+			sb_free(out);
+			return -1;
+		}
+		return 0;
+	}
+	sb_init(out);
+	while (out->len < want) {
+		long n = want - out->len < HEAD_PIECE ? want - out->len : HEAD_PIECE, k;
+		/* the buffer doubles, up to want */
+		long room = out->len > n ? out->len : n;
+
+		if (room > want - out->len)
+			room = want - out->len;
+		if ((out->len + n + 1 > out->cap && !sb_reserve(out, room)) || src_pause(d)) {
+			pdf_stream_close(s);
+			sb_free(out);
+			return -1;
+		}
+		k = pdf_stream_read(s, (unsigned char *)out->s + out->len, n);
+		if (k < 0) {
+			pdf_stream_close(s);
+			sb_free(out);
+			return -1;
+		}
+		if (k == 0)
+			break;
+		out->len += k;
+	}
+	if (out->len >= want) {
+		unsigned char c;
+
+		/* is there more? */
+		*whole = pdf_stream_read(s, &c, 1) == 0;
+	}
+	pdf_stream_close(s);
+	if (!out->s && !sb_reserve(out, 0))
+		return -1;
+	out->s[out->len] = 0;
+	return 0;
 }

@@ -16,6 +16,8 @@
 #include "lexnum.h"
 #include "pdftab.h"
 
+static void pause_point(PDOC *d);
+
 /* ------------------------------------------------------------------ fonts */
 typedef struct { uint32_t lo, hi, dst; } TUR;	/* dst: index into the pool (a length, then UTF-16 units) */
 typedef struct { uint32_t lo, hi; int16_t w; } WR;
@@ -217,8 +219,11 @@ static void tounicode_parse(PDOC *d, PFONT *f, const unsigned char *s, long n)
 	const unsigned char *p = s, *e = s + n;
 	int mode = 0;			/* 1 bfchar, 2 bfrange, 3 codespace */
 	unsigned char a[16], b[16], c[64];
+	unsigned turn = 0;
 
 	while (p < e) {
+		if (!(++turn & 63))
+			pause_point(d);		/* a big CMap takes a while on an ST */
 		while (p < e && is_white_c(*p))
 			p++;
 		if (p >= e)
@@ -545,23 +550,13 @@ static void note_prog(PDOC *d, PTEXT *t, POBJ *desc, const char *base, PFONT *f)
 /* The built-in encoding of an embedded Type 1 font: the clear-text part of the font
    program says "/Encoding 256 array ... dup 65 /A put ... readonly def". 1: found
    (uni filled), 0: it says StandardEncoding or isn't there. */
-static int t1_builtin(PDOC *d, POBJ *desc, uint16_t *uni)
+static int t1_encoding(PDOC *d, const char *s, long n, uint16_t *uni)
 {
-	POBJ *r = pd_getraw(desc, "FontFile"), *so;
-	SBUF b;
-	const char *term = NULL, *p, *e, *q;
+	const char *p, *e = s + n, *q;
 	int found = 0;
 
-	if (!r || r->t != PO_REF)
-		return 0;
-	so = pdf_get(d, r->a);
-	if (!so || pdf_stream(d, so, r->a, &b, &term, 4L << 20) != 0 || term) {
-		sb_free(&b);
-		return 0;
-	}
-	e = b.s + b.len;
 	p = NULL;
-	for (q = b.s; q + 10 < e && q < b.s + 16384; q++)
+	for (q = s; q + 10 < e && q < s + 16384; q++)
 		if (q[0] == '/' && !memcmp(q, "/Encoding", 9)) {
 			p = q + 9;
 			break;
@@ -572,11 +567,9 @@ static int t1_builtin(PDOC *d, POBJ *desc, uint16_t *uni)
 		if (e - p >= 16 && !memcmp(p, "StandardEncoding", 16)) {
 			found = 0;
 		} else {
-			int c;
-
-			for (c = 0; c < 256; c++)
-				uni[c] = 0;
-			/* "dup 65 /A put" until "def" */
+			/* "dup 65 /A put" until "def"; a code it leaves out keeps
+			   the standard one (Calamus SL's fonts have no space, and
+			   their text is set with code 32 between words) */
 			while (p + 4 < e) {
 				if (!memcmp(p, "dup", 3) && is_white_c((unsigned char)p[3])) {
 					const char *s = p + 3;
@@ -602,7 +595,8 @@ static int t1_builtin(PDOC *d, POBJ *desc, uint16_t *uni)
 						name[n] = 0;
 						if (code >= 0 && code < 256) {
 							uni[code] = (uint16_t)glyph_unicode(name);
-							found = 1;
+							if (!(++found & 31))
+								pause_point(d);
 						}
 					}
 					p = s;
@@ -610,15 +604,78 @@ static int t1_builtin(PDOC *d, POBJ *desc, uint16_t *uni)
 				}
 				if (!memcmp(p, "readonly", 8) || (p[0] == 'd' && p[1] == 'e' && p[2] == 'f' && is_white_c((unsigned char)p[3]) && found))
 					break;
-				if (found == 0 && p > b.s + 16384)
+				if (found == 0 && p > s + 16384)
 					break;
 				p++;
 			}
 		}
 	}
+	return found > 0;
+}
+
+/*
+ * A font program's encoding is near its start: its first HEAD_FIRST bytes
+ * are read, and more only where they don't hold it. A Type 1 program's
+ * clear text ends at "eexec" (Calamus SL's are 4 KB of a 40 KB font).
+ */
+#define HEAD_FIRST 4096L
+
+static int has_eexec(const char *s, long n)
+{
+	const char *e = s + n - 5;
+
+	for (; s <= e; s++)
+		if (*s == 'e' && !memcmp(s, "eexec", 5))
+			return 1;
+	return 0;
+}
+
+/* b: the program's first bytes (whole: all of it); the clear text, up to
+   cap bytes, read again when they don't hold it all. 0, or -1 */
+static int t1_clear(PDOC *d, POBJ *so, long onum, long cap, SBUF *b, int whole)
+{
+	const unsigned char *u = (const unsigned char *)b->s;
+
+	if (whole || has_eexec(b->s, b->len) || b->len >= cap)
+		return 0;
+	if (b->len >= 6 && u[0] == 0x80 && u[1] == 1) {
+		/* a PFB: the first segment's length */
+		long seg = (long)u[2] | (long)u[3] << 8 | (long)u[4] << 16 | (long)u[5] << 24;
+
+		if (seg > 0 && seg + 6 <= b->len)
+			return 0;
+		if (seg > 0 && seg + 6 < cap)
+			cap = seg + 6;
+	}
+	sb_free(b);
+	return pdf_stream_head(d, so, onum, cap, b, &whole);
+}
+
+static int t1_builtin(PDOC *d, POBJ *desc, uint16_t *uni)
+{
+	POBJ *r = pd_getraw(desc, "FontFile"), *so;
+	SBUF b;
+	int found, whole;
+	long clear;
+
+	if (!r || r->t != PO_REF)
+		return 0;
+	so = pdf_get(d, r->a);
+	if (!so)
+		return 0;
+	/* the clear-text part (Length1) holds the encoding: no more is read */
+	clear = pd_int(d, so, "Length1", 0);
+	if (clear <= 0 || clear > 65536L)
+		clear = clear > 0 ? 65536L : 32768L;
+	if (pdf_stream_head(d, so, r->a, clear < HEAD_FIRST ? clear : HEAD_FIRST, &b, &whole) != 0)
+		return 0;
+	if (t1_clear(d, so, r->a, clear, &b, whole) != 0)
+		return 0;
+	found = t1_encoding(d, b.s, b.len, uni);
 	sb_free(&b);
 	return found;
 }
+
 
 /* ---- CFF: the built-in encoding of an embedded Type1C font ---- */
 typedef struct { const unsigned char *b; long n; } CBUF;
@@ -716,7 +773,10 @@ static long cff_dict_get(const unsigned char *p, long n, int op, int esc)
 	return -1;
 }
 
-static int cff_encoding(const unsigned char *data, long n, uint16_t *uni)
+/* part: data is the font's first n bytes only; the charset and encoding
+   are taken only when they lie before the CharStrings (as they are put)
+   and so wholly in it */
+static int cff_encoding_in(const unsigned char *data, long n, uint16_t *uni, int part)
 {
 	CBUF c;
 	long off, cnt, dat, top_n, i, enc_off, cs_off, chs_off, nglyphs, scnt, sdat;
@@ -740,7 +800,11 @@ static int cff_encoding(const unsigned char *data, long n, uint16_t *uni)
 				if (o < n && o + l <= n) {
 					c.b = data + o;
 					c.n = l;
-				}
+				} else if (part && o < n) {
+					c.b = data + o;
+					c.n = n - o;
+				} else if (part)
+					return 0;
 				break;
 			}
 	}
@@ -786,7 +850,7 @@ static int cff_encoding(const unsigned char *data, long n, uint16_t *uni)
 	}
 	if (enc_off == 1 || cs_off <= 0)
 		return 0;
-	if (cs_off + 2 > c.n)
+	if (cs_off + 2 > c.n || (part && (enc_off >= cs_off || chs_off >= cs_off)))
 		return 0;
 	nglyphs = cff_u(c.b + cs_off, 2);
 	/* the string index, for the glyph names that are not standard */
@@ -921,23 +985,52 @@ out:
 	return ok;
 }
 
+/* 1 found, 0 not; -1: a head (part) didn't hold it, all of it may */
+static int cff_encoding(const unsigned char *data, long n, uint16_t *uni, int part)
+{
+	int r = cff_encoding_in(data, n, uni, part);
+
+	return part && !r && n >= 4 && (data[0] == 1 || !memcmp(data, "OTTO", 4)) ? -1 : r;
+}
+
+#define CFF_HEAD 32768L		/* the header, its INDEXes, encoding and charset come first */
+
 static int cff_builtin(PDOC *d, POBJ *desc, uint16_t *uni)
 {
 	POBJ *r = pd_getraw(desc, "FontFile3"), *so;
 	SBUF b;
-	const char *term = NULL;
-	int ok;
+	int ok, whole;
 
 	if (!r || r->t != PO_REF)
 		return 0;
 	so = pdf_get(d, r->a);
-	if (!so || pdf_stream(d, so, r->a, &b, &term, 4L << 20) != 0 || term) {
-		sb_free(&b);
+	if (!so || pdf_stream_head(d, so, r->a, HEAD_FIRST, &b, &whole) != 0)
 		return 0;
+	if (b.len >= 2 && ((b.s[0] == (char)0x80 && b.s[1] == 1) || (b.s[0] == '%' && b.s[1] == '!'))) {
+		/* a Type 1 program labelled Type1C (Calamus SL's Bridge) */
+		if (t1_clear(d, so, r->a, 65536L, &b, whole) != 0)
+			return 0;
+		ok = t1_encoding(d, b.s, b.len, uni);
+		sb_free(&b);
+		return ok;
 	}
-	ok = cff_encoding((const unsigned char *)b.s, b.len, uni);
+	ok = cff_encoding((const unsigned char *)b.s, b.len, uni, !whole);
 	sb_free(&b);
-	return ok;
+	if (ok < 0) {
+		/* the encoding or charset lies past the first bytes: more */
+		if (pdf_stream_head(d, so, r->a, CFF_HEAD, &b, &whole) != 0)
+			return 0;
+		ok = cff_encoding((const unsigned char *)b.s, b.len, uni, !whole);
+		sb_free(&b);
+	}
+	if (ok < 0) {
+		/* and past those: all of it */
+		if (pdf_stream_head(d, so, r->a, 4L << 20, &b, &whole) != 0)
+			return 0;
+		ok = cff_encoding((const unsigned char *)b.s, b.len, uni, 0);
+		sb_free(&b);
+	}
+	return ok > 0;
 }
 
 static PFONT *font_load_in(PDOC *d, POBJ *fd, long objnum, PTEXT *t);
@@ -1032,6 +1125,7 @@ static PFONT *font_load_in(PDOC *d, POBJ *fd, long objnum, PTEXT *t)
 			for (c = 0; c < 256; c++)
 				f->uni[c] = base_tab[c];
 		if (desc && !ename && sub && (!strcmp(sub, "Type1") || !strcmp(sub, "MMType1"))) {
+			pause_point(d);
 			if (!t1_builtin(d, desc, f->uni))
 				cff_builtin(d, desc, f->uni);
 		}
@@ -1085,18 +1179,20 @@ static PFONT *font_load_in(PDOC *d, POBJ *fd, long objnum, PTEXT *t)
 		memset(&none, 0, sizeof none);
 		note_prog(d, t, &none, base, f);
 	}
+	pause_point(d);			/* a font's parts are read between the stop hook's calls */
 	tu = pd_get(d, fd, "ToUnicode");
 	if (tu && tu->t == PO_DICT && tu->flag) {
 		SBUF b;
-		const char *term = NULL;
+		int whole;
 		long onum = pd_getraw(fd, "ToUnicode") && pd_getraw(fd, "ToUnicode")->t == PO_REF ? pd_getraw(fd, "ToUnicode")->a : -1;
 
-		if (pdf_stream(d, tu, onum, &b, &term, 8L << 20) == 0 && !term) {
+		/* (all of it, a piece at a time between the stop hook) */
+		if (pdf_stream_head(d, tu, onum, 8L << 20, &b, &whole) == 0) {
 			tounicode_parse(d, f, (const unsigned char *)b.s, b.len);
 			if (!f->composite)
 				fill_simple_from_tu(f);
+			sb_free(&b);
 		}
-		sb_free(&b);
 	}
 	if (f->composite) {
 		if (!f->nbytes)
@@ -1131,9 +1227,11 @@ static PFONT *font_get(PDOC *d, POBJ *fref, PTEXT *t)
 				/* a font from an earlier page is still in this page's font list */
 				return fc->e[i].f;
 			}
+	pause_point(d);
 	fd = pdf_res(d, fref);
 	if (!fd || fd->t != PO_DICT)
 		return NULL;
+	pause_point(d);
 	f = font_load(d, fd, obj, t);
 	if (!f)
 		return NULL;
@@ -1723,6 +1821,7 @@ static int run_content(IX *x, const unsigned char *s, long n)
  */
 #define CWIN 16384L
 #define CMARGIN 4096L
+#define REFILL_PIECE 2048L		/* the content unpacked between stop hooks */
 
 typedef struct CPIECES {
 	PDOC *d;
@@ -1802,10 +1901,25 @@ static void refill(IX *x, const unsigned char **pp, const unsigned char **pe)
 
 	if (keep > 0 && *pp != x->win)
 		memmove(x->win, *pp, (size_t)keep);
-	got = pieces_read(x->src, x->win + keep, x->wcap - keep);
-	if (got <= 0) {
-		x->src_end = 1;
-		got = 0;
+	/* 2 KB at a time, the stop hook between: unpacking 12 KB at once was
+	   a stretch of 400 ms on an ST */
+	got = 0;
+	while (keep + got < x->wcap) {
+		long k = x->wcap - keep - got, r;
+
+		if (k > REFILL_PIECE)
+			k = REFILL_PIECE;
+		if (got)
+			pause_point(x->d);
+		r = pieces_read(x->src, x->win + keep + got, k);
+		if (r <= 0) {
+			if (!got)
+				x->src_end = 1;
+			break;
+		}
+		got += r;
+		if (x->d->stopping)
+			break;
 	}
 	*pp = x->win;
 	*pe = x->win + keep + got;
@@ -2232,12 +2346,89 @@ void ptext_free(PTEXT *t)
 	sb_free(&t->text);
 }
 
-/* Chunks come in nearly the order they are read: an insertion sort takes them in a pass, and
-   gives up for qsort when the order is far from it. */
-static void ch_sort(CH *c, long n, int (*cmp)(const void *, const void *))
+/* Chunks come in nearly the order they are read: an insertion sort takes
+   them in a pass, and gives up for a merge sort of their numbers when the
+   order is far from it (a page of two columns, glyph by glyph: EDOS_01.PDF's
+   4,500 chunks). The libc's qsort on an Atari is a heap sort that swaps a
+   byte at a time: 11 s of such a page on an ST. Stable, as glibc's is, so
+   chunks at one place keep the stream's order on both. */
+static void ch_msort(PDOC *d, CH *c, long n, int (*cmp)(const void *, const void *))
 {
-	long i, moves = 0, limit = n * 6 + 64;
+	/* pointers, not numbers: a number times sizeof(CH) is a multiply
+	   a merge step on a 68000 */
+	CH **m = pdf_malloc(d, 2 * n * (long)sizeof(CH *)), **a = m, **b;
+	long w, i, moved = 0;
 
+	if (!m) {
+		qsort(c, (size_t)n, sizeof(CH), cmp);
+		return;
+	}
+	b = a + n;
+	for (i = 0; i < n; i++)
+		a[i] = c + i;
+	for (w = 1; w < n; w <<= 1) {
+		CH **t;
+
+		for (i = 0; i < n; i += 2 * w) {
+			long mid = i + w < n ? i + w : n, hi = i + 2 * w < n ? i + 2 * w : n;
+			CH **p = a + i, **pe = a + mid, **q = a + mid, **qe = a + hi, **k = b + i;
+
+			while (p < pe && q < qe)
+				*k++ = cmp(*q, *p) < 0 ? *q++ : *p++;
+			while (p < pe)
+				*k++ = *p++;
+			while (q < qe)
+				*k++ = *q++;
+			if (!((i + 2 * w) & 1023))
+				pause_point(d);
+		}
+		t = a;
+		a = b;
+		b = t;
+		pause_point(d);
+	}
+	/* a[k]: the chunk that goes to k; moved there a cycle at a time (each
+	   place's number found once, by its pointer) */
+	for (i = 0; i < n; i++) {
+		long j = i, s;
+		CH t;
+
+		if (a[i] == c + i)
+			continue;
+		t = c[i];
+		for (;;) {
+			s = a[j] - c;
+			a[j] = c + j;
+			if (s == i) {
+				c[j] = t;
+				break;
+			}
+			c[j] = c[s];
+			j = s;
+			if (!(++moved & 255))
+				pause_point(d);
+		}
+	}
+	pdf_free(d, m, 2 * n * (long)sizeof(CH *));
+}
+
+static void ch_sort(PDOC *d, CH *c, long n, int (*cmp)(const void *, const void *))
+{
+	long i, moves = 0, limit = n * 2 + 64, down = 0;
+
+	/* how far from the order: the pairs out of it */
+	for (i = 1; i < n; i++) {
+		if (cmp(&c[i - 1], &c[i]) > 0)
+			down++;
+		if (!(i & 511))
+			pause_point(d);
+	}
+	if (!down)
+		return;
+	if (down > 16 + n / 64) {
+		ch_msort(d, c, n, cmp);
+		return;
+	}
 	for (i = 1; i < n; i++) {
 		CH t = c[i];
 		long j = i;
@@ -2245,9 +2436,11 @@ static void ch_sort(CH *c, long n, int (*cmp)(const void *, const void *))
 		while (j > 0 && cmp(&c[j - 1], &t) > 0) {
 			c[j] = c[j - 1];
 			j--;
-			if (++moves > limit) {
+			if (!(++moves & 255))
+				pause_point(d);
+			if (moves > limit) {
 				c[j] = t;
-				qsort(c, (size_t)n, sizeof(CH), cmp);
+				ch_msort(d, c, n, cmp);
 				return;
 			}
 		}
@@ -2609,7 +2802,7 @@ static long columns(IX *x, LN *ln, long nl)
  */
 static void assemble(IX *x, PTEXT *t)
 {
-	long i, j, nl = 0, k;
+	long i, j, nl = 0, k, turn = 0;
 	LN *ln;
 	int pstart = 1;		/* the line before began a paragraph */
 
@@ -2653,7 +2846,7 @@ static void assemble(IX *x, PTEXT *t)
 		}
 		x->glyphwise = chars < 3 * x->nch && spaces * 20 >= x->nch;	/* a space a word or so */
 	}
-	ch_sort(x->ch, x->nch, ch_cmp_y);
+	ch_sort(x->d, x->ch, x->nch, ch_cmp_y);
 	ln = pdf_malloc(x->d, 2 * x->nch * (long)sizeof(LN));	/* lines split at a gutter: twice as many at most */
 	if (!ln)
 		return;
@@ -2667,7 +2860,13 @@ static void assemble(IX *x, PTEXT *t)
 			j++;
 		}
 		if (j - i > 1)
-			ch_sort(x->ch + i, j - i, ch_cmp_x);
+			ch_sort(x->d, x->ch + i, j - i, ch_cmp_x);
+		if (j - turn >= 256) {
+			/* a line's glyphs sorted left to right take a while, a page's
+			   lines more: EDOS_01.PDF's glyph by glyph */
+			pause_point(x->d);
+			turn = j;
+		}
 		ln[nl].a = i;
 		ln[nl].b = j;
 		ln[nl].y = y0;

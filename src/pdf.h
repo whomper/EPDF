@@ -97,13 +97,16 @@ typedef struct { int32_t num; POBJ *o; } PCENT;
 typedef struct pcrypt PCRYPT;
 
 #define PWIN 16384
+#define POWIN 2048			/* the objects' window: a few objects near each other */
 
 typedef struct pdoc {
 	/* file */
 	void *h;
 	long size;
-	unsigned char *win;
+	unsigned char *win;		/* a stream's bytes read in turn (pdf_rd_seq) */
 	long wbase, wlen, wcap;
+	unsigned char *owin;		/* objects, and the rest (pdf_rd) */
+	long obase, olen;
 	/* cross-reference table and trailer */
 	PXE *xe;
 	long nxe;
@@ -176,7 +179,8 @@ int pdf_stream(PDOC *d, POBJ *o, long onum, SBUF *out, const char **terminal, lo
 /* the stream's stored length, without reading it */
 long pdf_stream_len(PDOC *d, POBJ *o);
 /* a stream's bytes a piece at a time (stored, or Flate with no predictor;
-   not encrypted): NULL where it can't be, and pdf_stream decodes it whole.
+   decrypted as they are read): NULL where it can't be, and pdf_stream
+   decodes it whole.
    pdf_stream_read gives up to n bytes, 0 at the end, -1 damaged */
 typedef struct PCSRC PCSRC;
 PCSRC *pdf_stream_open(PDOC *d, POBJ *o, long onum);
@@ -185,6 +189,9 @@ void pdf_stream_close(PCSRC *s);
 /* the same for a scan or a JPEG (CCITTFaxDecode, DCTDecode; alone or
    after Flate): the coded bytes, before the picture's own filter */
 PCSRC *pdf_stream_open_coded(PDOC *d, POBJ *o, long onum);
+/* the first want bytes of a stream (all of it if shorter), a piece at a
+   time between the reader's stop hook; *whole: 1 if that is all of it */
+int pdf_stream_head(PDOC *d, POBJ *o, long onum, long want, SBUF *out, int *whole);
 
 /* ------------------------------------------------------------------ pages */
 long pdf_pages(PDOC *d);			/* page count; -1 if the tree is broken */

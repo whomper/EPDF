@@ -64,7 +64,8 @@ int pdf_open_hook(PDOC *d, const char *path, int (*stop)(void *ctx), void *ctx)
 	}
 	d->wcap = pdf_os_window();
 	d->win = pdf_malloc(d, d->wcap);
-	if (!d->win) {
+	d->owin = pdf_malloc(d, POWIN);
+	if (!d->win || !d->owin) {
 		set_err(d, "no memory");
 		return -1;
 	}
@@ -118,6 +119,7 @@ void pdf_close(PDOC *d)
 	pdf_free(d, d->xe, d->nxe * (long)sizeof(PXE));
 	pdf_free(d, d->xx, d->capxx * (long)sizeof(PXX));
 	pdf_free(d, d->win, d->wcap);
+	pdf_free(d, d->owin, POWIN);
 	pc_close(d);
 	pa_free(d, &d->a);
 	pa_free(d, &d->doc_a);

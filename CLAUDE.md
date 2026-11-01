@@ -225,4 +225,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   `build/pdftext FILE PAGE [marks]` shows a page's reflowed text on the host. Memory (0.3):
   `build/pdfmem FILE [FIRST [COUNT]]` gives each page's peak in the reader; `PDF_MEMCAP=KB` caps it
   on the host and names each refused allocation's callers; `tests/hatari/big.py WORK [NAME...]`
-  opens the corpus on ST-1 and reports pages and pictures that failed.
+  opens the corpus on ST-1 and reports pages and pictures that failed. Stretches while reading (0.5):
+  measure.py's page lines carry `gap_ms`, the longest stretch between the reader's stop hook's calls,
+  and `tools/gapat.py RUN.jsonl build/m68000/measure.elf` says where it began and ended (a build
+  with `XOPT="-O2 -g"` gives the lines).

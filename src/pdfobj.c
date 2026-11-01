@@ -131,10 +131,14 @@ static void pa_back(PDOC *d, PARENA *a, ACH *head, long used)
 		a->head->used = used;
 }
 
-/* ------------------------------------------------------------------ file window */
-/* The window is what a seek and a read costs once: PWIN bytes at the place
-   asked for, kept for the next read near it. */
-long pdf_rd(PDOC *d, long off, void *buf, long n)
+/* ------------------------------------------------------------------ file windows */
+/* A window is what a seek and a read costs once: its bytes at the place
+   asked for, kept for the next read near it. Two: a stream's bytes, read
+   in turn (PWIN, or twice that on a 68020 and up), and the objects', a few
+   at a time (POWIN). With one, each object read between two pieces of a
+   page's content read 16 KB at the object and 16 KB at the content again:
+   EDOS_01.PDF read 768 KB from the disk for a page of 220 KB. */
+static long rd_win(PDOC *d, unsigned char *w, long *base, long *len, long cap, long off, void *buf, long n)
 {
 	long got = 0, k;
 	unsigned char *b = buf;
@@ -146,15 +150,15 @@ long pdf_rd(PDOC *d, long off, void *buf, long n)
 	while (got < n) {
 		long o = off + got;
 
-		if (o >= d->wbase && o < d->wbase + d->wlen) {
-			k = d->wbase + d->wlen - o;
+		if (o >= *base && o < *base + *len) {
+			k = *base + *len - o;
 			if (k > n - got)
 				k = n - got;
-			memcpy(b + got, d->win + (o - d->wbase), (size_t)k);
+			memcpy(b + got, w + (o - *base), (size_t)k);
 			got += k;
 			continue;
 		}
-		if (n - got >= d->wcap) {	/* big: straight into the caller's buffer */
+		if (n - got >= cap) {	/* big: straight into the caller's buffer */
 			k = pdf_os_read(d->h, o, b + got, n - got);
 			d->st.reads++;
 			d->st.bytes_read += k > 0 ? k : 0;
@@ -163,15 +167,25 @@ long pdf_rd(PDOC *d, long off, void *buf, long n)
 			got += k;
 			continue;
 		}
-		k = pdf_os_read(d->h, o, d->win, d->wcap);
+		k = pdf_os_read(d->h, o, w, cap);
 		d->st.reads++;
 		d->st.bytes_read += k > 0 ? k : 0;
 		if (k <= 0)
 			break;
-		d->wbase = o;
-		d->wlen = k;
+		*base = o;
+		*len = k;
 	}
 	return got;
+}
+
+long pdf_rd(PDOC *d, long off, void *buf, long n)
+{
+	return rd_win(d, d->owin, &d->obase, &d->olen, POWIN, off, buf, n);
+}
+
+long pdf_rd_seq(PDOC *d, long off, void *buf, long n)
+{
+	return rd_win(d, d->win, &d->wbase, &d->wlen, d->wcap, off, buf, n);
 }
 
 /* ------------------------------------------------------------------ lexer */
@@ -899,7 +913,9 @@ static POBJ *parse_indirect(PDOC *d, const unsigned char *buf, long n, int final
 
 static POBJ *load_file_obj(PDOC *d, long num, long off, long gen)
 {
-	long want = 1024, got, a0 = 0;
+	/* 2 KB first: a font with its widths is just over 1 KB, and parsed
+	   twice from a first read of 1 KB took 270 ms on an ST (EDOS_01.PDF) */
+	long want = 2048, got, a0 = 0;
 	unsigned char *buf = NULL;
 	POBJ *o = NULL;
 	int trunc = 0;
@@ -924,7 +940,7 @@ static POBJ *load_file_obj(PDOC *d, long num, long off, long gen)
 		   parsed into the document's arena and kept (pdf_get), while
 		   there is room */
 		pa_back(d, a, h0, u0);
-		want *= 4;
+		want = want == 2048 ? 4096 : want * 4;	/* 4 KB, 16 KB, ... as before */
 		if (want >= 16384 && !page && d->cur == &d->a && !d->skip_kids && d->nkept < 8 && d->kept_bytes < KEPT_MAX) {
 			page = d->cur;
 			d->cur = &d->doc_a;

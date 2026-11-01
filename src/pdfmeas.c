@@ -26,6 +26,29 @@ static long clock_now(const PMEAS *m)
 	return m->us ? m->us() : m->ms() * 1000;
 }
 
+/* the reader's stop hook, never stopping: the longest stretch between
+   its calls (where EPDF hands the machine back), the page's start and end
+   counted as calls */
+static const PMEAS *gap_m;
+static long gap_last, gap_max;
+static void *gap_prev, *gap_from, *gap_to;	/* where it began and ended: the hook's callers */
+
+static int gap_hook(void *ctx)
+{
+	long t = clock_now(gap_m);
+	void *at = __builtin_return_address(0);
+
+	if (t - gap_last > gap_max) {
+		gap_max = t - gap_last;
+		gap_from = gap_prev;
+		gap_to = at;
+	}
+	gap_prev = at;
+	gap_last = t;
+	(void)ctx;
+	return 0;
+}
+
 int pdf_measure(const PMEAS *m, const char *path, const char *name, const char *pages)
 {
 	PDOC *d = malloc(sizeof *d);
@@ -101,9 +124,16 @@ int pdf_measure(const PMEAS *m, const char *path, const char *name, const char *
 		if (m->heap_mark)
 			m->heap_mark();
 		ptext_init(&t);
-		ta = clock_now(m);
+		gap_m = m;
+		d->stop = gap_hook;
+		d->stop_ctx = NULL;
+		gap_max = 0;
+		gap_prev = gap_from = gap_to = NULL;
+		ta = gap_last = clock_now(m);
 		rc = pdf_page_text(d, sel[i], &t);
 		tb = clock_now(m);
+		gap_hook(NULL);
+		d->stop = NULL;
 		s = d->st;
 		if (m->heap_peak)
 			hp = m->heap_peak();
@@ -112,7 +142,7 @@ int pdf_measure(const PMEAS *m, const char *path, const char *name, const char *
 			 "\"streams\":%ld,\"raw_kb\":%ld,\"out_kb\":%ld,\"crypt_kb\":%ld,\"glyphs\":%ld,\"chunks\":%ld,\"chars\":%ld,\"lines\":%ld,"
 			 "\"unmapped\":%ld,\"nomap_fonts\":%ld,\"fonts_new\":%ld,\"fonts_used\":%d,\"prog_kb\":%ld,"
 			 "\"paths\":%ld,\"paints\":%ld,\"images\":%ld,\"img_px\":%ld,\"img_kb\":%ld,\"dct\":%ld,\"jpx\":%ld,\"ccitt\":%ld,\"jbig2\":%ld,\"flate\":%ld,"
-			 "\"forms\":%ld,\"tu_ent\":%ld,\"t_stream\":%ld,\"t_font\":%ld,\"t_asm\":%ld,\"mem_kb\":%ld,\"heap_kb\":%ld}",
+			 "\"forms\":%ld,\"tu_ent\":%ld,\"t_stream\":%ld,\"t_font\":%ld,\"t_asm\":%ld,\"mem_kb\":%ld,\"heap_kb\":%ld,\"gap_ms\":%ld,\"gap_at\":\"%lx %lx %lx\"}",
 			 nm, sel[i] + 1, rc == 0 && !t.failed, tb - ta, s.reads - base.reads, (s.bytes_read - base.bytes_read) / 1024,
 			 s.objs - base.objs, s.objstm_loaded - base.objstm_loaded, s.streams - base.streams, (s.raw_in - base.raw_in) / 1024,
 			 (s.out - base.out) / 1024, (s.crypt_bytes - base.crypt_bytes) / 1024, s.glyphs - base.glyphs, s.chunks - base.chunks,
@@ -122,7 +152,10 @@ int pdf_measure(const PMEAS *m, const char *path, const char *name, const char *
 			 (s.image_raw - base.image_raw) / 1024, s.img_dct - base.img_dct, s.img_jpx - base.img_jpx, s.img_ccitt - base.img_ccitt,
 			 s.img_jbig2 - base.img_jbig2, s.img_flate - base.img_flate, s.forms - base.forms, s.tounicode_ent - base.tounicode_ent,
 			 s.t_stream - base.t_stream, s.t_font - base.t_font, s.t_asm - base.t_asm,
-			 s.mem_peak / 1024, hp >= 0 ? hp / 1024 : -1);
+			 s.mem_peak / 1024, hp >= 0 ? hp / 1024 : -1, gap_max / 1000,
+			 /* the hook's callers where the longest stretch began and
+			    ended, and pdf_measure's own address to place them */
+			 (unsigned long)gap_from, (unsigned long)gap_to, (unsigned long)pdf_measure);
 		m->emit(line);
 		if (m->text && t.text.s)
 			m->text(sel[i] + 1, t.text.s, t.text.len);
