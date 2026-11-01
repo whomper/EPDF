@@ -1215,6 +1215,7 @@ typedef struct {
 	fx rm[4];			/* the chunk being shown: origin x, y and the advance direction */
 	fx rfs;
 	fx page_area;			/* the page's width x height / 65536 (points squared, 16.16) */
+	int glyphwise;			/* the page set a glyph at a time with its spaces as characters (emit_line) */
 } IX;
 
 static const fx IDENT[6] = { FX_ONE, 0, 0, FX_ONE, 0, 0 };
@@ -2293,7 +2294,25 @@ static void emit_line(IX *x, CH *c, long a, long b, PTEXT *t)
 {
 	long i, runstart;
 	SBUF *o = &t->text;
+	fx gapmin = 9830;		/* 0.15 em: a gap that is a space between words */
+	long chars = 0;
+	int spaces = 0;
 
+	/* a line set a glyph at a time (its pieces under 3 characters on
+	   average) that has its spaces as characters takes only a wide gap
+	   (0.8 em: a tab, a column) as one more: its glyphs may be narrower
+	   than the line sets them (Calamus SL's PDFs, through its Bridge: each
+	   glyph placed alone, the font's widths its ink, "t h e di ffer e n
+	   ce", Erez's EDOS_01.PDF, 1 Nov 2026) */
+	for (i = a; i < b; i++) {
+		chars += c[i].len;
+		if (!spaces && memchr(x->txt.s + c[i].off, ' ', (size_t)c[i].len))
+			spaces = 1;
+	}
+	/* (a line of one word, a heading's last, has no space of its own: the
+	   page's tell) */
+	if ((spaces || x->glyphwise) && chars < 3 * (b - a))
+		gapmin = 52429;
 	for (i = a; i < b;) {
 		int rtl = is_rtl_text(x->txt.s + c[i].off, c[i].len);
 
@@ -2303,7 +2322,7 @@ static void emit_line(IX *x, CH *c, long a, long b, PTEXT *t)
 				fx gap = c[i].x - (c[i - 1].x + c[i - 1].dx);
 				fx fs = c[i].fs > c[i - 1].fs ? c[i].fs : c[i - 1].fs;
 
-				if (gap > fxmul(fs, 9830) && o->len && o->s[o->len - 1] != ' ' && !c[i].sp)	/* 0.15 em */
+				if (gap > fxmul(fs, gapmin) && o->len && o->s[o->len - 1] != ' ' && !c[i].sp)
 					sb_addc(o, ' ');
 			}
 			sb_add(o, x->txt.s + c[i].off, c[i].len);
@@ -2403,6 +2422,56 @@ typedef struct {
 #define GBINS 128
 
 /*
+ * The gutter where too few lines have a gap in it for the vote (lines
+ * wholly in their column: the columns' baselines apart, so one isn't set
+ * beside the other; Calamus SL's EDOS_01.PDF, 1 Nov 2026): a strip near
+ * the middle of the text that at most a tenth of the lines cross without
+ * a gap there (votes: the lines with one), with at least three tenths of
+ * the lines having text on each side of it. Its middle, or 0.
+ */
+static fx clear_strip(const LN *ln, long nl, fx lo, fx width, long nb, const short *votes)
+{
+	short cover[GBINS];
+	long k, b, from = -1, run = 0, best = -1, bestrun = 0, nleft, nright;
+	fx g0, g1;
+
+	memset(cover, 0, sizeof cover);
+	for (k = 0; k < nl; k++) {
+		long b0 = (ln[k].x0 - lo) / GBIN, b1 = (ln[k].x1 - lo) / GBIN;
+
+		for (b = b0 < 0 ? 0 : b0; b <= b1 && b < nb; b++)
+			cover[b]++;
+	}
+	/* the widest run of such bins within the middle 30-70 % */
+	for (b = 0; b <= nb; b++) {
+		fx at = lo + b * GBIN + GBIN / 2;
+		int ok = b < nb && (cover[b] - votes[b]) * 10L <= nl && at >= lo + width * 3 / 10 &&
+			 at <= lo + width * 7 / 10;
+
+		if (ok) {
+			if (!run++)
+				from = b;
+		} else if (run) {
+			if (run > bestrun)
+				best = from, bestrun = run;
+			run = 0;
+		}
+	}
+	if (best < 0)
+		return 0;
+	g0 = lo + best * GBIN;
+	g1 = lo + (best + bestrun) * GBIN;
+	nleft = nright = 0;
+	for (k = 0; k < nl; k++) {
+		nleft += ln[k].x0 < g0;
+		nright += ln[k].x1 > g1;
+	}
+	if (nleft * 10 < nl * 3 || nright * 10 < nl * 3)
+		return 0;
+	return (g0 + g1) / 2;
+}
+
+/*
  * Two columns side by side read one after the other (with t->soft, the
  * text view's): where many lines have a gap wider than 1.5 em at the same
  * place, near the middle of the text, that is a gutter. The lines are cut
@@ -2436,21 +2505,39 @@ static long columns(IX *x, LN *ln, long nl)
 
 		for (c = ln[k].a + 1; c < ln[k].b; c++) {
 			fx end = x->ch[c - 1].x + x->ch[c - 1].dx, gap = x->ch[c].x - end;
+			/* the smaller of the two sides' sizes: a heading beside the
+			   other column's text (EDOS_01.PDF's "Next time") */
+			fx fs = x->ch[c].fs < x->ch[c - 1].fs ? x->ch[c].fs : x->ch[c - 1].fs;
 
-			if (gap > ln[k].fs + (ln[k].fs >> 1)) {
-				long b = (end + gap / 2 - lo) / GBIN;
+			if (gap > fs + (fs >> 1)) {
+				/* each bin whose middle the gap covers (a ragged column's
+				   lines end anywhere: their gaps' middles spread over
+				   several bins, EDOS_01.PDF), else the one at its middle;
+				   a gap over 8 em (a map's open sea) its middle alone */
+				long b0 = (end - lo + GBIN / 2 + GBIN - 1) / GBIN, b1 = (x->ch[c].x - lo - GBIN / 2) / GBIN, b;
 
-				if (b >= 0 && b < nb && b != last)
-					votes[b]++, last = b;
+				if (b1 < b0 || gap > 8 * fs)
+					b0 = b1 = (end + gap / 2 - lo) / GBIN;
+				for (b = b0 > last ? b0 : last + 1; b <= b1; b++)
+					if (b >= 0 && b < nb)
+						votes[b]++, last = b;
 			}
 		}
 	}
 	for (k = 0; k < nb; k++)
 		if (best < 0 || votes[k] > votes[best])
 			best = k;
-	gutter = lo + best * GBIN + GBIN / 2;
-	if (best < 0 || votes[best] < 6 || votes[best] * 10L < nl * 3 ||
-	    gutter < lo + width * 3 / 10 || gutter > lo + width * 7 / 10)
+	/* the middle of the run of bins with that many votes */
+	if (best >= 0) {
+		long e = best;
+
+		while (e + 1 < nb && votes[e + 1] == votes[best])
+			e++;
+		gutter = lo + (best + e + 1) * GBIN / 2;
+	} else
+		gutter = 0;
+	if ((best < 0 || votes[best] < 6 || votes[best] * 10L < nl * 3 ||
+	     gutter < lo + width * 3 / 10 || gutter > lo + width * 7 / 10) && (gutter = clear_strip(ln, nl, lo, width, nb, votes)) == 0)
 		return nl;
 	left = ln + nl;			/* the room after the lines: the left column, then the right */
 	out = pdf_malloc(x->d, 2 * nl * (long)sizeof(LN));
@@ -2470,9 +2557,12 @@ static long columns(IX *x, LN *ln, long nl)
 				right[nr++] = *l;
 				continue;
 			}
-			/* a gap round the gutter: the line cut there */
+			/* a gap round the gutter, as wide as the vote's, the line cut
+			   there (a narrower one is between a heading's letters) */
 			for (c = l->a + 1; c < l->b; c++)
-				if (x->ch[c - 1].x + x->ch[c - 1].dx <= gutter && x->ch[c].x >= gutter) {
+				if (x->ch[c - 1].x + x->ch[c - 1].dx <= gutter && x->ch[c].x >= gutter &&
+				    x->ch[c].x - (x->ch[c - 1].x + x->ch[c - 1].dx) >
+					    (x->ch[c].fs < x->ch[c - 1].fs ? x->ch[c].fs : x->ch[c - 1].fs) * 3 / 2) {
 					m = c;
 					break;
 				}
@@ -2536,6 +2626,27 @@ static void assemble(IX *x, PTEXT *t)
 			if ((fxmul(t->img[i].dw, t->img[i].dh >> 8) >> 8) * 5 < x->page_area * 3)
 				t->img[j++] = t->img[i];
 		t->nimg = j;
+	}
+	/* a space the stream puts before a glyph that stands a little left of
+	   it (a heading set tight: "The" space "EDOS", the space at 107.9, the
+	   E at 105.0, EDOS_01.PDF) sorted just before that glyph */
+	for (i = 1; i + 1 < x->nch; i++) {
+		CH *p = &x->ch[i - 1], *s = &x->ch[i], *n = &x->ch[i + 1];
+
+		/* (left to right: the glyph before it on its left; in Hebrew the
+		   next glyph is on the left anyway) */
+		if (s->len == 1 && x->txt.s[s->off] == ' ' && fxabs(n->y - s->y) < (s->fs >> 1) && n->x < s->x &&
+		    n->x > s->x - (s->fs >> 1) && fxabs(p->y - s->y) < (s->fs >> 1) && p->x < n->x)
+			s->x = n->x - 1;
+	}
+	{
+		long chars = 0, spaces = 0;
+
+		for (i = 0; i < x->nch; i++) {
+			chars += x->ch[i].len;
+			spaces += x->ch[i].len == 1 && x->txt.s[x->ch[i].off] == ' ';
+		}
+		x->glyphwise = chars < 3 * x->nch && spaces * 20 >= x->nch;	/* a space a word or so */
 	}
 	ch_sort(x->ch, x->nch, ch_cmp_y);
 	ln = pdf_malloc(x->d, 2 * x->nch * (long)sizeof(LN));	/* lines split at a gutter: twice as many at most */
