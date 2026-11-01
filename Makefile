@@ -80,6 +80,7 @@ test: build/test_xe build/test_ccitt build/test_textview build/test_inf build/te
 	build/test_xe
 	python3 tests/ccitt.py
 	python3 tests/glyphwise.py
+	python3 tests/crypt.py
 	build/test_textview
 	build/test_inf
 	build/test_tstore build

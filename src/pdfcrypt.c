@@ -229,14 +229,39 @@ int pc_open(PDOC *d, POBJ *enc, POBJ *id)
 			free(c);
 			return 1;
 		}
-		if (hash_r56(d, r, U + 32, NULL, 0, h) != 0 || memcmp(h, U, 32) != 0) {
-			free(c);
-			return 1;		/* the user password is not empty */
+		/* the file key from the empty password (its key salt), then
+		   checked by /Perms (ISO 32000-2, algorithm 13: "adb" in its
+		   bytes 9 to 11 when the key is right): one hash where the
+		   password's own check took another, the most of an open on a
+		   68000 (revision 6: 165 s on an 8 MHz ST, 1 Nov 2026). Without
+		   /Perms, the password's hash as before */
+		long pn;
+		const unsigned char *Pm = str_of(d, enc, "Perms", &pn);
+
+		if (!Pm || pn < 16) {
+			if (hash_r56(d, r, U + 32, NULL, 0, h) != 0 || memcmp(h, U, 32) != 0) {
+				free(c);
+				return 1;	/* the user password is not empty */
+			}
 		}
-		hash_r56(d, r, U + 40, NULL, 0, ik);
+		if (hash_r56(d, r, U + 40, NULL, 0, ik) != 0) {
+			free(c);
+			return 1;
+		}
 		memcpy(c->key, UE, 32);
 		memset(iv, 0, 16);
 		aes_cbc_dec(ik, 32, iv, c->key, 32);
+		if (Pm && pn >= 16) {
+			unsigned char pm[16];
+
+			memcpy(pm, Pm, 16);
+			memset(iv, 0, 16);
+			aes_cbc_dec(c->key, 32, iv, pm, 16);	/* one block, a zero IV: ECB */
+			if (pm[9] != 'a' || pm[10] != 'd' || pm[11] != 'b') {
+				free(c);
+				return 1;	/* the user password is not empty */
+			}
+		}
 		c->klen = 32;
 		(void)OE;
 		d->crypt = c;
