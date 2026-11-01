@@ -6,11 +6,13 @@
     profile.py MACHINE[:SCREEN] CPU DOC=PAGES [N]
 
 The program is MEASURE.PRG with its symbols (tools/prgsyms.py); it ends on an illegal
-instruction, Hatari's debugger (-D) takes over and runs 'profile cycles' on commands
-fed to it; tools/profsum.py adds the addresses up per function (the program's text
-starts where TOS loaded it: 0x1dfc4 on these machines). Prints the N busiest functions.
+instruction, Hatari's debugger takes over (--debug-except illegal,autostart: not at
+EmuTOS's own probes while it boots) and runs 'profile cycles' on commands fed to it;
+tools/profsum.py adds the addresses up per function (where TOS loaded the text: a
+symbol 'profile symbols' names, against the ELF). Prints the N busiest functions.
 """
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -44,14 +46,25 @@ def main(argv):
     start = os.path.join(hd, "start.txt")
     open(start, "w").write("profile on\n")
     cmd = ["hatari"] + m.args() + ["--natfeats", "yes", "--fast-forward", "yes", "--statusbar", "no", "--log-level", "warn",
-                                   "-D", "--debug-except", "illegal", "--parse", start, "--auto", "C:\\MEASURE.PRG"]
+                                   "--debug-except", "illegal,autostart", "--parse", start, "--auto", "C:\\MEASURE.PRG"]
     out = os.path.join(hd + ".prof.txt")
-    r = subprocess.run(cmd, env=m.env(), input="symbols prg\nprofile cycles 8000\nq\n", stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=3600)
+    r = subprocess.run(cmd, env=m.env(), input="symbols prg\nprofile symbols 20\nprofile cycles 8000\nq\n", stdout=subprocess.PIPE,
+                       stderr=subprocess.STDOUT, text=True, timeout=3600)
     open(out, "w").write(r.stdout)
     for ln in r.stdout.replace("}{", "}\n{").splitlines():
         if ln.startswith('{"file"'):
             print(ln[:260])
-    subprocess.run([sys.executable, os.path.join(TOP, "tools", "profsum.py"), out, elf, "1dfc4", top])
+    # where TOS put the text: a symbol 'profile symbols' named, against the ELF
+    nm = dict((l.split()[2], int(l.split()[0], 16)) for l in subprocess.run(
+        ["m68k-linux-gnu-nm", "--defined-only", elf], capture_output=True, text=True).stdout.splitlines() if len(l.split()) == 3)
+    base = None
+    for mm in re.finditer(r"^0x([0-9a-f]+)\s+[\d.]+\s+\d+\s+(\S+)", r.stdout, re.M):
+        if mm.group(2) in nm:
+            base = int(mm.group(1), 16) - nm[mm.group(2)]
+            break
+    if base is None:
+        sys.exit("profile.py: no symbol in the profile to place the text; see " + out)
+    subprocess.run([sys.executable, os.path.join(TOP, "tools", "profsum.py"), out, elf, "%x" % base, top])
 
 
 if __name__ == "__main__":

@@ -574,12 +574,15 @@ static int pdf_stream_in(PDOC *d, POBJ *o, long onum, SBUF *out, const char **te
  * unpacked by common's inflate_open/inflate_read (40 KB). Anything else
  * gives NULL, and the caller decodes it whole (pdf_stream) as before.
  */
-#define PCSRC_INFLATE 41000L		/* inflate.c's state, about: counted in st.mem while open */
+#define PCSRC_INFLATE 73000L		/* inflate_open_piece's state, about: counted in st.mem while open */
 
 struct PCSRC {
 	PDOC *d;
 	long off, left;			/* the stored bytes still to read, in the file */
 	INFLATE *z;			/* NULL: stored as it is */
+	const unsigned char *pp;	/* inflate_piece's piece, and what is left of it */
+	long pn;
+	int pend;			/* inflate_piece said the end (0) or damage (-1) */
 };
 
 static int pcsrc_get(void *u, unsigned char *buf, long n)
@@ -665,7 +668,9 @@ static PCSRC *src_open(PDOC *d, POBJ *o, int image)
 	s->left = len;
 	s->z = NULL;
 	if (flate) {
-		s->z = inflate_open(pcsrc_get, s);
+		s->z = inflate_open_piece(pcsrc_get, s);
+		s->pn = 0;
+		s->pend = 1;
 		if (!s->z) {
 			d->st.oom++;
 			pdf_free(d, s, (long)sizeof *s);
@@ -691,9 +696,41 @@ PCSRC *pdf_stream_open_coded(PDOC *d, POBJ *o, long onum)
 	return src_open(d, o, 1);
 }
 
+/*
+ * A stream's bytes from inflate_piece's pieces: its hot loop is common's
+ * assembly on the Atari (atari/inflate_fast.S, INFLATE_ASM), where
+ * inflate_read's C took a map's page 89 s of 232 on an ST; 46 s now. Its
+ * buffer is the window too: 72 KB a stream open, inflate_open's 40.
+ */
+static long piece_read(PCSRC *s, unsigned char *out, long n)
+{
+	long k = 0;
+
+	while (k < n) {
+		long m;
+
+		if (s->pn <= 0) {
+			if (s->pend <= 0)
+				return k ? k : s->pend;
+			s->pn = inflate_piece(s->z, &s->pp, 32768L, 0);
+			if (s->pn <= 0) {
+				s->pend = (int)s->pn;
+				s->pn = 0;
+				return k ? k : s->pend;
+			}
+		}
+		m = n - k < s->pn ? n - k : s->pn;
+		memcpy(out + k, s->pp, (size_t)m);
+		s->pp += m;
+		s->pn -= m;
+		k += m;
+	}
+	return k;
+}
+
 long pdf_stream_read(PCSRC *s, unsigned char *out, long n)
 {
-	long k = s->z ? inflate_read(s->z, out, n) : pcsrc_get(s, out, n);
+	long k = s->z ? piece_read(s, out, n) : pcsrc_get(s, out, n);
 
 	if (k > 0)
 		s->d->st.out += k;

@@ -14,6 +14,7 @@
 #include <string.h>
 #include "tos.h"
 #include "view/textview.h"
+#include "lexnum.h"
 
 long nf_find(const char *name);
 long nf_call2(long id, long arg);
@@ -72,6 +73,52 @@ static long ref_layout(const char *text, long len, int cols, unsigned long *star
 			break;
 	}
 	return n;
+}
+
+/* lex_number as pdfobj.c had it, its fraction rounded exactly */
+static int ref_number(const unsigned char *s, const unsigned char *e, fx *fxv, int32_t *iv, int *isreal)
+{
+	int neg = 0, digits = 0, fd = 0, real = 0;
+	uint32_t ip = 0, fp = 0;
+
+	if (s < e && (*s == '+' || *s == '-')) {
+		neg = *s == '-';
+		s++;
+	}
+	while (s < e && *s == '-')
+		s++;
+	while (s < e && *s >= '0' && *s <= '9') {
+		ip = ip < 429496729u ? ip * 10 + (uint32_t)(*s - '0') : 0xFFFFFFFFu;
+		s++;
+		digits++;
+	}
+	if (s < e && *s == '.') {
+		real = 1;
+		s++;
+		while (s < e && *s >= '0' && *s <= '9') {
+			if (fd < 5) {
+				fp = fp * 10 + (uint32_t)(*s - '0');
+				fd++;
+			}
+			s++;
+			digits++;
+		}
+	}
+	if (!digits || s != e)
+		return 0;
+	*isreal = real;
+	*iv = neg ? -(int32_t)ip : (int32_t)ip;
+	if (ip > 32767)
+		ip = 32767;
+	{
+		static const uint32_t pw[6] = { 1, 10, 100, 1000, 10000, 100000 };
+		uint32_t v = ip << 16;
+
+		if (real && fd)
+			v += fd < 5 ? (fp * 65536u + pw[fd] / 2) / pw[fd] : (fp * 4096u + 3125u) / 6250u;
+		*fxv = neg ? -(fx)v : (fx)v;
+	}
+	return 1;
 }
 
 static char page[40000];
@@ -142,6 +189,54 @@ int main(void)
 	if (tv_find(page, (long)sizeof page - 1, '\r') != -1) {
 		say("viewtest: FAIL find not there");
 		bad++;
+	}
+	/* lexnum.h's fractions (divu.w here): every fp of 1 to 5 places,
+	   against the exact rounding in 32 bits (five places: both sides
+	   divided by 16) */
+	{
+		static const uint32_t pw[6] = { 1, 10, 100, 1000, 10000, 100000 };
+		int fd;
+
+		for (fd = 1; fd <= 5 && bad < 5; fd++) {
+			uint32_t fp;
+
+			for (fp = 0; fp < pw[fd]; fp++) {
+				uint32_t w = fd < 5 ? (fp * 65536u + pw[fd] / 2) / pw[fd] : (fp * 4096u + 3125u) / 6250u;
+
+				if (frac_fx(fp, fd) != w) {
+					snprintf(line, sizeof line, "viewtest: FAIL frac_fx(%lu, %d) %lu, wanted %lu", (unsigned long)fp, fd,
+						 (unsigned long)frac_fx(fp, fd), (unsigned long)w);
+					say(line);
+					bad++;
+					break;
+				}
+			}
+		}
+	}
+	/* lex_number_at (its digits a dbra loop here) against the plain C
+	   of lex_number, on made-up runs of 0-9 . + - and what follows */
+	for (t = 0; t < 20000 && bad < 10; t++) {
+		static const char al[] = "0123456789012345678901234567890123456789.-+ ";
+		char tok[24];
+		int len = 1 + (int)rnd(16), k, ok, real = 0, r2 = 0, ok2;
+		fx f = 0, f2 = 0;
+		int32_t iv = 0, i2 = 0;
+		const unsigned char *q, *e, *got;
+
+		for (k = 0; k < len; k++)
+			tok[k] = al[rnd(sizeof al - 1)];
+		tok[len] = 0;
+		e = (const unsigned char *)tok + len;
+		for (q = (const unsigned char *)tok; q < e && ((*q >= '0' && *q <= '9') || *q == '.' || *q == '-' || *q == '+'); q++)
+			;
+		ok = ref_number((const unsigned char *)tok, q, &f, &iv, &real);
+		got = lex_number_at((const unsigned char *)tok, e, &f2, &i2, &r2, &ok2);
+		if (got != q || ok != ok2 || (ok && (f != f2 || iv != i2 || real != r2))) {
+			snprintf(line, sizeof line, "viewtest: FAIL number \"%s\": %d %ld %ld, wanted %d %ld %ld", tok, ok2, (long)f2,
+				 (long)i2, ok, (long)f, (long)iv);
+			say(line);
+			bad++;
+		}
 	}
 	say(bad ? "viewtest: FAILED" : "viewtest: ok");
 	nf_name = "NF_EXIT";

@@ -120,6 +120,9 @@ build/$(1)/crt0.o: common/atari/crt0.S | build/$(1)
 	$$(XCC) $$(XCPU) -DSTACK_SIZE=$$(STACK_SIZE) -c -o $$@ $$<
 build/$(1)/nf.o: common/atari/nf.S | build/$(1)
 	$$(XCC) $$(XCPU) -c -o $$@ $$<
+build/$(1)/inflate_fast.o: common/atari/inflate_fast.S | build/$(1)
+	$$(XCC) $$(XCPU) -c -o $$@ $$<
+build/$(1)/common/src/inflate.o build/$(1)/src/pdffilt.o: XFLAGS += -DINFLATE_ASM
 build/$(1):
 	mkdir -p $$@
 endef
@@ -140,16 +143,16 @@ OBJS = $(patsubst %.c,%.o,$(ATARI_SRC))
 binary:
 	mkdir -p binary
 binary/MEASURE.PRG: XCPU = -m68000 -mstrict-align -fdisable-tree-bswap
-binary/MEASURE.PRG: $(addprefix build/m68000/,$(OBJS)) build/m68000/crt0.o build/m68000/nf.o common/atari/link.ld | binary
+binary/MEASURE.PRG: $(addprefix build/m68000/,$(OBJS)) build/m68000/crt0.o build/m68000/nf.o build/m68000/inflate_fast.o common/atari/link.ld | binary
 	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68000/measure.elf \
-	  build/m68000/crt0.o build/m68000/nf.o $(addprefix build/m68000/,$(OBJS)) -lgcc
+	  build/m68000/crt0.o build/m68000/nf.o build/m68000/inflate_fast.o $(addprefix build/m68000/,$(OBJS)) -lgcc
 	python3 common/tools/elf2tos.py build/m68000/measure.elf $@
 binary/MEAS30.PRG: XCPU = -m68030 -msoft-float
-binary/MEAS30.PRG: $(addprefix build/m68030/,$(OBJS)) build/m68030/crt0.o build/m68030/nf.o common/atari/link.ld | binary
+binary/MEAS30.PRG: $(addprefix build/m68030/,$(OBJS)) build/m68030/crt0.o build/m68030/nf.o build/m68030/inflate_fast.o common/atari/link.ld | binary
 	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68030/measure.elf \
-	  build/m68030/crt0.o build/m68030/nf.o $(addprefix build/m68030/,$(OBJS)) -lgcc
+	  build/m68030/crt0.o build/m68030/nf.o build/m68030/inflate_fast.o $(addprefix build/m68030/,$(OBJS)) -lgcc
 	python3 common/tools/elf2tos.py build/m68030/measure.elf $@
 
 # ---------------------------------------------------------------- FreeType (third_party/freetype, 2.13.3)
@@ -288,7 +291,7 @@ build/m68000/coro.o: src/gem/coro.S | build/m68000
 build/m68000/crash_s.o: common/atari/crash.S | build/m68000
 	$(XCC) $(XCPU) -c -o $@ $<
 binary/EPDF.PRG: XCPU = -m68000 -mstrict-align -fdisable-tree-bswap
-EPDF_OBJS = $(GEM_OBJ) $(addprefix build/m68000/,$(patsubst %.c,%.o,$(RT_C))) $(addprefix build/m68000/,$(patsubst %.c,%.o,$(PDF_SRC) src/pdfio_tos.c $(COMMON_SRC))) $(addprefix build/m68000/,$(patsubst %.c,%.o,$(BSSL_SRC)))
+EPDF_OBJS = $(GEM_OBJ) build/m68000/inflate_fast.o $(addprefix build/m68000/,$(patsubst %.c,%.o,$(RT_C))) $(addprefix build/m68000/,$(patsubst %.c,%.o,$(PDF_SRC) src/pdfio_tos.c $(COMMON_SRC))) $(addprefix build/m68000/,$(patsubst %.c,%.o,$(BSSL_SRC)))
 binary/EPDF.PRG: $(EPDF_OBJS) build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o common/atari/link.ld | binary
 	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68000/epdf.elf \

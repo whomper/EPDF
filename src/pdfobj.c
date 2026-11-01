@@ -217,11 +217,13 @@ void lex_skip(LEX *x)
 	}
 }
 
+#include "lexnum.h"
+
 /* "12", "-3", "4.25", ".5", "+7": the value as fx and as an integer */
 int lex_number(const unsigned char *s, const unsigned char *e, fx *fxv, int32_t *iv, int *isreal)
 {
 	int neg = 0, digits = 0, fd = 0, real = 0;
-	uint32_t ip = 0, fp = 0, scale = 1;
+	uint32_t ip = 0, fp = 0;
 
 	if (s < e && (*s == '+' || *s == '-')) {
 		neg = *s == '-';
@@ -240,7 +242,6 @@ int lex_number(const unsigned char *s, const unsigned char *e, fx *fxv, int32_t 
 		while (s < e && *s >= '0' && *s <= '9') {
 			if (fd < 5) {
 				fp = fp * 10 + (uint32_t)(*s - '0');
-				scale *= 10;
 				fd++;
 			}
 			s++;
@@ -256,12 +257,13 @@ int lex_number(const unsigned char *s, const unsigned char *e, fx *fxv, int32_t 
 	{
 		uint32_t v = ip << 16;
 
-		if (real)
-			v += (fp * 65536u + scale / 2) / scale;	/* fp < 10^5: fp * 65536 < 2^32 */
+		if (real && fd)
+			v += frac_fx(fp, fd);
 		*fxv = neg ? -(fx)v : (fx)v;
 	}
 	return 1;
 }
+
 
 static int hexv(int c)
 {

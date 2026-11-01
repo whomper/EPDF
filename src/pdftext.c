@@ -13,6 +13,7 @@
 #include <string.h>
 #include "pdf.h"
 #include "pdfint.h"
+#include "lexnum.h"
 #include "pdftab.h"
 
 /* ------------------------------------------------------------------ fonts */
@@ -1878,7 +1879,12 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 			return -1;
 
 		if (is_white_c(c)) {
-			p++;
+			/* a run of white space in one go: a map's content is mostly
+			   numbers and the spaces between them, and each turn of
+			   this loop has its refill, slice and stop tests */
+			do
+				p++;
+			while (p < e && is_white_c(*p));
 			continue;
 		}
 		if (c == '%') {
@@ -1887,14 +1893,13 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 			continue;
 		}
 		if ((c >= '0' && c <= '9') || c == '-' || c == '+' || c == '.') {
-			const unsigned char *q = p;
+			const unsigned char *q;
 			fx f;
 			int32_t iv;
-			int real;
+			int real, ok;
 
-			while (q < e && ((*q >= '0' && *q <= '9') || *q == '.' || *q == '-' || *q == '+'))
-				q++;
-			if (!lex_number(p, q, &f, &iv, &real))
+			q = lex_number_at(p, e, &f, &iv, &real, &ok);	/* found and read in one pass */
+			if (!ok)
 				f = 0;
 			else if (!real && iv > 32767)
 				f = FX_INT(32767);
