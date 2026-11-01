@@ -6,6 +6,10 @@ common/tests/speed/speed.py:
 
     speed.py WORK [MACHINE...]        (default: ST:mono ST:med Falcon-4:16)
 
+The hub's switches, from the environment: AERA_WITH_NVDI=1 (NVDI),
+EPDF_PROF_PRG (another profiled build), EPDF_FONT ("name,size" into
+EPDF.INF), XDISPLAY (the display).
+
 EPDF.PRG built with -DAES_PROFILE=20 (make speed-test builds it into
 build/aprof) starts on a 30-page book made here (pdfgen.py), through
 LAUNCH.PRG as a desktop would start it with a file. Each action's
@@ -14,6 +18,7 @@ time. The first scrolls come while the pages are still being read in the
 background: what a key waits for then is the page reading stopping.
 """
 import os
+import shutil
 import sys
 import time
 
@@ -38,9 +43,18 @@ def mouse(r, x, y, what):
 
 
 def run(work, machine):
-    r = speed.Rig(os.path.join(work, machine.replace(":", "_")), machine)
+    # the hub's runs (switches, from the environment): AERA_WITH_NVDI=1
+    # boots NVDI; EPDF_PROF_PRG another profiled build (0.3's, to compare);
+    # EPDF_FONT a font in EPDF.INF ("Courier 10 Pitch,14"); XDISPLAY the
+    # display
+    r = speed.Rig(os.path.join(work, machine.replace(":", "_")), machine,
+                  nvdi=os.environ.get("AERA_WITH_NVDI") == "1", display=os.environ.get("XDISPLAY", ":91"))
     try:
-        r.put(os.path.join(TOP, "build", "aprof", "EPDF.PRG"), "EPDF")
+        prg = os.environ.get("EPDF_PROF_PRG") or os.path.join(TOP, "build", "aprof", "EPDF.PRG")
+        os.makedirs(os.path.join(r.hd, "EPDF"), exist_ok=True)
+        shutil.copy(prg, os.path.join(r.hd, "EPDF", "EPDF.PRG"))
+        if os.environ.get("EPDF_FONT"):
+            r.write("EPDF/EPDF.INF", "FONT=%s\n" % os.environ["EPDF_FONT"])
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
         make_pdf(os.path.join(r.hd, "BOOK.PDF"), book(30))
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\BOOK.PDF\n")
