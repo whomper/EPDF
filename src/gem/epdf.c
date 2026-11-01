@@ -904,7 +904,11 @@ int main(void)
 			x = y = w = h = 0;
 	}
 
-	if (menu_build(&menu, cw, ch, scr_w, scr_h) == 0) {
+	/* the AES's cell, not the view's: font_init has set cw and ch to the
+	   document's font (Courier 14 spread the titles and cut their tops,
+	   and the bar took no clicks where its titles belong; the hub, 1 Nov
+	   2026) */
+	if (menu_build(&menu, gl_wchar, gl_hchar, scr_w, scr_h) == 0) {
 		has_menu = menu_bar(menu.tree, 1) != 0;
 		if (has_menu)
 			menu_icheck(menu.tree, mbar_object(&menu, CMD_LINES), lines_mode);

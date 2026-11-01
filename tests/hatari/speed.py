@@ -8,7 +8,9 @@ common/tests/speed/speed.py:
 
 The hub's switches, from the environment: AERA_WITH_NVDI=1 (NVDI),
 EPDF_PROF_PRG (another profiled build), EPDF_FONT ("name,size" into
-EPDF.INF), XDISPLAY (the display).
+EPDF.INF), XDISPLAY (the display). A run with EPDF_FONT compares the
+menu bar with the one a system-font run left in the same WORK
+(WORK/menubar-MACHINE.png): run that one first.
 
 EPDF.PRG built with -DAES_PROFILE=20 (make speed-test builds it into
 build/aprof) starts on a 30-page book made here (pdfgen.py), through
@@ -79,9 +81,31 @@ def held_press(r, what, x, y, mods=()):
     return what, differ(held, after), differ(before, after)
 
 
+# a menu command's screen changes by more than the pointer does (16 x 16,
+# where it was and where it is: a missed menu changed the screen by that,
+# and passed, the hub's Courier run, 1 Nov 2026)
+MENU_CHANGED = 2000
+
+
+def menu_bar(r, shot, font):
+    """the menu bar of a shot (its top 19 rows) kept as WORK/menubar-MACHINE
+    for the system font; with EPDF_FONT, the pixels it differs from that
+    one by (the bar is the AES's, in the system font, whatever the
+    document's font: Courier 14 laid it out with its own cell, the hub, 1
+    Nov 2026), None when there is no system-font run in WORK to compare"""
+    ref = os.path.join(os.path.dirname(r.work), "menubar-%s.png" % os.path.basename(r.work))
+    bar = os.path.join(r.shots, "menubar.png")
+    subprocess.run(["convert", shot, "-crop", "640x19+0+0", "+repage", bar], check=True)
+    if not font:
+        shutil.copy(bar, ref)
+        return 0
+    return differ(bar, ref) if os.path.exists(ref) else None
+
+
 def menu_act(r, what, budget, title_x, row_y):
     """a menu command as an action; gives (what, pixels the screen changed
-    by): 0 is a menu that didn't open or a click that missed its item"""
+    by): under MENU_CHANGED is a menu that didn't open or a click that
+    missed its item"""
     tag = re.sub(r"[^a-z0-9]+", "-", what.lower()).strip("-")
     before = r.shot("menu-before-" + tag)
     r.act(what, budget, lambda: r.menu(title_x, row_y))
@@ -114,6 +138,7 @@ def run(work, machine):
         if s >= 0 and d >= 0:
             r.start_end = len(con[:d].encode("utf-8", "replace"))
         r.act("a line scrolled, pages being read", speed.LINE, lambda: r.key("Down"))
+        first = os.path.join(r.shots, "01-a-line-scrolled-pages-being-read.png")
         r.act("a page scrolled, pages being read", speed.PAGE, lambda: r.key("shift+Down"))
         r.act("next page", speed.WINDOW, lambda: r.key("ctrl+Right"))
         time.sleep(120 if machine.startswith("ST") else 60)    # the reading done
@@ -148,9 +173,18 @@ def run(work, machine):
             print("  %-40s %6d %6d  %s" % (what, ha, ba, "ok" if ok else "NOT SHOWN WHILE HELD"))
             bad |= not ok
         for what, px in menus:
-            if px <= 0:
-                print("  %-40s the screen didn't change: the menu or its item missed" % what)
+            if px < MENU_CHANGED:
+                print("  %-40s the screen changed by %d pixels: the menu or its item missed" % (what, px))
                 bad = 1
+        font = os.environ.get("EPDF_FONT")
+        bar = menu_bar(r, first, font)
+        if font:
+            if bar is None:
+                print("  the menu bar with %s: not compared (no system-font run in this WORK)" % font)
+            else:
+                print("  the menu bar with %s against the system font's: %d pixels differ  %s"
+                      % (font, bar, "ok" if bar == 0 else "NOT THE SAME"))
+                bad |= bar != 0
         return bad
     finally:
         r.stop()
