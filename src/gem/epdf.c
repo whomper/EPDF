@@ -959,9 +959,9 @@ int main(void)
 
 		/* the sliders after a scroll, once no key waits; the reading
 		   on while nothing else does */
-		if (win_sliders_due() || menus_due || pending || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0)
+		if (win_owed() || win_sliders_due() || menus_due || pending || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0)
 			flags |= MU_TIMER;
-		t = win_sliders_due() || menus_due || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0 ? 0 : bg_timer(pending, 1000);
+		t = win_owed() || win_sliders_due() || menus_due || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0 ? 0 : bg_timer(pending, 1000);
 		/* either button going down (0x100: the AES's "any of them"), one
 		   click (5.8: the press at once, not held back for the
 		   double-click time); a double click timed by press_double */
@@ -978,7 +978,9 @@ int main(void)
 		if (which & MU_MESAG)
 			message(msg);
 		if (which == MU_TIMER) {
-			if (arrived >= 0) {
+			if (win_owed()) {
+				win_draw_owed();	/* the rows a scroll moved in: their text */
+			} else if (arrived >= 0) {
 				win_page_ready(arrived);	/* the page read last turn */
 				win_info();
 				arrived = -1;

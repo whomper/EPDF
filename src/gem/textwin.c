@@ -619,6 +619,33 @@ static int overlap(const GRECT *a, const GRECT *b, GRECT *o)
 	return 1;
 }
 
+/*
+ * A line scrolled in two turns (the hub's plan, EContact's card bands): the
+ * key's turn moves the rows and clears the band that came in; the rows'
+ * text is owed, drawn in the next turn (timer 0, before the sliders), so
+ * the key's stretch is the copy's alone (TOS 1.04: about 53 ms of work
+ * for a line, the limit 50). A key before that turn moves the owed rows
+ * with the rest and adds its own; a redraw, a selection or a page coming
+ * in draws what is owed first.
+ */
+static long owe_r0 = -1, owe_r1 = -1;		/* screen rows [r0, r1) owed */
+
+void win_draw_rows(long r0, long r1);
+
+int win_owed(void)
+{
+	return win >= 0 && !iconified && owe_r1 > owe_r0;
+}
+
+void win_draw_owed(void)
+{
+	long r0 = owe_r0, r1 = owe_r1;
+
+	owe_r0 = owe_r1 = -1;
+	if (win >= 0 && !iconified && r1 > r0)
+		win_draw_rows(r0, r1);
+}
+
 /* the window's rectangles over area, each drawn */
 void win_redraw(const GRECT *area)
 {
@@ -627,6 +654,8 @@ void win_redraw(const GRECT *area)
 
 	if (win < 0)
 		return;
+	if (owe_r1 > owe_r0)
+		win_draw_owed();		/* (it comes back here with nothing owed) */
 	if (iconified) {
 		static char st[16];
 
@@ -716,10 +745,26 @@ static void moved(long d)
 	wind_get(win, WF_FIRSTXYWH, &r.x, &r.y, &r.w, &r.h);
 	if (keep <= 0 || r.x > work.x || r.y > work.y || r.x + r.w < work.x + work.w || r.y + r.h < work.y + work.h ||
 	    work.x < desk_x || work.y < desk_y || work.x + work.w > desk_x + desk_w || work.y + work.h > desk_y + desk_h) {
+		owe_r0 = owe_r1 = -1;	/* all of it drawn now */
 		edges_clean = 1;	/* scrolled: the same layout */
 		win_draw_all();
 		edges_clean = 0;
 		return;
+	}
+	if (owe_r1 > owe_r0) {
+		/* the rows owed move with the rest; drawn first when they and
+		   those coming in wouldn't make one run */
+		long a0 = owe_r0 - d, a1 = owe_r1 - d;
+		long n0 = d > 0 ? keep : 0, n1 = d > 0 ? rows + 1 : rows - keep;
+
+		if (a1 <= 0 || a0 >= rows + 1)
+			owe_r0 = owe_r1 = -1;		/* moved out of view */
+		else if (a0 > n1 || a1 < n0) {
+			win_draw_owed();		/* apart: drawn as they are */
+		} else {
+			owe_r0 = a0 < 0 ? 0 : a0;
+			owe_r1 = a1 > rows + 1 ? rows + 1 : a1;
+		}
 	}
 	{
 		short pxy[8], clip[4];
@@ -761,12 +806,22 @@ static void moved(long d)
 			a.h = (short)((r1 - r0) * ch);
 			if (a.y + a.h > work.y + work.h)
 				a.h = (short)(work.y + work.h - a.y);
-			if (doc_view() && doc_view()->nstale)
-				dv_recount_view(doc_view(), rows + 1);
 			if (a.h > 0) {
-				edges_clean = 1;
-				draw_rows(&a, r0, r1);
-				edges_clean = 0;
+				/* the band cleared now, its text owed to the next turn */
+				short tx = (short)(work.x + MARGIN);
+
+				text_clip(vdi_h, clip);
+				blank(&a, tx, (short)(tx + cols * cw), a.y, a.h);
+				text_noclip(vdi_h);
+				if (owe_r1 > owe_r0) {
+					if (r0 < owe_r0)
+						owe_r0 = r0;
+					if (r1 > owe_r1)
+						owe_r1 = r1;
+				} else {
+					owe_r0 = r0;
+					owe_r1 = r1;
+				}
 			}
 		}
 		graf_mouse(M_ON, NULL);
@@ -987,6 +1042,10 @@ void win_sel_change(long q0, long r0, long q1, long r1, long p0, long o0, long p
 	int kind, took;
 	const char *s;
 
+	/* (what a scroll owes drawn first: the XOR goes over finished rows) */
+	if (owe_r1 > owe_r0)
+		win_draw_owed();
+
 	if (!v || win < 0 || iconified || (q0 < 0 && p0 < 0))
 		return;
 	in_order(&q0, &r0, &q1, &r1);
@@ -1189,6 +1248,7 @@ int win_message(const short *msg)
 		if (!iconified) {
 			wind_set(win, WF_ICONIFY, msg[4], msg[5], msg[6], msg[7]);
 			iconified = 1;
+			owe_r0 = owe_r1 = -1;	/* drawn whole when it opens again */
 			log_event("iconified", NULL, NULL);
 		}
 		return 1;
