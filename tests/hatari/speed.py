@@ -79,6 +79,15 @@ def held_press(r, what, x, y, mods=()):
     return what, differ(held, after), differ(before, after)
 
 
+def menu_act(r, what, budget, title_x, row_y):
+    """a menu command as an action; gives (what, pixels the screen changed
+    by): 0 is a menu that didn't open or a click that missed its item"""
+    tag = re.sub(r"[^a-z0-9]+", "-", what.lower()).strip("-")
+    before = r.shot("menu-before-" + tag)
+    r.act(what, budget, lambda: r.menu(title_x, row_y))
+    return what, differ(before, os.path.join(r.shots, "%02d-%s.png" % (r.n, tag)))
+
+
 def run(work, machine):
     # the hub's runs (switches, from the environment): AERA_WITH_NVDI=1
     # boots NVDI; EPDF_PROF_PRG another profiled build (0.3's, to compare);
@@ -124,8 +133,13 @@ def run(work, machine):
                 held_press(r, "a press: the selection off", 200, 160)]
         r.act("Select all", speed.KEY, lambda: r.key("ctrl+a"))
         r.act("Copy", speed.KEY, lambda: r.key("ctrl+c"), job=True)    # its turns: a sliced job (2.2)
-        r.act("View > The page's lines", speed.WINDOW, lambda: r.menu(150, 60))
-        r.act("About box", speed.DIALOG, lambda: r.menu(36, 28))
+        # the menu bar's titles, 8 pixels a character from x 16: " EPDF "
+        # 16-63, " File " 64-111, " Edit " 112-159, " View " 160-207; the
+        # items 16 pixels a row from y 20. x 150 was Edit's title (its
+        # separator clicked: the row measured nothing, and a menu left so
+        # took the About box's click on TOS 4 with NVDI, the hub, 1 Nov)
+        menus = [menu_act(r, "View > The page's lines", speed.WINDOW, 184, 60),
+                 menu_act(r, "About box", speed.DIALOG, 36, 28)]
         r.act("About box closed", speed.WINDOW, lambda: r.key("Escape"))
         bad = r.report()
         print("\nheld still a second (5.8): pixels held against after the release, before against after")
@@ -133,6 +147,10 @@ def run(work, machine):
             ok = ha == 0 and ba > 0
             print("  %-40s %6d %6d  %s" % (what, ha, ba, "ok" if ok else "NOT SHOWN WHILE HELD"))
             bad |= not ok
+        for what, px in menus:
+            if px <= 0:
+                print("  %-40s the screen didn't change: the menu or its item missed" % what)
+                bad = 1
         return bad
     finally:
         r.stop()
