@@ -144,6 +144,12 @@ at first. This section is kept up to date: the build, the tests, what a release 
   on such lines, a tight heading's spaces sorted before the next letter, the gutter found by every
   bin a gap covers or a strip few lines cross; `tests/glyphwise.py`). Resident 442,088. A release
   that fixes is X.Y.Z (the hub's "0.4.1"; the workflow takes any VERSION its tag matches).
+  0.5 ("start 0.5", 1 Nov) under way. 0.4.2 went out the same day (v0.4.2 on 5dc88c76, cleared on
+  447635df): common's inflate fix (0.4 and 0.4.1 could read a damaged stream wrongly), the ST's next
+  page, a page while reading and Select all within their times (TOS 1.04: 195, 110, 45), five-place
+  fractions read right, AES-256 opened in the reader's turns. Resident 449,236. Over on TOS 1.04: a
+  line 80 (TOS's own drawing, the hub thinks), View > The page's lines 305, About 230 (200 with the
+  hub's e9f041d). On main after it: the reading stretches (EDOS_01.PDF held an ST 17 s at a time).
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
   checks: `tools/nofpu.sh`); decode streams with `inflate_open`/`inflate_read` so a page needn't fit
   in memory; reuse `common/atari/dspjpeg.c` with `PIC_LIBJPEG` for JPEG on the Falcon; a progressive
