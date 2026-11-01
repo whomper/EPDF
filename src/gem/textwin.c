@@ -144,6 +144,11 @@ void win_info(void)
 	wind_set_str(win, WF_INFO, winfo);
 }
 
+/* what the sliders were set to: TOS 1.04's AES draws the slider at each
+   wind_set, 40 ms on an ST, so each is set only when it changes (a line
+   scrolled set both again: the 80 ms turn after the key) */
+static short sl_size = -1, sl_pos = -1;
+
 static void sliders(void)
 {
 	DOCVIEW *v = doc_view();
@@ -157,8 +162,14 @@ static void sliders(void)
 	}
 	if (size < 1)
 		size = 1;
-	wind_set(win, WF_VSLSIZE, (short)size, 0, 0, 0);
-	wind_set(win, WF_VSLIDE, (short)pos, 0, 0, 0);
+	if (size != sl_size) {
+		wind_set(win, WF_VSLSIZE, (short)size, 0, 0, 0);
+		sl_size = (short)size;
+	}
+	if (pos != sl_pos) {
+		wind_set(win, WF_VSLIDE, (short)pos, 0, 0, 0);
+		sl_pos = (short)pos;
+	}
 	sliders_due = 0;
 }
 
@@ -1049,6 +1060,7 @@ int win_open(short x, short y, short w, short h)
 	win = wind_create(icon_kind(WKIND), desk_x, desk_y, desk_w, desk_h);
 	if (win < 0)
 		return -1;
+	sl_size = sl_pos = -1;		/* a new window: its sliders set */
 	win_title();
 	wind_set_str(win, WF_INFO, " ");
 	wind_open(win, x, y, w, h);

@@ -7,7 +7,9 @@ through common's tests/speed/gemprof.py (its Profiler).
     gemprof.py WORK [MACHINE] [ACTION...] [--top N]
 
     actions: line, lineup, page, next, last, start, selall, lines, about
-             (default: line page next selall lines about)
+             (default: line page next selall lines about); ACTION@N
+             profiles the Nth turn from the action (line@2: the turn
+             after the key's)
 
 EPDF as the speed rig runs it (build/aprof: make build/aprof/EPDF.PRG,
 with its symbols put in by tools/prgsyms.py) opens the speed rig's 30-page
@@ -57,8 +59,8 @@ def main(argv):
     if not argv:
         sys.exit(__doc__)
     work = os.path.abspath(argv[0])
-    machine = argv[1] if len(argv) > 1 and argv[1] not in ACTIONS else "ST:mono"
-    names = [a for a in argv[1:] if a in ACTIONS] or ["line", "page", "next", "selall", "lines", "about"]
+    machine = argv[1] if len(argv) > 1 and argv[1].split("@")[0] not in ACTIONS else "ST:mono"
+    names = [a for a in argv[1:] if a.split("@")[0] in ACTIONS] or ["line", "page", "next", "selall", "lines", "about"]
     elf = os.path.join(TOP, "build", "aprof", "epdf.elf")
     p = gemprof.Profiler(work, machine, elf, after_event="bg_tick", top=top)
     r = p.rig
@@ -74,9 +76,12 @@ def main(argv):
         time.sleep(120 if machine.startswith("ST") else 60)      # the reading done
         p.begin()
         print(r.describe())
-        for name in names:
+        for spec in names:
+            name, _, turn = spec.partition("@")
             what, do = ACTIONS[name]
-            print(p.action(what, lambda: do(r)))
+            turn = int(turn or 1)
+            # (turn= only where asked: common's gemprof.py before its action(turn=) has none)
+            print(p.action(what + ", turn %d" % turn, lambda: do(r), turn=turn) if turn > 1 else p.action(what, lambda: do(r)))
             if name == "about":
                 r.key("Escape")
                 r.still()
