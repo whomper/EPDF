@@ -14,7 +14,7 @@ through common's tests/speed/gemprof.py (its Profiler).
 EPDF as the speed rig runs it (build/aprof: make build/aprof/EPDF.PRG,
 with its symbols put in by tools/prgsyms.py) opens the speed rig's 30-page
 book through LAUNCH.PRG (make binary/LAUNCH.PRG). When the pages are read,
-each action is profiled from bg_tick (the first function EPDF calls when
+each action is profiled from bg_tick_at (the first function EPDF calls when
 an event comes) until EPDF is back at its event call (evnt_multi_), so
 TOS's share is the action's alone. The machine is common/tools/machines.py's,
 on Erez's TOS where ~/.aera/tos has it, else EmuTOS: the report's first
@@ -62,7 +62,7 @@ def main(argv):
     machine = argv[1] if len(argv) > 1 and argv[1].split("@")[0] not in ACTIONS else "ST:mono"
     names = [a for a in argv[1:] if a.split("@")[0] in ACTIONS] or ["line", "page", "next", "selall", "lines", "about"]
     elf = os.path.join(TOP, "build", "aprof", "epdf.elf")
-    p = gemprof.Profiler(work, machine, elf, after_event="bg_tick", top=top)
+    p = gemprof.Profiler(work, machine, elf, after_event="bg_tick_at", top=top)
     r = p.rig
     try:
         os.makedirs(os.path.join(r.hd, "EPDF"), exist_ok=True)

@@ -966,7 +966,7 @@ int main(void)
 		   click (5.8: the press at once, not held back for the
 		   double-click time); a double click timed by press_double */
 		which = evnt_multi_(flags, 0x101, 3, 0, t, msg, &ev);
-		bg_tick();
+		bg_tick_at(ev.mx, ev.my, ev.mbutton, ev.kstate);	/* the event's mouse: no graf_mkstate (4.9 ms on TOS 1.04) */
 		if (which & MU_KEYBD)
 			key(ev.kstate, ev.kreturn);
 		if ((which & MU_BUTTON) && !win_iconified() && wind_find(ev.mx, ev.my) == win_handle()) {
