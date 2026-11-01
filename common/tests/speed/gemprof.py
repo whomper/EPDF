@@ -103,21 +103,29 @@ class Profiler:
         self.debug("profile on")
         time.sleep(1)
 
-    def action(self, what, do, settle=8):
-        """do() profiled until the app's next event call: a summary"""
+    def action(self, what, do, settle=8, turn=1):
+        """do() profiled until the app's next event call: a summary. With
+        after_event, turn N profiles the Nth turn from the action instead
+        of its first (what a timer turn after the key does: EPDF's line
+        scrolled was 50 ms, the turn after it 80 on TOS 1.04)"""
         r = self.rig
         mark = len(r.console())
         extra = os.environ.get("GEMPROF_DEBUG", "")
         # with after_event, a first break there (the event's handling begins)
         # starts the profile again: it is then the stretch alone, TOS's share
-        # in it too, not the second of idle and interrupts before the key
-        r.hatari.stdin.write((("c\n" if self.after_event else "") +
-                              "profile cycles 100000\n%sc\n" % (extra + "\n" if extra else "")).encode())
+        # in it too, not the second of idle and interrupts before the key.
+        # The break at the event call is set at that first break, so it ends
+        # the turn the profile began in (the Nth: after_event's Nth hit)
+        if self.after_event:
+            r.hatari.stdin.write(("b pc = %s :once\nc\n" % self.break_at +
+                                  "profile cycles 100000\n%sc\n" % (extra + "\n" if extra else "")).encode())
+        else:
+            r.hatari.stdin.write(("profile cycles 100000\n%sc\n" % (extra + "\n" if extra else "")).encode())
         r.hatari.stdin.flush()
         if self.after_event:
-            self.debug("b pc = %s :once" % self.after_event)
-            time.sleep(1)
-        self.debug("b pc = %s :once" % self.break_at)
+            self.debug("b pc = %s %s:once" % (self.after_event, ":%d " % turn if turn > 1 else ""))
+        else:
+            self.debug("b pc = %s :once" % self.break_at)
         time.sleep(1)
         r.in_act = True
         do()
