@@ -97,7 +97,7 @@ A PDF viewer: full pages on the Falcon and TT (the stock 4 MB Falcon, `Falcon-4`
 text view (reflowed text, search, copy, pictures) that also runs on a 68000 ST. A program (PRG) only,
 at first. This section is kept up to date: the build, the tests, what a release carries, the decisions.
 
-- **Where it stands (31 Oct 2026):** stage 1, the text view, approved by Erez ("time stage 1 work to
+- **Where it stands (1 Nov 2026):** stage 1, the text view, approved by Erez ("time stage 1 work to
   then", 29 Oct) and under way; stage 2 (page rendering) is not started and waits for his answer. Done:
   the window with every page one after another (`src/view/docview.c`), reflow (the extractor's soft
   break, `PTEXT.soft`), reading in slices on a second stack (`src/gem/coro.S`), the text store with
@@ -119,17 +119,25 @@ at first. This section is kept up to date: the build, the tests, what a release 
   corpus's 25 pass; the 3 fail on JPEGs too big for a 68000 (0.4). The hub cleared cc798ec3 on Erez's
   TOS (gui and acc_all; ST 1.04: a line 80, next page 320, Select all 60, About 250) and 0.3 went out
   (v0.3 on b58255c5, 31 Oct); the hub's big.py on ST-1 with TOS 1.04 was still running (a loss there:
-  0.3.x). Phase report sent through the hub. 0.4, pictures, started 1 Nov ("start 0.4"), is on main as
-  16eb2a9e: a JPEG streamed and made a row at a time (common's pic_jpeg_rows), every picture made a
+  0.3.x). Phase report sent through the hub. 0.4, pictures, started 1 Nov ("start 0.4"), went out
+  the same day (v0.4 on 2a4abf21, cleared on c96aaef7): a JPEG streamed and made a row at a time (common's pic_jpeg_rows), every picture made a
   row at a time shown from the top down as its rows come (Erez: "rows top to bottom"; the plan's 1/8
   preview didn't pay on a 68000, 197 s against 257 s), the DSP on a Falcon through pic.c's own
   baseline header reader (PIC_TJPGD_DSP, dspjpeg_port_jpeg: novel 100 -> 37 s, scan-stinternals 219
   -> 47 s on Falcon-4), scr_fill where scr_cpu_wins(), -DDLG_CPU; then 5.8's one click (click.c:
   the selection's first cell on press, a double click's word on its release). On ST-1 the 0.3
   JPEG failures are gone (novel 257 s, scan-gfabasic 282 s); the two maps still read no page in
-  300 s (the interpreter on a 68000). Still to do on the ST's speed: a line (80), next page (310), a page scrolled with
-  everything selected (~205), the About box (265 on EmuTOS); the interpreter's per-glyph cost (a map's
-  or photo-nasa-sunda's one page isn't read in 200 s on a 68000).
+  300 s (the interpreter on a 68000). Then the hub's 5.8 note: the selection drawn on a press through
+  press_update_begin/end (TOS holds BEG_UPDATE back while the button is held still; the speed rig's
+  held-press shots check it); the resident size cut for acc_all under NVDI on Falcon-4 (465,180 ->
+  440,772: EPDF's buffers and common's inflate and DSP tables taken when used; e4407c2a couldn't open
+  a VDI workstation, 11d34604's menus didn't drop on the second boot); the rig's View menu click fixed
+  (it clicked Edit's separator), which found View > The page's lines laying out 24 pages at once
+  (dv_recount_view: ST 4.3 s -> 0.4 s). Resident 440,772 (0.3: 419,428). Still to do on the ST's
+  speed (TOS 1.04, v0.4): a line 80, next page 315, a page while reading 160, Select all 65, View >
+  The page's lines 415, About 260; the interpreter's per-glyph cost (the two maps and
+  photo-nasa-sunda read no page in 200 s on ST-1). The rig's Courier 14 rows for View and About
+  (40, <20 under NVDI) still look like a missed menu click.
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
   checks: `tools/nofpu.sh`); decode streams with `inflate_open`/`inflate_read` so a page needn't fit
   in memory; reuse `common/atari/dspjpeg.c` with `PIC_LIBJPEG` for JPEG on the Falcon; a progressive
