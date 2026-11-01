@@ -119,7 +119,10 @@ at first. This section is kept up to date: the build, the tests, what a release 
   corpus's 25 pass; the 3 fail on JPEGs too big for a 68000 (0.4). The hub cleared cc798ec3 on Erez's
   TOS (gui and acc_all; ST 1.04: a line 80, next page 320, Select all 60, About 250) and 0.3 went out
   (v0.3 on b58255c5, 31 Oct); the hub's big.py on ST-1 with TOS 1.04 was still running (a loss there:
-  0.3.x). Phase report sent through the hub; 0.4 (pictures) proposed, waiting for Erez's word. Still to do on the ST's speed: a line (80), next page (310), a page scrolled with
+  0.3.x). Phase report sent through the hub. 0.4, pictures, started 1 Nov ("start 0.4"): a JPEG
+  streamed and made a row at a time (a patch to common's pic.c: pic_jpeg_rows), its 1/8 preview
+  first on a 68000, the DSP on a Falcon (asked the hub: a baseline header reader in pic.c, or
+  libjpeg in the one program). Still to do on the ST's speed: a line (80), next page (310), a page scrolled with
   everything selected (~205), the About box (265 on EmuTOS); the interpreter's per-glyph cost (a map's
   or photo-nasa-sunda's one page isn't read in 200 s on a 68000).
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
