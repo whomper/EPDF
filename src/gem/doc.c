@@ -65,6 +65,9 @@ static PIC_PAL *rpic_pal;
 static unsigned char *rpic_std;
 static long rpic_bytes;
 static int rpic_why;
+static int rpic_rows;			/* made a row at a time into rpic->bm (pics_rows): rpic_ok */
+static int rpic_ok;
+static long rpic_shown;			/* its rows the window has been told of */
 /* memory refused (0.3): the store gives its pool back and the page or the
    picture is tried again, once */
 static long retried_page = -1;
@@ -122,6 +125,13 @@ static void reader(void)
 	}
 }
 
+/* a band of the picture's colour rows waits for pics_band, on the main
+   stack: the machine handed back meanwhile */
+static void band_wait(void)
+{
+	coro_switch(&pic_co, &main_co);
+}
+
 /* the pictures' stack: one at a time, decoded, dithered and laid out as
    the standard bitmap */
 static void decoder(void)
@@ -133,15 +143,18 @@ static void decoder(void)
 		rpic_std = NULL;
 		rpic_bytes = 0;
 		{
-			/* a scan or samples: a row at a time into the bitmap (never the
-			   whole picture in memory); a JPEG: whole, then dithered */
-			int how;
+			/* a scan, samples, a JPEG TJpgDec or the DSP takes: a row at a
+			   time into the window's bitmap, shown from the top down as the
+			   rows come (never the whole picture in memory); the rest
+			   whole, then dithered */
+			int how = pics_rows(doc, rpic, rpic_planes, rpic_pal, &rpic_why);
 
-			rpic_std = pics_rows(doc, rpic->obj, rpic->w, rpic->h, rpic_planes, rpic_pal, &rpic_bytes, &rpic_why, &how);
+			rpic_rows = how >= 0;
 			if (how >= 0) {
 				static char a[48];
 
-				if (!rpic_std && abandon)
+				rpic_ok = how > 0;
+				if (!rpic_ok && abandon)
 					rpic_why = PIC_STOPPED;
 				snprintf(a, sizeof a, "rows %lu", tos_ms() - t0);
 				log_event("picture-ms", a, NULL);
@@ -181,11 +194,17 @@ static void stop_reading(void)
 	}
 	if (rpic) {
 		running = &pic_co;
-		while (!pdone)
+		while (!pdone) {
 			coro_switch(&main_co, &pic_co);
+			pics_band();		/* (a band waiting is let go on) */
+		}
 		free(rpic_std);
-		rpic->state = PICS_FAILED;
-		rpic->why = PIC_STOPPED;
+		if (rpic_rows)
+			pics_made(rpic, 0, PIC_STOPPED);
+		else {
+			rpic->state = PICS_FAILED;
+			rpic->why = PIC_STOPPED;
+		}
 		rpic = NULL;
 	}
 	abandon = 0;
@@ -210,8 +229,11 @@ int doc_pic_start(void)
 	rpic = e;
 	rpic_planes = planes;
 	rpic_pal = pics_palette();
+	rpic_shown = 0;
+	rpic_rows = 0;
 	pdone = 0;
 	pic_poll = pic_turn;
+	pics_wait = band_wait;
 	return 1;
 }
 
@@ -224,16 +246,37 @@ int doc_pic_slice(unsigned long ms, long *obj)
 	slice_end = tos_ms() + ms;
 	running = &pic_co;
 	coro_switch(&main_co, &pic_co);
+	pics_band();			/* a band of colour rows to the screen's format */
 	if (!pdone)
 		return 0;
-	if (!rpic_std && rpic_why == PIC_MEMORY && retried_obj != rpic->obj && give_back("picture")) {
+	if ((rpic_rows ? !rpic_ok : !rpic_std) && rpic_why == PIC_MEMORY && retried_obj != rpic->obj && give_back("picture")) {
 		retried_obj = rpic->obj;
+		if (rpic_rows)
+			pics_made(rpic, 0, PIC_STOPPED);	/* its rows so far let go */
+		rpic->state = PICS_DECODING;
+		rpic_shown = 0;
 		pdone = 0;		/* the decoder starts it again in the next slice */
 		return 0;
 	}
 	*obj = rpic->obj;
-	pics_done(rpic, rpic_std, rpic_bytes, rpic_why);
+	if (rpic_rows)
+		pics_made(rpic, rpic_ok, rpic_why);
+	else
+		pics_done(rpic, rpic_std, rpic_bytes, rpic_why);
 	rpic = NULL;
+	return 1;
+}
+
+/* the picture being made: rows made since the window was last told, from
+   *from to *to (its object *obj); 0 none */
+int doc_pic_rows(long *obj, long *from, long *to)
+{
+	if (!rpic || rpic->ready <= rpic_shown)
+		return 0;
+	*obj = rpic->obj;
+	*from = rpic_shown;
+	*to = rpic->ready;
+	rpic_shown = rpic->ready;
 	return 1;
 }
 

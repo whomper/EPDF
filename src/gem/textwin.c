@@ -223,6 +223,18 @@ static void blank(const GRECT *c, short x1, short x2, short y, short h)
 		h = (short)(c->y + c->h - y);
 	if (x2 <= x1 || h <= 0)
 		return;
+	p[0] = x1;
+	p[1] = y;
+	p[2] = (short)(x2 - 1);
+	p[3] = (short)(y + h - 1);
+	if (scr_cpu_wins()) {
+		/* TOS's screen on a 68000: pen 0 by the CPU (common's scr_fill,
+		   cut to the clip); elsewhere (a 68030's TOS 4 fills as fast, NVDI,
+		   GDOS, a card) the VDI's fill as before, set once (scr_fill's VDI
+		   way would ask and set it each time) */
+		scr_fill(vdi_h, p, 0);
+		return;
+	}
 	if (!fill_set) {
 		vswr_mode(vdi_h, MD_REPLACE);
 		vsf_interior(vdi_h, FIS_SOLID);
@@ -230,10 +242,6 @@ static void blank(const GRECT *c, short x1, short x2, short y, short h)
 		vsf_perimeter(vdi_h, 0);
 		fill_set = 1;
 	}
-	p[0] = x1;
-	p[1] = y;
-	p[2] = (short)(x2 - 1);
-	p[3] = (short)(y + h - 1);
 	vr_recfl(vdi_h, p);
 }
 
@@ -281,10 +289,13 @@ static void draw_pic(const GRECT *c, short y, const DVPIC *pr)
 	PICE *e = pics_get(pr->obj, pr->w, pr->h);
 	short x = pic_x(pr->w), right = (short)(c->x + c->w), tx = (short)(work.x + MARGIN);
 	long y0 = pr->row * ch, y1 = y0 + ch > pr->h ? pr->h : y0 + ch;
+	/* the rows made: all of it, or (made a row at a time) those so far,
+	   from the top down */
+	long made = e && e->bm.fd_addr ? (e->state == PICS_READY ? pr->h : e->ready) : 0, m1 = made < y1 ? made : y1;
 
 	blank(c, tx, x, y, ch);
 	blank(c, (short)(x + pr->w), right, y, ch);
-	if (e && e->state == PICS_READY && y1 > y0) {
+	if (m1 > y0) {
 		MFDB scr;
 		short pxy[8];
 
@@ -292,12 +303,22 @@ static void draw_pic(const GRECT *c, short y, const DVPIC *pr)
 		pxy[0] = 0;
 		pxy[1] = (short)y0;
 		pxy[2] = (short)(pr->w - 1);
-		pxy[3] = (short)(y1 - 1);
+		pxy[3] = (short)(m1 - 1);
 		pxy[4] = x;
 		pxy[5] = y;
 		pxy[6] = (short)(x + pr->w - 1);
-		pxy[7] = (short)(y + (y1 - y0) - 1);
+		pxy[7] = (short)(y + (m1 - y0) - 1);
 		vro_cpyfm(vdi_h, 3, pxy, &e->bm, &scr);
+		if (m1 < y1) {
+			/* the rest of the row: still the frame's */
+			short yy = (short)(y + (m1 - y0)), hh = (short)(y1 - m1);
+
+			blank(c, x, (short)(x + pr->w), yy, hh);
+			line_col(x, yy, x, (short)(yy + hh - 1), 1);
+			line_col((short)(x + pr->w - 1), yy, (short)(x + pr->w - 1), (short)(yy + hh - 1), 1);
+			if (pr->row == pr->rows - 1)
+				line_col(x, (short)(yy + hh - 1), (short)(x + pr->w - 1), (short)(yy + hh - 1), 1);
+		}
 		if (y1 - y0 < ch)
 			blank(c, x, (short)(x + pr->w), (short)(y + (y1 - y0)), (short)(ch - (y1 - y0)));
 		vswr_mode(vdi_h, MD_REPLACE);
@@ -718,6 +739,27 @@ void win_pic_ready(long obj)
 		return;
 	for (r = 0; r <= rows && dv_row(v, r, &kind, &s, &n, &page, &off); r++)
 		if (kind == DV_PIC && v->pic.obj == obj) {
+			if (first < 0)
+				first = r;
+			last = r;
+		}
+	if (first >= 0)
+		win_draw_rows(first, last + 1);
+}
+
+/* pixel rows from, to of picture obj made (it is made from the top
+   down): only the window's rows they are in drawn again */
+void win_pic_rows(long obj, long from, long to)
+{
+	DOCVIEW *v = doc_view();
+	long r, first = -1, last = -1, n, page, off;
+	int kind;
+	const char *s;
+
+	if (!v || win < 0 || iconified || to <= from)
+		return;
+	for (r = 0; r <= rows && dv_row(v, r, &kind, &s, &n, &page, &off); r++)
+		if (kind == DV_PIC && v->pic.obj == obj && (v->pic.row + 1) * ch > from && v->pic.row * ch < to) {
 			if (first < 0)
 				first = r;
 			last = r;

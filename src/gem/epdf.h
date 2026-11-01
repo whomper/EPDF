@@ -33,6 +33,7 @@ void doc_want(long page);		/* read from this page on next */
 long doc_slice(unsigned long ms);	/* the reading on for ms: the page it finished, or -1 */
 int doc_pic_start(void);		/* a picture the window wants: its decoding begun */
 int doc_pic_slice(unsigned long ms, long *obj);	/* 1 when it is done: *obj */
+int doc_pic_rows(long *obj, long *from, long *to);	/* rows made since asked: from, to */
 int doc_pic_busy(void);
 const char *doc_status(void);		/* the About box's line */
 const char *doc_page_text(long n, long *len);	/* NULL when not read yet */
@@ -68,6 +69,7 @@ void win_draw_span(long p0, long o0, long p1, long o1);
 void win_sel_change(long q0, long r0, long q1, long r1, long p0, long o0, long p1, long o1);
 void win_show(long page, long off);		/* that place in view */
 void win_pic_ready(long obj);		/* a picture decoded: its rows drawn */
+void win_pic_rows(long obj, long from, long to);	/* its pixel rows from, to made: drawn */
 
 /* font.c: the text view's font (FONT= in EPDF.INF) */
 void font_init(const char *setting, const char *dir);

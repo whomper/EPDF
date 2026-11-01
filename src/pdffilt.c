@@ -600,13 +600,15 @@ static int pcsrc_get(void *u, unsigned char *buf, long n)
 	return (int)k;
 }
 
-static int is_ccitt(const POBJ *f)
+/* a picture's own filter, which the caller decodes: a scan's or a JPEG's */
+static int is_coded(const POBJ *f)
 {
-	return f && f->t == PO_NAME && (!strcmp(f->u.p, "CCITTFaxDecode") || !strcmp(f->u.p, "CCF"));
+	return f && f->t == PO_NAME && (!strcmp(f->u.p, "CCITTFaxDecode") || !strcmp(f->u.p, "CCF") ||
+					!strcmp(f->u.p, "DCTDecode") || !strcmp(f->u.p, "DCT"));
 }
 
-/* image: the stream's last filter is a scan's (CCITTFaxDecode), left to
-   the caller: the bytes before it */
+/* image: the stream's last filter is a scan's or a JPEG's, left to the
+   caller: the bytes before it */
 static PCSRC *src_open(PDOC *d, POBJ *o, int image)
 {
 	POBJ *filter, *parms;
@@ -623,11 +625,11 @@ static PCSRC *src_open(PDOC *d, POBJ *o, int image)
 	if (!parms)
 		parms = pd_get(d, o, "DP");
 	if (image) {
-		/* /CCITTFaxDecode, [/CCITTFaxDecode] or [/FlateDecode /CCITTFaxDecode] */
-		if (is_ccitt(filter))
+		/* /CCITTFaxDecode, [/CCITTFaxDecode] or [/FlateDecode /CCITTFaxDecode]; DCTDecode the same */
+		if (is_coded(filter))
 			filter = NULL;
 		else if (filter && filter->t == PO_ARR && filter->a >= 1 && filter->a <= 2
-			 && is_ccitt(pdf_res(d, pa_at(filter, filter->a - 1)))) {
+			 && is_coded(pdf_res(d, pa_at(filter, filter->a - 1)))) {
 			filter = filter->a == 2 ? pdf_res(d, pa_at(filter, 0)) : NULL;
 			parms = parms && parms->t == PO_ARR && parms->a == 2 ? pdf_res(d, pa_at(parms, 0)) : NULL;
 		} else
@@ -683,7 +685,7 @@ PCSRC *pdf_stream_open(PDOC *d, POBJ *o, long onum)
 	return src_open(d, o, 0);
 }
 
-PCSRC *pdf_stream_open_scan(PDOC *d, POBJ *o, long onum)
+PCSRC *pdf_stream_open_coded(PDOC *d, POBJ *o, long onum)
 {
 	(void)onum;
 	return src_open(d, o, 1);

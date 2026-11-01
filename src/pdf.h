@@ -178,9 +178,9 @@ typedef struct PCSRC PCSRC;
 PCSRC *pdf_stream_open(PDOC *d, POBJ *o, long onum);
 long pdf_stream_read(PCSRC *s, unsigned char *out, long n);
 void pdf_stream_close(PCSRC *s);
-/* the same for a scan (CCITTFaxDecode, alone or after Flate): the coded
-   bytes, before the scan's own filter */
-PCSRC *pdf_stream_open_scan(PDOC *d, POBJ *o, long onum);
+/* the same for a scan or a JPEG (CCITTFaxDecode, DCTDecode; alone or
+   after Flate): the coded bytes, before the picture's own filter */
+PCSRC *pdf_stream_open_coded(PDOC *d, POBJ *o, long onum);
 
 /* ------------------------------------------------------------------ pages */
 long pdf_pages(PDOC *d);			/* page count; -1 if the tree is broken */

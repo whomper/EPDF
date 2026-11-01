@@ -33,6 +33,7 @@
 #include "popup.h"
 #include "menu.h"
 #include "pics.h"
+#include "dspjpeg.h"
 #include "epdf.h"
 
 short ap_id;
@@ -782,6 +783,7 @@ static void crash_quit(const char *what)
 /* the reading on for a piece of the slice; a page it finished shown */
 static long arrived = -1;		/* a page read, its rows still to draw */
 static long arrived_pic = -1;		/* a picture made, its rows still to draw */
+static long rows_pic = -1, rows_from, rows_to;	/* a picture being made: its new rows, to draw */
 static int pic_turn;			/* pictures and pages take turns */
 
 /* the reading on for a piece of the slice; 1 when a page came, whose rows
@@ -806,6 +808,8 @@ int main(void)
 	ap_id = appl_init();
 	if (ap_id < 0)
 		return 1;
+	if (dspjpeg_present())
+		pic_dsp = &dspjpeg_port_jpeg;	/* a Falcon: its DSP decodes the JPEGs it takes (EPDF dithers on the CPU) */
 	dlg_title = "EPDF";			/* dialogs in a window (MiNT, MagiC): 3.5 */
 	vdi_h = graf_handle(&gl_wchar, &gl_hchar, &d, &d);
 	cw = gl_wchar;
@@ -894,9 +898,9 @@ int main(void)
 
 		/* the sliders after a scroll, once no key waits; the reading
 		   on while nothing else does */
-		if (win_sliders_due() || pending || arrived >= 0 || arrived_pic >= 0)
+		if (win_sliders_due() || pending || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0)
 			flags |= MU_TIMER;
-		t = win_sliders_due() || arrived >= 0 || arrived_pic >= 0 ? 0 : bg_timer(pending, 1000);
+		t = win_sliders_due() || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0 ? 0 : bg_timer(pending, 1000);
 		/* either button going down (0x100: the AES's "any of them"), two
 		   clicks counted */
 		which = evnt_multi_(flags, 0x102, 3, 0, t, msg, &ev);
@@ -921,6 +925,10 @@ int main(void)
 			} else if (arrived_pic >= 0) {
 				win_pic_ready(arrived_pic);	/* the picture made last turn */
 				arrived_pic = -1;
+				rows_pic = -1;
+			} else if (rows_pic >= 0) {
+				win_pic_rows(rows_pic, rows_from, rows_to);	/* its rows made last turn */
+				rows_pic = -1;
 			} else if (win_sliders_due()) {
 				win_sliders();
 			} else if (cp.on) {
@@ -950,6 +958,20 @@ int main(void)
 						;
 				if (!doc_pic_busy() && obj >= 0)
 					arrived_pic = obj;
+				else {
+					long o, f, t2;
+
+					/* its rows so far, drawn in the next turn (from the top down) */
+					if (doc_pic_rows(&o, &f, &t2)) {
+						if (rows_pic == o)
+							rows_to = t2;
+						else {
+							rows_pic = o;
+							rows_from = f;
+							rows_to = t2;
+						}
+					}
+				}
 			} else if (pending && bg_may_work()) {
 				bg_begin();
 				/* a search first: the user waits for it; the reading after */

@@ -11,7 +11,9 @@ typedef struct {
 	long obj;
 	int w, h;
 	int state, why;
-	MFDB bm;			/* PICS_READY: the screen's own bitmap, in ST RAM */
+	MFDB bm;			/* the screen's own bitmap, in ST RAM, when bm.fd_addr */
+	long ready;			/* its rows made, drawn from the top down while it is made a
+					   row at a time; h when PICS_READY */
 	int heap;			/* bm's memory is malloc's (else GEMDOS's) */
 	unsigned long used;
 } PICE;
@@ -19,13 +21,24 @@ typedef struct {
 PICE *pics_get(long obj, int w, int h);	/* NULL: every slot busy decoding */
 int pics_waiting(void);
 PICE *pics_next(void);			/* one to decode, marked decoding */
+/* the decoder's answer for a picture made whole: std (the standard
+   bitmap) or NULL (why) */
 void pics_done(PICE *e, unsigned char *std, long bytes, int why);
 PIC_PAL *pics_palette(void);		/* NULL on a 16-bit screen */
 unsigned char *pics_standard(const PIC *p, int nplanes, PIC_PAL *pl, long *bytes);
-/* image obj made straight into the standard bitmap a row at a time; *how
-   1 made, 0 not (*why), -1 not this way (pdf_image, pics_standard) */
+/* e's picture made a row at a time straight into e->bm, its rows shown
+   as they come (e->ready): 1 made, 0 not (*why), -1 not this way
+   (pdf_image, pics_standard, pics_done). On the decoder's stack */
 struct pdoc;
-unsigned char *pics_rows(struct pdoc *d, long obj, int w, int h, int nplanes, PIC_PAL *pl, long *bytes, int *why, int *how);
+int pics_rows(struct pdoc *d, PICE *e, int nplanes, PIC_PAL *pl, int *why);
+/* while a band of colour rows waits for the screen's format, the decoder
+   hands the machine back through pics_wait (doc.c's); pics_band, on the
+   main stack, turns it (vr_trnfm): 1 when there was one */
+extern void (*pics_wait)(void);
+int pics_band(void);
+/* pics_rows' picture ended: made, or not (its bitmap let go; logged
+   unless it was stopped) */
+void pics_made(PICE *e, int ok, int why);
 void pics_forget(void);
 void pics_exit(void);
 

@@ -471,7 +471,7 @@ done:
 	return ok;
 }
 
-static long scan_fill(void *u, uint8_t *buf, long n)
+static long scan_fill(void *u, unsigned char *buf, long n)
 {
 	long k = pdf_stream_read(u, buf, n);
 
@@ -574,6 +574,39 @@ static int rows_ccitt(PDOC *d, POBJ *o, PCSRC *src, const unsigned char *s, long
 	return ok;
 }
 
+/* a JPEG: its bytes read a piece at a time, its rows made one at a time
+   (common's pic_jpeg_rows: TJpgDec, a 1 MB ST's); -1 one TJpgDec doesn't
+   take (progressive, CMYK), or not stored so: pdf_image, whole */
+typedef struct {
+	PIMG_ROW row;
+	void *u;
+} JROWS;
+
+static void jpeg_row(void *u, long y, const unsigned short *px, const unsigned char *alpha)
+{
+	JROWS *j = u;
+
+	(void)alpha;			/* a JPEG's are solid */
+	j->row(j->u, y, px);
+}
+
+static int rows_jpeg(PDOC *d, POBJ *o, long obj, int w, int h, PIMG_ROW row, void *u, int *why)
+{
+	PCSRC *src = pdf_stream_open_coded(d, o, obj);
+	JROWS j;
+	int r;
+
+	if (!src)
+		return -1;
+	j.row = row;
+	j.u = u;
+	r = pic_jpeg_rows(scan_fill, src, w, h, jpeg_row, &j, why);
+	pdf_stream_close(src);
+	if (r > 0)
+		*why = PIC_OK;
+	return r;
+}
+
 int pdf_image_rows(PDOC *d, long obj, int w, int h, PIMG_ROW row, void *u, long max_bytes, int *why)
 {
 	POBJ *o = pdf_get(d, obj), *cs, *fl;
@@ -591,8 +624,10 @@ int pdf_image_rows(PDOC *d, long obj, int w, int h, PIMG_ROW row, void *u, long 
 		fl = pdf_res(d, pa_at(fl, fl->a - 1));
 	if (fl && fl->t == PO_NAME)
 		fn = fl->u.p;
-	if (fn && (!strcmp(fn, "DCTDecode") || !strcmp(fn, "DCT") || !strcmp(fn, "JPXDecode") || !strcmp(fn, "JBIG2Decode")))
-		return -1;			/* a JPEG (or not shown): pdf_image's */
+	if (fn && (!strcmp(fn, "JPXDecode") || !strcmp(fn, "JBIG2Decode")))
+		return -1;			/* not shown: pdf_image says so */
+	if (fn && (!strcmp(fn, "DCTDecode") || !strcmp(fn, "DCT")))
+		return rows_jpeg(d, o, obj, w, h, row, u, why);
 	sw = pd_int(d, o, "Width", 0);
 	sh = pd_int(d, o, "Height", 0);
 	bpc = (int)pd_int(d, o, "BitsPerComponent", 8);
@@ -619,7 +654,7 @@ int pdf_image_rows(PDOC *d, long obj, int w, int h, PIMG_ROW row, void *u, long 
 	if (fn && (!strcmp(fn, "CCITTFaxDecode") || !strcmp(fn, "CCF"))) {
 		SBUF b;
 		const char *term = NULL;
-		PCSRC *src = pdf_stream_open_scan(d, o, obj);
+		PCSRC *src = pdf_stream_open_coded(d, o, obj);
 		long oom = d->st.oom;
 
 		sb_init(&b);
