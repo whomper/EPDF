@@ -24,7 +24,7 @@
 #define NPICS 8
 
 static PICE cache[NPICS];
-static PIC_PAL pal;
+static PIC_PAL *pal;			/* taken at the first picture (not resident) */
 static int pal_planes = -1;
 static unsigned long tick;
 
@@ -55,16 +55,18 @@ PIC_PAL *pics_palette(void)
 	if (planes > 8)
 		return NULL;
 	if (pal_planes == planes)
-		return &pal;
+		return pal;
+	if (!pal && !(pal = calloc(1, sizeof *pal)))
+		return NULL;
 	n = 1 << planes;
 	memset(rgb, 0, sizeof rgb);
 	if (planes == 1) {
 		/* white and black, without asking: EmuTOS's mono screen answers
 		   vq_color with colours that made the dither run away */
 		rgb[0][0] = rgb[0][1] = rgb[0][2] = 255;
-		pic_pal_init(&pal, 2, (const unsigned char (*)[3])rgb);
+		pic_pal_init(pal, 2, (const unsigned char (*)[3])rgb);
 		pal_planes = planes;
-		return &pal;
+		return pal;
 	}
 	for (pen = 0; pen < n; pen++) {
 		short c[3];
@@ -75,9 +77,9 @@ PIC_PAL *pics_palette(void)
 		rgb[r][1] = (unsigned char)(c[1] * 255L / 1000);
 		rgb[r][2] = (unsigned char)(c[2] * 255L / 1000);
 	}
-	pic_pal_init(&pal, n, (const unsigned char (*)[3])rgb);
+	pic_pal_init(pal, n, (const unsigned char (*)[3])rgb);
 	pal_planes = planes;
-	return &pal;
+	return pal;
 }
 
 /* the picture as the VDI's standard bitmap (planes one after another, a
@@ -492,5 +494,9 @@ void pics_forget(void)
 void pics_exit(void)
 {
 	pics_forget();
-	pic_pal_free(&pal);
+	if (pal) {
+		pic_pal_free(pal);
+		free(pal);
+		pal = NULL;
+	}
 }

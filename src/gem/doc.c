@@ -56,7 +56,7 @@ static long rpage = -1;			/* the page being read, -1 none */
 static int rdone;			/* the reader has finished rpage */
 static int abandon;			/* the document closes: stop the page and the picture */
 static unsigned long slice_end;		/* tos_ms() when the slice is up */
-static PTEXT rt;			/* the page read */
+static PTEXT *rt;			/* the page read (taken with the document) */
 static long rpage_oom;			/* the reader's refused allocations before it */
 static PICE *rpic;			/* the picture being decoded, NULL none */
 static int pdone;			/* the decoder has finished rpic */
@@ -116,10 +116,10 @@ static void reader(void)
 		pdf_page_reset(doc);
 		doc->st.mem_peak = doc->st.mem;	/* this page's own peak, for the log */
 		rpage_oom = doc->st.oom;
-		ptext_init(&rt);
-		rt.soft = 1;
-		rt.pics = 1;
-		pdf_page_text(doc, rpage, &rt);
+		ptext_init(rt);
+		rt->soft = 1;
+		rt->pics = 1;
+		pdf_page_text(doc, rpage, rt);
 		rdone = 1;
 		coro_switch(&read_co, &main_co);
 	}
@@ -189,7 +189,7 @@ static void stop_reading(void)
 		running = &read_co;
 		while (!rdone)
 			coro_switch(&main_co, &read_co);
-		ptext_free(&rt);
+		ptext_free(rt);
 		rpage = -1;
 	}
 	if (rpic) {
@@ -226,9 +226,14 @@ int doc_pic_start(void)
 		coro_start(&pic_co, pic_stack, PIC_STACK, decoder);
 		pic_started = 1;
 	}
+	rpic_pal = pics_palette();
+	if (!rpic_pal && planes <= 8) {
+		e->state = PICS_FAILED;		/* no memory for the palette's table */
+		e->why = PIC_MEMORY;
+		return 0;
+	}
 	rpic = e;
 	rpic_planes = planes;
-	rpic_pal = pics_palette();
 	rpic_shown = 0;
 	rpic_rows = 0;
 	pdone = 0;
@@ -356,7 +361,7 @@ int doc_open(const char *path, int cols, int lines_mode, const char *cache)
 		return -1;
 	}
 	doc->stop = slice_up;
-	if (!read_stack && !(read_stack = malloc(READ_STACK))) {
+	if ((!read_stack && !(read_stack = malloc(READ_STACK))) || (!rt && !(rt = calloc(1, sizeof *rt)))) {
 		pdf_close(doc);
 		free(doc);
 		doc = NULL;
@@ -437,26 +442,26 @@ long doc_slice(unsigned long ms)
 	if (!rdone)
 		return -1;
 	n = rpage;
-	if (rt.failed && doc->st.oom != rpage_oom && retried_page != n && give_back("page")) {
+	if (rt->failed && doc->st.oom != rpage_oom && retried_page != n && give_back("page")) {
 		retried_page = n;
-		ptext_free(&rt);
+		ptext_free(rt);
 		rdone = 0;		/* the reader reads it again in the next slice */
 		return -1;
 	}
 	rpage = -1;
-	rt_failed = rt.failed;
+	rt_failed = rt->failed;
 	/* the soft break as CR in the store: the conversion keeps CR, LF and Tab only */
-	for (i = 0; i < rt.text.len; i++)
-		if (rt.text.s[i] == '\v')
-			rt.text.s[i] = '\r';
-	a = rt.text.s && rt.text.len > 0 ? cs_to_atari(rt.text.s, rt.text.len, CS_UTF8, &len) : NULL;
+	for (i = 0; i < rt->text.len; i++)
+		if (rt->text.s[i] == '\v')
+			rt->text.s[i] = '\r';
+	a = rt->text.s && rt->text.len > 0 ? cs_to_atari(rt->text.s, rt->text.len, CS_UTF8, &len) : NULL;
 	if (ts_put(&store, n, a ? a : "", a ? len : 0) != 0) {
 		/* no room for it: shown as empty, not read again */
 		ts_put(&store, n, "", 0);
 		log_event("page-lost", NULL, NULL);
 	}
 	free(a);
-	ptext_free(&rt);
+	ptext_free(rt);
 	done++;
 #ifdef EPDF_STACKS
 	if (done % 25 == 0)

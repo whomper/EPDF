@@ -4,12 +4,21 @@
 #include <string.h>
 #include "rscale.h"
 
-static uint8_t pc8[256], pc4h[256], pc4l[256], pc2[4][256];
+/* the bits' counts, taken at the first scan (1.8 KB not resident) */
+static uint8_t *pc8, *pc4h, *pc4l, (*pc2)[256];
 static int ready;
 
-static void tables(void)
+static int tables(void)
 {
 	int b, i;
+	uint8_t *t = malloc(256 * 7);
+
+	if (!t)
+		return -1;
+	pc8 = t;
+	pc4h = t + 256;
+	pc4l = t + 512;
+	pc2 = (uint8_t (*)[256])(t + 768);
 
 	for (b = 0; b < 256; b++) {
 		int n = 0;
@@ -23,14 +32,15 @@ static void tables(void)
 			pc2[i][b] = (uint8_t)(((b >> (7 - 2 * i)) & 1) + ((b >> (6 - 2 * i)) & 1));
 	}
 	ready = 1;
+	return 0;
 }
 
 int rs_init(RSCALE *r, int cols, int f)
 {
 	if (f != 2 && f != 4 && f != 8)
 		return -1;
-	if (!ready)
-		tables();
+	if (!ready && tables() != 0)
+		return -1;
 	r->f = f;
 	r->cols = cols;
 	r->outw = (cols + f - 1) / f;

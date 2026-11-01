@@ -331,13 +331,15 @@ static struct {
 	long len, missing;
 	int skip;			/* inside a picture's line (pdftext.c's "\x7F..."): not copied */
 	unsigned long said;		/* tos_ms() when the progress was last shown */
-	char piece[COPY_STEP * 2 + 2];	/* a step's text, line ends made CR LF */
+	char *piece;			/* a step's text, line ends made CR LF: COPY_STEP * 2 + 2 bytes,
+					   taken while a copy goes on (not resident: 1 Nov 2026) */
 } cp;
 
 static void copy_end(const char *say)
 {
 	if (cp.on)
 		clip_put_end(0);	/* given up: the old clipboard kept, or this one removed */
+	free(cp.piece);
 	memset(&cp, 0, sizeof cp);
 	if (say)
 		win_status(say);
@@ -354,6 +356,11 @@ static void copy(void)
 		return;
 	}
 	memset(&cp, 0, sizeof cp);
+	if (!(cp.piece = malloc(COPY_STEP * 2 + 2))) {
+		clip_put_end(0);
+		win_status("too little memory to copy");
+		return;
+	}
 	cp.on = 1;
 	cp.p0 = v->sel_p0;
 	cp.o0 = v->sel_o0;
