@@ -259,6 +259,26 @@ int dv_recount(DOCVIEW *v, int max)
 	return v->nstale > 0;
 }
 
+int dv_recount_view(DOCVIEW *v, long window)
+{
+	long n = v->top_page, have;
+
+	/* the top page, then those after it while the window isn't full: a
+	   page each, not rows + 2 pages (24 of a book on an ST's high mode,
+	   175 ms each: View > The page's lines 4.3 s on ST, 1 Nov 2026) */
+	if (n < 0 || n >= v->npages)
+		return v->nstale > 0;
+	if (v->stale[n])
+		dv_page_ready(v, n);
+	have = v->rows[n] - v->top_row;
+	while (have < window && ++n < v->npages) {
+		if (v->stale[n])
+			dv_page_ready(v, n);
+		have += v->rows[n];
+	}
+	return v->nstale > 0;
+}
+
 int dv_row(DOCVIEW *v, long r, int *kind, const char **s, long *n, long *page, long *off)
 {
 	long p = v->top_page, row = v->top_row + r;

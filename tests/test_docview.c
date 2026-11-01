@@ -103,6 +103,39 @@ int main(void)
 	dv_free(&v);
 	ts_close(&ts);
 
+	/* a new mode counts only the pages the window shows: four pages of
+	   four rows (a head, three lines), a window of 5 rows from page 2's
+	   second row takes pages 2 and 3; 1 and 4 are counted as they come */
+	{
+		const char *pg = "a\nb\nc\n";
+		long i;
+
+		ts_open(&ts, 4, 1000, "");
+		dv_init(&v, &ts, 4, 10, 0);
+		for (i = 0; i < 4; i++) {
+			ts_put(&ts, i, pg, (long)strlen(pg));
+			dv_page_ready(&v, i);
+		}
+		v.top_page = 1;
+		v.top_row = 1;
+		dv_set_cols(&v, 10, 1);
+		eq("all stale", v.nstale, 4);
+		eq("more to count", dv_recount_view(&v, 5), 1);
+		eq("page 1 left", v.stale[0], 1);
+		eq("page 2 counted", v.stale[1], 0);
+		eq("page 3 counted", v.stale[2], 0);
+		eq("page 4 left", v.stale[3], 1);
+		rows(&v, 5, "a|b|c|#3|a");
+		v.top_page = 3;
+		v.top_row = 0;
+		eq("the last one", dv_recount_view(&v, 5), 1);
+		eq("page 4 counted", v.stale[3], 0);
+		v.top_page = 0;
+		eq("none left", dv_recount_view(&v, 5), 0);
+		dv_free(&v);
+		ts_close(&ts);
+	}
+
 	/* a picture: 100 x 50 points at most 200 pixels wide, rows of 10: 5 rows;
 	   in a medium mode (pixels twice as tall) 3 */
 	{

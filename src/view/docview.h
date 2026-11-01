@@ -67,6 +67,9 @@ void dv_set_cols(DOCVIEW *v, int cols, int lines_mode);
 /* up to max pages counted again, those nearest the top first; 1 while
    more are to count */
 int dv_recount(DOCVIEW *v, int max);
+/* the pages a window of that many rows shows from the top counted again,
+   the rest left to when they come into view; 1 while more are to count */
+int dv_recount_view(DOCVIEW *v, long window);
 
 /* the pictures' room: at most w pixels wide, rows ch pixels high, a pixel
    aspect / 16 as tall as it is wide (16 square, 32 an ST's medium mode);

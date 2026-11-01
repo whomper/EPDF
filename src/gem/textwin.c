@@ -180,7 +180,7 @@ void win_layout(void)
 	if (v) {
 		dv_set_cols(v, cols, settings_lines());
 		dv_set_pics(v, cols * cw, ch, pix_aspect);
-		dv_recount(v, rows + 2);	/* the pages in view at once, the rest later */
+		dv_recount_view(v, rows + 1);	/* the pages in view at once, the rest as they come into view */
 		dv_scroll(v, 0, rows);
 	}
 	sliders();
@@ -561,7 +561,7 @@ void win_redraw(const GRECT *area)
 	r0 = (a.y - work.y) / ch;
 	r1 = (a.y + a.h - work.y + ch - 1) / ch;
 	if (doc_view() && doc_view()->nstale)
-		dv_recount(doc_view(), rows + 2);	/* those in view counted before they are drawn */
+		dv_recount_view(doc_view(), rows + 1);	/* those in view counted before they are drawn */
 	wind_update(BEG_UPDATE);
 	graf_mouse(M_OFF, NULL);
 	wind_get(win, WF_FIRSTXYWH, &r.x, &r.y, &r.w, &r.h);
@@ -676,7 +676,7 @@ static void moved(long d)
 			if (a.y + a.h > work.y + work.h)
 				a.h = (short)(work.y + work.h - a.y);
 			if (doc_view() && doc_view()->nstale)
-				dv_recount(doc_view(), rows + 2);
+				dv_recount_view(doc_view(), rows + 1);
 			if (a.h > 0)
 				draw_rows(&a, r0, r1);
 		}
