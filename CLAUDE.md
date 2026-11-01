@@ -119,10 +119,15 @@ at first. This section is kept up to date: the build, the tests, what a release 
   corpus's 25 pass; the 3 fail on JPEGs too big for a 68000 (0.4). The hub cleared cc798ec3 on Erez's
   TOS (gui and acc_all; ST 1.04: a line 80, next page 320, Select all 60, About 250) and 0.3 went out
   (v0.3 on b58255c5, 31 Oct); the hub's big.py on ST-1 with TOS 1.04 was still running (a loss there:
-  0.3.x). Phase report sent through the hub. 0.4, pictures, started 1 Nov ("start 0.4"): a JPEG
-  streamed and made a row at a time (a patch to common's pic.c: pic_jpeg_rows), its 1/8 preview
-  first on a 68000, the DSP on a Falcon (asked the hub: a baseline header reader in pic.c, or
-  libjpeg in the one program). Still to do on the ST's speed: a line (80), next page (310), a page scrolled with
+  0.3.x). Phase report sent through the hub. 0.4, pictures, started 1 Nov ("start 0.4"), is on main as
+  16eb2a9e: a JPEG streamed and made a row at a time (common's pic_jpeg_rows), every picture made a
+  row at a time shown from the top down as its rows come (Erez: "rows top to bottom"; the plan's 1/8
+  preview didn't pay on a 68000, 197 s against 257 s), the DSP on a Falcon through pic.c's own
+  baseline header reader (PIC_TJPGD_DSP, dspjpeg_port_jpeg: novel 100 -> 37 s, scan-stinternals 219
+  -> 47 s on Falcon-4), scr_fill where scr_cpu_wins(), -DDLG_CPU; then 5.8's one click (click.c:
+  the selection's first cell on press, a double click's word on its release). On ST-1 the 0.3
+  JPEG failures are gone (novel 257 s, scan-gfabasic 282 s); the two maps still read no page in
+  300 s (the interpreter on a 68000). Still to do on the ST's speed: a line (80), next page (310), a page scrolled with
   everything selected (~205), the About box (265 on EmuTOS); the interpreter's per-glyph cost (a map's
   or photo-nasa-sunda's one page isn't read in 200 s on a 68000).
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
@@ -154,6 +159,10 @@ at first. This section is kept up to date: the build, the tests, what a release 
     (mono: black). A standard PDF shows no badge.
   - Order: EPDF 1.0; the format and EPDF reading it (1.1); EConvert direct; then gateway mode.
 - **Decisions in the code:** a program only, so `EPDF.INF` is beside it (6.1), not in the boot root.
+  A picture made a row at a time is drawn from the top down as its rows come (pics_rows: one plane
+  or 16 bits straight into the window's bitmap, else a 16-row band the main stack turns with
+  vr_trnfm; nothing on the decoder's stack calls the VDI). The loop asks for one click (5.8);
+  press_double/press_track (common's click.c) time the double click and tell a drag.
   One window: ^U quits, ^W does nothing (3.2). Find next is ^G and Find previous Shift+^G (the Mac's
   keys, 3.2). The extractor's text is UTF-8; the view's is the Atari character set with the soft
   break as CR (`cs_to_atari` keeps only CR, LF, Tab). The page's text is read a page at a time on its

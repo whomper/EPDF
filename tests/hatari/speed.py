@@ -29,6 +29,14 @@ speed = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(speed)
 
 
+def mouse(r, x, y, what):
+    """the mouse to (x, y) in the Atari's screen, then xdotool's what"""
+    g = dict(l.split("=") for l in r.xdo("getwindowgeometry", "--shell", r.win()).split())
+    r.xdo("mousemove", str(int(g["X"]) + x), str(int(g["Y"]) + y))
+    time.sleep(0.4)
+    r.xdo(*what.split())
+
+
 def run(work, machine):
     r = speed.Rig(os.path.join(work, machine.replace(":", "_")), machine)
     try:
@@ -54,6 +62,11 @@ def run(work, machine):
         r.act("a page scrolled", speed.PAGE, lambda: r.key("shift+Down"))
         r.act("the last page", speed.WINDOW, lambda: r.key("shift+ctrl+Home"))
         r.act("the start", speed.WINDOW, lambda: r.key("Home"))
+        # 5.8: the selection's first cell on the press, nothing more on the
+        # release where it was; a double click's word on its second release
+        r.act("a press in the text", speed.KEY, lambda: mouse(r, 200, 160, "mousedown 1"))
+        r.act("its release", speed.KEY, lambda: r.xdo("mouseup", "1"))
+        r.act("a double click: the word", speed.KEY, lambda: mouse(r, 200, 160, "click --repeat 2 --delay 60 1"))
         r.act("Select all", speed.KEY, lambda: r.key("ctrl+a"))
         r.act("Copy", speed.KEY, lambda: r.key("ctrl+c"), job=True)    # its turns: a sliced job (2.2)
         r.act("View > The page's lines", speed.WINDOW, lambda: r.menu(150, 60))

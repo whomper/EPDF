@@ -34,6 +34,7 @@
 #include "menu.h"
 #include "pics.h"
 #include "dspjpeg.h"
+#include "click.h"
 #include "epdf.h"
 
 short ap_id;
@@ -450,11 +451,26 @@ static int copy_step(void)
 
 /* a click in the text: the selection made by dragging; with Shift, the
    selection there is taken on to where the button is let go */
-static void click(short mx, short my, short kstate)
+/* messages that come while a press is held (press_track): as the loop's */
+static void message(const short *msg);
+static void select_word(short mx, short my);
+
+static void held_msg(short *m)
+{
+	message(m);
+}
+
+/* a left press in the text (the guidelines, 5.8): the selection's first
+   cell at once; let go where it was, nothing (or, the second press of a
+   double click, the word); moved while held, the selection follows the
+   mouse until it is let go */
+static void click(short mx, short my, short kstate, int dbl)
 {
 	DOCVIEW *v = doc_view();
 	long ap, ao, p, o, lp, lo;
 	short mb, ks;
+	static const GRECT anywhere = { 0, 0, 32767, 32767 };
+	int how;
 
 	if (!v || !win_hit(mx, my, &p, &o)) {
 		if (v && v->sel_p0 >= 0)
@@ -471,6 +487,15 @@ static void click(short mx, short my, short kstate)
 	select_span(ap, ao, p, o);
 	lp = p;
 	lo = o;
+	how = press_track(&anywhere, mx, my, 0, held_msg, 0, 0);
+	if (how != PRESS_DRAG) {
+		if (dbl)
+			select_word(mx, my);	/* the double click's word, on its second release */
+		else if (v->sel_p0 == v->sel_p1 && v->sel_o0 == v->sel_o1)
+			select_span(-1, 0, 0, 0);	/* a click alone: nothing selected */
+		menu_states();
+		return;
+	}
 	wind_update(BEG_MCTRL);
 	for (;;) {
 		graf_mkstate(&mx, &my, &mb, &ks);
@@ -901,19 +926,18 @@ int main(void)
 		if (win_sliders_due() || pending || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0)
 			flags |= MU_TIMER;
 		t = win_sliders_due() || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0 ? 0 : bg_timer(pending, 1000);
-		/* either button going down (0x100: the AES's "any of them"), two
-		   clicks counted */
-		which = evnt_multi_(flags, 0x102, 3, 0, t, msg, &ev);
+		/* either button going down (0x100: the AES's "any of them"), one
+		   click (5.8: the press at once, not held back for the
+		   double-click time); a double click timed by press_double */
+		which = evnt_multi_(flags, 0x101, 3, 0, t, msg, &ev);
 		bg_tick();
 		if (which & MU_KEYBD)
 			key(ev.kstate, ev.kreturn);
 		if ((which & MU_BUTTON) && !win_iconified() && wind_find(ev.mx, ev.my) == win_handle()) {
 			if (ev.mbutton & 2)
-				context_menu(ev.mx, ev.my);
-			else if (ev.breturn >= 2)
-				select_word(ev.mx, ev.my);
+				context_menu(ev.mx, ev.my);	/* (on press, as ever) */
 			else
-				click(ev.mx, ev.my, ev.kstate);
+				click(ev.mx, ev.my, ev.kstate, press_double(1, ev.mx, ev.my));
 		}
 		if (which & MU_MESAG)
 			message(msg);
