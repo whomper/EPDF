@@ -52,6 +52,7 @@ static int lines_mode;
 static char open_dir[160] = "";		/* where Open looks first (FOLDER=) */
 static int find_dir;			/* a search runs: 1 forwards, -1 back; 0 none */
 static void menu_states(void);
+static int menus_due;			/* menu_states() in the next idle turn */
 static void command(int c);
 
 #ifndef BEG_MCTRL
@@ -214,6 +215,7 @@ static void menu_states(void)
 	signed char now[5];
 	int i;
 
+	menus_due = 0;
 	if (!has_menu)
 		return;
 	now[0] = v && v->sel_p0 >= 0;
@@ -245,7 +247,7 @@ static void select_span(long p0, long o0, long p1, long o1)
 	dv_select(v, p0, o0, p1, o1);
 	/* the rows whose look changed: the old shape off, the new one on */
 	win_sel_change(q0, r0, q1, r1, p0, o0, p1, o1);
-	menu_states();
+	menus_due = 1;		/* Copy's state in the next turn: an AES call off the key's */
 }
 
 /* the search starts after the selection (before it, going back), or at the
@@ -957,9 +959,9 @@ int main(void)
 
 		/* the sliders after a scroll, once no key waits; the reading
 		   on while nothing else does */
-		if (win_sliders_due() || pending || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0)
+		if (win_sliders_due() || menus_due || pending || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0)
 			flags |= MU_TIMER;
-		t = win_sliders_due() || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0 ? 0 : bg_timer(pending, 1000);
+		t = win_sliders_due() || menus_due || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0 ? 0 : bg_timer(pending, 1000);
 		/* either button going down (0x100: the AES's "any of them"), one
 		   click (5.8: the press at once, not held back for the
 		   double-click time); a double click timed by press_double */
@@ -989,6 +991,8 @@ int main(void)
 				rows_pic = -1;
 			} else if (win_sliders_due()) {
 				win_sliders();
+			} else if (menus_due) {
+				menu_states();
 			} else if (cp.on) {
 				/* a copy the user asked for: before the reading and the
 				   pictures; a step starts only if one as long as the last

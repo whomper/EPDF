@@ -147,7 +147,8 @@ void win_info(void)
 /* what the sliders were set to: TOS 1.04's AES draws the slider at each
    wind_set, 40 ms on an ST, so each is set only when it changes (a line
    scrolled set both again: the 80 ms turn after the key) */
-static short sl_size = -1, sl_pos = -1;
+static short sl_size = -1, sl_pos = -1, sl_px = -1;	/* sl_px: the place in the bar's pixels */
+extern short gl_hchar;
 
 static void sliders(void)
 {
@@ -162,13 +163,27 @@ static void sliders(void)
 	}
 	if (size < 1)
 		size = 1;
-	if (size != sl_size) {
+	if (size != sl_size)
 		wind_set(win, WF_VSLSIZE, (short)size, 0, 0, 0);
+	{
+		/* the place set only when the slider would move a pixel (or reach
+		   an end): the bar is the work area's height less its two arrows,
+		   the slider at least a cell high. A long book's line moves it
+		   less than a pixel: no wind_set, 36 ms on TOS 1.04, after most */
+		long track = work.h - 2L * (gl_hchar + 3), sl, px;
+
+		if (track < 1)
+			track = 1;
+		sl = size * track / 1000;
+		if (sl < gl_hchar)
+			sl = gl_hchar;
+		px = track > sl ? pos * (track - sl) / 1000 : 0;
+		if (pos != sl_pos && (size != sl_size || pos == 0 || pos == 1000 || px != sl_px || sl_pos < 0)) {
+			wind_set(win, WF_VSLIDE, (short)pos, 0, 0, 0);
+			sl_pos = (short)pos;
+			sl_px = (short)px;
+		}
 		sl_size = (short)size;
-	}
-	if (pos != sl_pos) {
-		wind_set(win, WF_VSLIDE, (short)pos, 0, 0, 0);
-		sl_pos = (short)pos;
 	}
 	sliders_due = 0;
 }
@@ -1060,7 +1075,7 @@ int win_open(short x, short y, short w, short h)
 	win = wind_create(icon_kind(WKIND), desk_x, desk_y, desk_w, desk_h);
 	if (win < 0)
 		return -1;
-	sl_size = sl_pos = -1;		/* a new window: its sliders set */
+	sl_size = sl_pos = sl_px = -1;	/* a new window: its sliders set */
 	win_title();
 	wind_set_str(win, WF_INFO, " ");
 	wind_open(win, x, y, w, h);
