@@ -18,7 +18,9 @@ time. The first scrolls come while the pages are still being read in the
 background: what a key waits for then is the page reading stopping.
 """
 import os
+import re
 import shutil
+import subprocess
 import sys
 import time
 
@@ -40,6 +42,41 @@ def mouse(r, x, y, what):
     r.xdo("mousemove", str(int(g["X"]) + x), str(int(g["Y"]) + y))
     time.sleep(0.4)
     r.xdo(*what.split())
+
+
+def differ(a, b):
+    """pixels that differ between two shots"""
+    c = subprocess.run(["compare", "-metric", "AE", a, b, "null:"], capture_output=True, text=True)
+    try:
+        return int(float(c.stderr.split()[0]))
+    except (ValueError, IndexError):
+        return -1
+
+
+def held_press(r, what, x, y, mods=()):
+    """5.8 by its pixels (the hub, 1 Nov 2026): a press held still for a
+    second shows what it draws before the release. TOS's AES holds
+    BEG_UPDATE back while the button is held still, and AESGAP can't see
+    that wait (it is inside an AES call), so the shot is the check: held
+    the same as after the release, and not the same as before the press.
+    Gives (what, pixels held against after, before against after)"""
+    g = dict(l.split("=") for l in r.xdo("getwindowgeometry", "--shell", r.win()).split())
+    r.xdo("mousemove", str(int(g["X"]) + x), str(int(g["Y"]) + y))
+    time.sleep(1)
+    tag = re.sub(r"[^a-z0-9]+", "-", what.lower()).strip("-")
+    before = shutil.copy(r.shot("held-before"), os.path.join(r.shots, "held-%s-0-before.png" % tag))
+    for m in mods:
+        r.xdo("keydown", m)
+    r.xdo("mousedown", "1")
+    time.sleep(1)
+    held = shutil.copy(r.shot("held-held"), os.path.join(r.shots, "held-%s-1-held.png" % tag))
+    r.xdo("mouseup", "1")
+    for m in mods:
+        r.xdo("keyup", m)
+    time.sleep(1)
+    r.still()
+    after = shutil.copy(r.shot("held-after"), os.path.join(r.shots, "held-%s-2-after.png" % tag))
+    return what, differ(held, after), differ(before, after)
 
 
 def run(work, machine):
@@ -81,12 +118,22 @@ def run(work, machine):
         r.act("a press in the text", speed.KEY, lambda: mouse(r, 200, 160, "mousedown 1"))
         r.act("its release", speed.KEY, lambda: r.xdo("mouseup", "1"))
         r.act("a double click: the word", speed.KEY, lambda: mouse(r, 200, 160, "click --repeat 2 --delay 60 1"))
+        # the presses that draw, each held still a second (5.8): Shift's
+        # taking the word's selection on two rows, and a press taking it off
+        held = [held_press(r, "Shift+press: the selection taken on", 200, 192, ("shift",)),
+                held_press(r, "a press: the selection off", 200, 160)]
         r.act("Select all", speed.KEY, lambda: r.key("ctrl+a"))
         r.act("Copy", speed.KEY, lambda: r.key("ctrl+c"), job=True)    # its turns: a sliced job (2.2)
         r.act("View > The page's lines", speed.WINDOW, lambda: r.menu(150, 60))
         r.act("About box", speed.DIALOG, lambda: r.menu(36, 28))
         r.act("About box closed", speed.WINDOW, lambda: r.key("Escape"))
-        return r.report()
+        bad = r.report()
+        print("\nheld still a second (5.8): pixels held against after the release, before against after")
+        for what, ha, ba in held:
+            ok = ha == 0 and ba > 0
+            print("  %-40s %6d %6d  %s" % (what, ha, ba, "ok" if ok else "NOT SHOWN WHILE HELD"))
+            bad |= not ok
+        return bad
     finally:
         r.stop()
 

@@ -20,6 +20,7 @@
 #include "docview.h"
 #include "bidi.h"
 #include "pic.h"
+#include "click.h"
 #include "pics.h"
 #include "epdf.h"
 
@@ -892,14 +893,17 @@ void win_sel_change(long q0, long r0, long q1, long r1, long p0, long o0, long p
 	DOCVIEW *v = doc_view();
 	GRECT r, c;
 	long row, n, page, off;
-	int kind;
+	int kind, took;
 	const char *s;
 
 	if (!v || win < 0 || iconified || (q0 < 0 && p0 < 0))
 		return;
 	in_order(&q0, &r0, &q1, &r1);
 	in_order(&p0, &o0, &p1, &o1);
-	wind_update(BEG_UPDATE);
+	/* not BEG_UPDATE of our own: drawn on a press (the old selection off,
+	   Shift's taken on) or while dragging, TOS's AES would hold it back
+	   while the button is held still (5.8, common's click.h) */
+	took = press_update_begin();
 	graf_mouse(M_OFF, NULL);
 	wind_get(win, WF_FIRSTXYWH, &r.x, &r.y, &r.w, &r.h);
 	while (r.w > 0 && r.h > 0) {
@@ -946,7 +950,7 @@ void win_sel_change(long q0, long r0, long q1, long r1, long p0, long o0, long p
 		wind_get(win, WF_NEXTXYWH, &r.x, &r.y, &r.w, &r.h);
 	}
 	graf_mouse(M_ON, NULL);
-	wind_update(END_UPDATE);
+	press_update_end(took);
 }
 
 /* the selection's start shown in the window, a few rows under the top */
