@@ -20,6 +20,8 @@ less the AES's idle 'stop'. The milliseconds are at the machine's clock
 
 Hatari's command FIFO (--cmd-fifo) passes the debugger commands; each
 starts the profile again, so the breakpoint is set just before the key.
+GEMPROF_DEBUG adds debugger commands at each break (say "profile caller";
+their output is in WORK/MACHINE/hatari.log).
 """
 import bisect
 import collections
@@ -141,7 +143,8 @@ def main(argv):
         for name in names:
             what, do = ACTIONS[name]
             mark = len(r.console())
-            r.hatari.stdin.write(b"profile cycles 100000\nc\n")
+            extra = os.environ.get("GEMPROF_DEBUG", "")    # more debugger commands at the break ("profile callers")
+            r.hatari.stdin.write(("profile cycles 100000\n%sc\n" % (extra + "\n" if extra else "")).encode())
             r.hatari.stdin.flush()
             debug("b pc = evnt_multi_ :once")
             time.sleep(1)
