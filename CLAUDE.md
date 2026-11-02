@@ -192,6 +192,12 @@ at first. This section is kept up to date: the build, the tests, what a release 
   (text_plain_state() < 0) win_draw_all clears the rows' area and owes their text to the bands of
   about 60 ms (the hub's option (a)); a row drawn by the VDI ends with a fill, not with spaces.
   `-DEPDF_BAND_ALWAYS` (XOPT) bands on any font, for the rigs here, which have no NVDI.
+  The row's first turn split (the text moved and its place cleared, then the row drawn whole:
+  Falcon-4 under NVDI with Courier 14, Copy's turns 60 -> 40), and common's pic.c built with
+  PIC_NO_GIF/PIC_NO_PNG (AERA-Atari 6588b07, this session's patch: resident 424,504, "free-kb 29"
+  under NVDI with four accessories). The hub cleared ca99f40e5 and 0.5.2 went out on 2 Nov (v0.5.2
+  on a002695e). Next: Select all on ST:mono at its 50, a longer document for speed.py's shot of the
+  row, About against Rig.about, the maps' speed on an ST.
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
   checks: `tools/nofpu.sh`); decode streams with `inflate_open`/`inflate_read` so a page needn't fit
   in memory; reuse `common/atari/dspjpeg.c` with `PIC_LIBJPEG` for JPEG on the Falcon; a progressive
