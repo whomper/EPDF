@@ -81,7 +81,8 @@ static TV *laid(DOCVIEW *v, long n)
 	/* the soft breaks: a space, or a line end showing the page's lines
 	   (copied whole, then each CR found and changed: a character at a
 	   time with a long index was 54 ms a page on an ST, gemprof.py) */
-	memcpy(t, s, (size_t)len);
+	if (len > 0)
+		memcpy(t, s, (size_t)len);
 	for (k = 0; k < len; k++) {
 		long f = tv_find(t + k, len - k, '\r');
 
