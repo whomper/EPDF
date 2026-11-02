@@ -217,7 +217,12 @@ at first. This section is kept up to date: the build, the tests, what a release 
   capitals; names from outside are used as they came. files.py fails on an own name with a capital
   and finds epdf.txc with machines.ci_path. The first release with it says once in its notes: "File
   names are now in lowercase. On an ext2 drive, delete the old folder and install this release
-  fresh." The hub runs it under FreeMiNT on ext2 first and says when to release (EUpdate first).
+  fresh." The hub ran it under FreeMiNT on ext2 (common/tests/xaaes, run.py --ext2: epdf.inf written
+  and read back in lowercase), cleared fc06515ce with the round (speed.py with Rig.about; the bar's
+  job shot on a book of 400 pages, bar_shot, where the 30-page book was read first; Select all kept
+  as it is, 40-45 of its 50: box_op, the window's rows inverted, 19 ms, is the 68000's floor) and,
+  after EUpdate 1.28, 0.5.4 went out on 2 Nov (v0.5.4 on 1fec4feb). Resident 421,768. Next: the
+  bar's separator 0xFA, the middle dot (0xF9 draws high in TOS 1.04's font, the hub).
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
   checks: `tools/nofpu.sh`); decode streams with `inflate_open`/`inflate_read` so a page needn't fit
   in memory; reuse `common/atari/dspjpeg.c` with `PIC_LIBJPEG` for JPEG on the Falcon; a progressive
