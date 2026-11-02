@@ -395,8 +395,20 @@ int doc_open(const char *path, int cols, int lines_mode, const char *cache)
 	const char *base;
 
 	doc_close();
-	heap_grain = 0;		/* a document's heap in the libc's own big blocks (64 KB
-				   steps left it in pieces: memory refused on ST-1) */
+	{
+		/* a document's heap as the libc's has always been: a first block
+		   of a quarter of what is free (taken and given back to the heap
+		   here), then doubling. 64 KB steps, and the libc's later blocks
+		   alone, left a document's memory in pieces: memory refused on
+		   ST-1 in up to six of the corpus's documents, none before */
+		long q = ((long)Malloc(-1L) / 4) & ~1L;
+		void *p;
+
+		heap_grain = q;
+		p = q > 1024 ? malloc((size_t)(q - 1024)) : NULL;
+		free(p);
+		heap_grain = 0;
+	}
 	if ((!read_stack && !(read_stack = malloc(READ_STACK))) || (!rt && !(rt = calloc(1, sizeof *rt))) ||
 	    !(odoc = malloc(sizeof *odoc)))
 		return -1;
@@ -435,13 +447,10 @@ static long open_done(void)
 		name[0] = '\0';
 		return DOC_FAILED;
 	}
-	/* three sixteenths of the memory free keeps text, at most 256 KB; the
-	   rest goes to the cache file. (A quarter while the libc's heap held a
-	   quarter of the memory already, so a quarter of the rest; with the
-	   heap in 64 KB steps a quarter of all of it left the reader short on
-	   ST-1: memory refused in six of the corpus's documents) */
+	/* a quarter of the memory free keeps text, at most 256 KB; the rest
+	   goes to the cache file */
 	free_mem = (long)Malloc(-1L);
-	budget = free_mem / 16 * 3;
+	budget = free_mem / 4;
 	if (budget > 256L * 1024)
 		budget = 256L * 1024;
 	if (budget < 16L * 1024)
