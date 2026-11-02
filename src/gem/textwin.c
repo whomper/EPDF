@@ -729,6 +729,7 @@ static char bar_now[BAR_CELLS + 1], bar_want[BAR_CELLS + 1];	/* the words as dra
 static short bar_fc_now, bar_fc_want;	/* cells filled */
 static int bar_go, bar_due;		/* the row wanted; something to draw */
 static int bar_info;			/* the info line to set again, in a turn of its own */
+static int bar_whole;			/* the row's place cleared: the row to draw whole, in a turn of its own */
 static int job_kind;			/* the job shown, 0 none */
 static unsigned long job_t0, job_since, idle_since, bar_drawn, eta_at;
 static long job_p0, eta_s = -1;
@@ -977,7 +978,7 @@ void win_progress(int kind, const char *what, long done, long total)
 
 int win_progress_due(void)
 {
-	return (bar_due || bar_info) && win >= 0 && !iconified;
+	return (bar_due || bar_info || bar_whole) && win >= 0 && !iconified;
 }
 
 int win_progress_shown(void)
@@ -1056,9 +1057,16 @@ static void bar_place(int on)
 		text_clip(vdi_h, clip);
 		scr_rows(vdi_h, pxy);
 		text_noclip(vdi_h);
-		if (on)
-			draw_bar(&whole);
-		else {
+		if (on) {
+			/* its place cleared now, the row drawn in the next turn (both
+			   in one were 60 ms on Falcon-4 under NVDI with Courier 14,
+			   the hub's Copy: its turns) */
+			text_clip(vdi_h, clip);
+			fill_set = 0;
+			blank(&whole, whole.x, (short)(whole.x + whole.w), whole.y, bar_h);
+			text_noclip(vdi_h);
+			bar_whole = 1;
+		} else {
 			/* the band at the foot that came in: cleared now, its text
 			   owed to the next turns (as a scroll's rows are) */
 			long r0 = (whole.y + whole.h - m - work.y) / ch;
@@ -1089,6 +1097,18 @@ void win_progress_draw(void)
 	if (bar_go != (bar_h != 0)) {
 		bar_place(bar_go);
 		bar_due = bar_h && (memcmp(bar_now, bar_want, sizeof bar_now) || bar_fc_now != bar_fc_want);
+		return;
+	}
+	if (bar_whole) {
+		bar_whole = 0;
+		if (bar_h) {
+			memcpy(bar_now, bar_want, sizeof bar_now);
+			bar_fc_now = bar_fc_want;
+			b = whole;
+			b.h = bar_h;
+			win_redraw(&b);		/* the row whole, where it shows */
+		}
+		bar_drawn = tos_ms();
 		return;
 	}
 	if (bar_info) {
