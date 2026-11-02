@@ -10,6 +10,7 @@ enum { PICS_FREE, PICS_WANTED, PICS_DECODING, PICS_READY, PICS_FAILED };
 typedef struct {
 	long obj;
 	int w, h;
+	int flip;			/* DV_FLIPV: made upside down, then turned; DV_FLIPH: mirrored */
 	int state, why;
 	MFDB bm;			/* the screen's own bitmap, in ST RAM, when bm.fd_addr */
 	long ready;			/* its rows made, drawn from the top down while it is made a
@@ -18,14 +19,14 @@ typedef struct {
 	unsigned long used;
 } PICE;
 
-PICE *pics_get(long obj, int w, int h);	/* NULL: every slot busy decoding */
+PICE *pics_get(long obj, int w, int h, int flip);	/* NULL: every slot busy decoding */
 int pics_waiting(void);
 PICE *pics_next(void);			/* one to decode, marked decoding */
 /* the decoder's answer for a picture made whole: std (the standard
    bitmap) or NULL (why) */
 void pics_done(PICE *e, unsigned char *std, long bytes, int why);
 PIC_PAL *pics_palette(void);		/* NULL on a 16-bit screen */
-unsigned char *pics_standard(const PIC *p, int nplanes, PIC_PAL *pl, long *bytes);
+unsigned char *pics_standard(PIC *p, int nplanes, PIC_PAL *pl, int flip, long *bytes);
 /* e's picture made a row at a time straight into e->bm, its rows shown
    as they come (e->ready): 1 made, 0 not (*why), -1 not this way
    (pdf_image, pics_standard, pics_done). On the decoder's stack */

@@ -162,7 +162,16 @@ at first. This section is kept up to date: the build, the tests, what a release 
   more free than 0.4.2) and, at doc_open, one block of a quarter of what is free, then the
   libc's doubling; known: ST-1's big.py has memory refused, and recovered, in manual-compendium
   and scan-stinternals (none lost), to be looked at again with the hub's task #98 (the family's
-  first heap block). Still to look at: ST:med's page third band (120 ms on TOS 1.04).
+  first heap block). Still to look at: ST:med's page third band (120 ms on TOS 1.04). Then
+  Erez's photos of 0.5 (2 Nov): EDOS_01.PDF's first page lost its first word into the next line
+  (a drop cap, its baseline a line down: taken into the line its text starts) and read its two
+  columns across each other (the right one 3 points higher, beside a picture: the gutter found as a
+  strip of the body's lines without ink, `clear_strip`, kept off tables, contents pages and
+  listings), text set up the page's edge is a line of its own after the page's text, a piece
+  printed twice at its place comes once, `columns()` no longer runs its output into its right
+  column's lines (pages with lines cut at a gutter lost lines and doubled others); a picture placed
+  upside down or mirrored is shown as its page shows it ("v"/"h" after the size in its line,
+  PIMG.flip, PICE.flip); the arrow set at the start (the desktop's busy bee stayed).
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
   checks: `tools/nofpu.sh`); decode streams with `inflate_open`/`inflate_read` so a page needn't fit
   in memory; reuse `common/atari/dspjpeg.c` with `PIC_LIBJPEG` for JPEG on the Falcon; a progressive

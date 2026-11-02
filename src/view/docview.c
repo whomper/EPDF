@@ -4,8 +4,10 @@
 #include <string.h>
 #include "docview.h"
 
-/* a picture's line: its object and size in points; 0 when it isn't one */
-static int pic_of(const char *s, long n, long *obj, long *w, long *h)
+/* a picture's line: its object and size in points, and how it is turned
+   (*flip, DV_FLIPV / DV_FLIPH: 'v' and 'h' after the size); 0 when it
+   isn't one */
+static int pic_of(const char *s, long n, long *obj, long *w, long *h, int *flip)
 {
 	long v[3] = { 0, 0, 0 };
 	int k = 0;
@@ -13,11 +15,16 @@ static int pic_of(const char *s, long n, long *obj, long *w, long *h)
 
 	if (n < 4 || s[0] != 0x7F)
 		return 0;
+	*flip = 0;
 	for (i = 1; i < n && k < 3; i++) {
-		if (s[i] >= '0' && s[i] <= '9')
+		if (s[i] >= '0' && s[i] <= '9' && !*flip)
 			v[k] = v[k] * 10 + (s[i] - '0');
-		else if (s[i] == ' ' || s[i] == 'x')
+		else if ((s[i] == ' ' || s[i] == 'x') && !*flip)
 			k++;
+		else if (k == 2 && s[i] == 'v')
+			*flip |= DV_FLIPV;
+		else if (k == 2 && s[i] == 'h')
+			*flip |= DV_FLIPH;
 		else
 			return 0;
 	}
@@ -105,7 +112,7 @@ static TV *laid(DOCVIEW *v, long n)
 		TV *tv = &v->lay[best].tv;
 		long *lr = malloc((size_t)(tv->nlines + 1) * sizeof *lr), i, ln, o, w, h;
 		const char *ls;
-		int pw, ph;
+		int pw, ph, fl;
 
 		if (!lr) {
 			v->lay[best].page = -1;
@@ -114,7 +121,7 @@ static TV *laid(DOCVIEW *v, long n)
 		lr[0] = 0;
 		for (i = 0; i < tv->nlines; i++) {
 			ls = tv_line(tv, i, &ln);
-			lr[i + 1] = lr[i] + (ls && pic_of(ls, ln, &o, &w, &h) ? pic_rows(v, w, h, &pw, &ph) : 1);
+			lr[i + 1] = lr[i] + (ls && pic_of(ls, ln, &o, &w, &h, &fl) ? pic_rows(v, w, h, &pw, &ph) : 1);
 		}
 		v->lay[best].lrow = lr;
 	}
@@ -322,6 +329,7 @@ int dv_row(DOCVIEW *v, long r, int *kind, const char **s, long *n, long *page, l
 	}
 	{
 		long *lr = lrow_of(v, tv), lo = 0, hi = tv->nlines - 1, r = row - 1, obj, w, h;
+		int fl;
 
 		*kind = DV_TEXT;
 		if (lr && tv->nlines > 0) {
@@ -335,9 +343,10 @@ int dv_row(DOCVIEW *v, long r, int *kind, const char **s, long *n, long *page, l
 					hi = mid - 1;
 			}
 			*s = tv_line(tv, lo, n);
-			if (*s && pic_of(*s, *n, &obj, &w, &h)) {
+			if (*s && pic_of(*s, *n, &obj, &w, &h, &fl)) {
 				*kind = DV_PIC;
 				v->pic.obj = obj;
+				v->pic.flip = fl;
 				v->pic.rows = pic_rows(v, w, h, &v->pic.w, &v->pic.h);
 				v->pic.row = r - lr[lo];
 				*off = (long)(*s - (const char *)tv->text);

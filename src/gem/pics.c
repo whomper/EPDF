@@ -20,6 +20,7 @@
 #include "epdf.h"
 #include "pics.h"
 #include "pdfimg.h"
+#include "docview.h"
 
 #define NPICS 8
 
@@ -85,11 +86,27 @@ PIC_PAL *pics_palette(void)
 /* the picture as the VDI's standard bitmap (planes one after another, a
    row of words each), or the 16-bit screen's pixels: pure work, done on
    the reading's stack; NULL out of memory or stopped */
-unsigned char *pics_standard(const PIC *p, int nplanes, PIC_PAL *pl, long *bytes)
+unsigned char *pics_standard(PIC *p, int nplanes, PIC_PAL *pl, int flip, long *bytes)
 {
 	long wd = (p->w + 15) / 16, plane = wd * 2 * p->h, y, x;
 	unsigned char *pens, *std;
 	int k;
+
+	/* turned the way its page shows it (its pixels are the decoder's) */
+	if (flip & DV_FLIPH)
+		for (y = 0; y < p->h; y++) {
+			unsigned short *a = p->px + y * p->w, *b = a + p->w - 1, t;
+
+			for (; a < b; a++, b--)
+				t = *a, *a = *b, *b = t;
+		}
+	if (flip & DV_FLIPV)
+		for (y = 0; y < p->h / 2; y++) {
+			unsigned short *a = p->px + y * p->w, *b = p->px + (p->h - 1 - y) * p->w, t;
+
+			for (x = 0; x < p->w; x++, a++, b++)
+				t = *a, *a = *b, *b = t;
+		}
 
 	if (nplanes == 16) {
 		/* the Falcon's high colour: RGB 5-6-5, a word a pixel, rows of whole words */
@@ -157,6 +174,7 @@ typedef struct {
 	long b0, bn;			/* the band's first row, and rows in it */
 	int full;			/* the band waits for pics_band */
 	int nomem;
+	unsigned short *mir;		/* a mirrored picture's row, right to left */
 } SINK;
 
 static SINK *sink;			/* the one being made */
@@ -191,9 +209,15 @@ static void sink_row(void *u, long y, const unsigned short *px)
 	}
 	if (k->nomem)
 		return;
+	if (k->mir) {
+		for (x = 0; x < k->w; x++)
+			k->mir[x] = px[k->w - 1 - x];
+		px = k->mir;
+	}
 	if (k->nplanes == 16) {
 		memcpy((unsigned char *)e->bm.fd_addr + y * k->row, px, (size_t)k->w * 2);
-		e->ready = y + 1;
+		if (!(e->flip & DV_FLIPV))
+			e->ready = y + 1;
 		return;
 	}
 	pic_dither_row(k->dt, px, NULL, k->pens);
@@ -203,7 +227,8 @@ static void sink_row(void *u, long y, const unsigned short *px)
 		for (x = 0; x < k->w; x++)
 			if (k->pens[x] & 1)
 				o[x >> 3] |= (unsigned char)(0x80 >> (x & 7));
-		e->ready = y + 1;
+		if (!(e->flip & DV_FLIPV))
+			e->ready = y + 1;
 		return;
 	}
 	for (p = 0; p < k->nplanes; p++) {
@@ -249,7 +274,8 @@ int pics_band(void)
 	dst.fd_addr = (unsigned char *)k->e->bm.fd_addr + k->b0 * k->row;
 	dst.fd_stand = 0;
 	vr_trnfm(vdi_h, &src, &dst);
-	k->e->ready = k->b0 + k->bn;
+	if (!(k->e->flip & DV_FLIPV))
+		k->e->ready = k->b0 + k->bn;	/* (upside down: shown when it is whole, turned) */
 	k->full = 0;
 	return 1;
 }
@@ -272,7 +298,11 @@ int pics_rows(PDOC *d, PICE *e, int nplanes, PIC_PAL *pl, int *why)
 	}
 	if (nplanes != 1 && nplanes != 16)
 		k.band = calloc(1, (size_t)(k.wd * 2 * BAND * nplanes));
-	if ((nplanes != 16 && (!k.pens || !k.dt)) || (nplanes != 1 && nplanes != 16 && !k.band)) {
+	if (e->flip & DV_FLIPH)
+		k.mir = malloc((size_t)e->w * 2);
+	if ((nplanes != 16 && (!k.pens || !k.dt)) || (nplanes != 1 && nplanes != 16 && !k.band) ||
+	    ((e->flip & DV_FLIPH) && !k.mir)) {
+		free(k.mir);
 		free(k.pens);
 		free(k.band);
 		pic_dither_close(k.dt);
@@ -282,6 +312,7 @@ int pics_rows(PDOC *d, PICE *e, int nplanes, PIC_PAL *pl, int *why)
 	sink = &k;
 	how = pdf_image_rows(d, e->obj, e->w, e->h, sink_row, &k, 2L << 20, why);
 	sink = NULL;
+	free(k.mir);
 	free(k.pens);
 	free(k.band);
 	pic_dither_close(k.dt);
@@ -311,13 +342,14 @@ static void let_go(PICE *e)
 }
 
 /* the picture obj at w x h: its slot (ready, wanted, decoding or failed) */
-PICE *pics_get(long obj, int w, int h)
+PICE *pics_get(long obj, int w, int h, int flip)
 {
 	int i, best = -1;
 
 	tick++;
 	for (i = 0; i < NPICS; i++)
-		if (cache[i].state && cache[i].obj == obj && cache[i].w == w && cache[i].h == h) {
+		if (cache[i].state && cache[i].obj == obj && cache[i].w == w && cache[i].h == h &&
+		    cache[i].flip == flip) {
 			cache[i].used = tick;
 			return &cache[i];
 		}
@@ -335,6 +367,7 @@ PICE *pics_get(long obj, int w, int h)
 	cache[best].obj = obj;
 	cache[best].w = w;
 	cache[best].h = h;
+	cache[best].flip = flip;
 	cache[best].state = PICS_WANTED;
 	cache[best].used = tick;
 	return &cache[best];
@@ -431,6 +464,21 @@ void pics_made(PICE *e, int ok, int why)
 		snprintf(a, sizeof a, "why %d", why ? why : PIC_MEMORY);
 		failed(e, why, a);
 		return;
+	}
+	if (e->flip & DV_FLIPV) {
+		/* made top row first where its page shows it at the bottom:
+		   turned over now that it is whole (rows are the screen's
+		   format's whole words, so a row moves as it is) */
+		long row = e->bm.fd_wdwidth * (long)e->bm.fd_nplanes, y;	/* words */
+
+		for (y = 0; y < e->h / 2; y++) {
+			unsigned short *a = (unsigned short *)e->bm.fd_addr + y * row,
+				       *b = (unsigned short *)e->bm.fd_addr + (e->h - 1 - y) * row, t;
+			long i;
+
+			for (i = 0; i < row; i++, a++, b++)
+				t = *a, *a = *b, *b = t;
+		}
 	}
 	e->ready = e->h;
 	e->state = PICS_READY;

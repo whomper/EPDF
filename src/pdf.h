@@ -221,7 +221,12 @@ typedef struct {
 	fx dw, dh;			/* the size it is drawn at, page points */
 	fx top;				/* its top edge on the page (page points, y up) */
 	char filter[16];
+	char flip;			/* PIMG_V: drawn upside down (its first row at the bottom),
+					   PIMG_H: mirrored, by its placing (Calamus SL's) */
 } PIMG;
+
+#define PIMG_V 1
+#define PIMG_H 2
 
 typedef struct {
 	SBUF text;			/* the page's text, UTF-8 */

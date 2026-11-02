@@ -182,7 +182,7 @@ static void decoder(void)
 		if (p) {
 			static char a[48];
 
-			rpic_std = pics_standard(p, rpic_planes, rpic_pal, &rpic_bytes);
+			rpic_std = pics_standard(p, rpic_planes, rpic_pal, rpic->flip, &rpic_bytes);
 			if (!rpic_std)
 				rpic_why = abandon ? PIC_STOPPED : PIC_MEMORY;
 			pic_free(p);

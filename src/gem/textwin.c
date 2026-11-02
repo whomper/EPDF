@@ -337,7 +337,7 @@ static short pic_x(int w)
    frame with a word in it */
 static void draw_pic(const GRECT *c, short y, const DVPIC *pr)
 {
-	PICE *e = pics_get(pr->obj, pr->w, pr->h);
+	PICE *e = pics_get(pr->obj, pr->w, pr->h, pr->flip);
 	short x = pic_x(pr->w), right = (short)(c->x + c->w), tx = (short)(work.x + MARGIN);
 	long y0 = pr->row * ch, y1 = y0 + ch > pr->h ? pr->h : y0 + ch;
 	/* the rows made: all of it, or (made a row at a time) those so far,

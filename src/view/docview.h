@@ -27,6 +27,7 @@
 
 #define DV_LAID 4			/* pages kept laid out */
 
+enum { DV_FLIPV = 1, DV_FLIPH = 2 };	/* a picture shown upside down, mirrored (pdf.h's PIMG_V, PIMG_H) */
 enum { DV_TEXT, DV_HEAD, DV_WAIT, DV_PIC };	/* a row of text, a page's head, a page still to come,
 						   a row of a picture */
 
@@ -35,6 +36,7 @@ enum { DV_TEXT, DV_HEAD, DV_WAIT, DV_PIC };	/* a row of text, a page's head, a p
 typedef struct {
 	long obj;			/* its image XObject */
 	int w, h;			/* shown at w x h pixels */
+	int flip;			/* DV_FLIPV: its rows bottom up, DV_FLIPH: right to left */
 	long row, rows;			/* this row, of rows */
 } DVPIC;
 

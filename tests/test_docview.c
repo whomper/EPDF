@@ -157,6 +157,32 @@ int main(void)
 		dv_free(&v);
 		ts_close(&ts);
 	}
+
+	/* a picture placed upside down ("v") or mirrored ("h"): still a
+	   picture, the way it is turned given with its row */
+	{
+		const char *pg = "\x7F" "12 100x50v\n\x7F" "13 100x50vh\n\x7F" "14 100x50q\n";
+		int kind;
+		long off, n, pg_;
+		const char *s;
+
+		ts_open(&ts, 1, 1000, "");
+		ts_put(&ts, 0, pg, (long)strlen(pg));
+		dv_init(&v, &ts, 1, 20, 0);
+		dv_set_pics(&v, 200, 10, 16);
+		while (dv_recount(&v, 5))
+			;
+		dv_row(&v, 1, &kind, &s, &n, &pg_, &off);
+		eq("v: a picture", kind, DV_PIC);
+		eq("v: upside down", v.pic.flip, DV_FLIPV);
+		dv_row(&v, 6, &kind, &s, &n, &pg_, &off);
+		eq("vh: a picture", kind, DV_PIC);
+		eq("vh: both", v.pic.flip, DV_FLIPV | DV_FLIPH);
+		dv_row(&v, 11, &kind, &s, &n, &pg_, &off);
+		eq("q: text", kind, DV_TEXT);
+		dv_free(&v);
+		ts_close(&ts);
+	}
 	puts(bad ? "docview: FAILED" : "docview: ok");
 	return bad != 0;
 }

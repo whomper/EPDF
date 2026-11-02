@@ -1676,6 +1676,17 @@ static void do_xobject(IX *x, const char *name)
 				im->h = h;
 				im->dw = fxabs(c[0]) + fxabs(c[1]);
 				im->dh = fxabs(c[2]) + fxabs(c[3]);
+				/* the image's first row is at the unit square's top: a
+				   placing that turns the square over shows it upside
+				   down or mirrored (EDOS_01.PDF's menu, 2 Nov 2026); a
+				   quarter turn isn't followed */
+				im->flip = 0;
+				if (!c[1] && !c[2]) {
+					if (c[3] < 0)
+						im->flip |= PIMG_V;
+					if (c[0] < 0)
+						im->flip |= PIMG_H;
+				}
 				/* the unit square's highest corner */
 				im->top = y0 > y1 ? y0 : y1;
 				if (y2 > im->top)
@@ -2630,6 +2641,14 @@ static void emit_line(IX *x, CH *c, long a, long b, PTEXT *t)
 		int rtl = is_rtl_text(x->txt.s + c[i].off, c[i].len);
 
 		if (!rtl) {
+			/* the same piece again where it stood (printed twice, a bold
+			   made by a small offset: EDOS_01.PDF's running title) once */
+			if (i > a && c[i].len == c[i - 1].len && fxabs(c[i].x - c[i - 1].x) < (c[i].fs >> 3) &&
+			    fxabs(c[i].y - c[i - 1].y) < (c[i].fs >> 3) &&
+			    !memcmp(x->txt.s + c[i].off, x->txt.s + c[i - 1].off, (size_t)c[i].len)) {
+				i++;
+				continue;
+			}
 			/* a space between pieces when there is a gap */
 			if (i > a) {
 				fx gap = c[i].x - (c[i - 1].x + c[i - 1].dx);
@@ -2711,7 +2730,8 @@ static void pic_order(PTEXT *t)
 	t->pnext = 0;
 }
 
-/* a picture's line, a paragraph of its own: "\x7F<object> <w>x<h>" */
+/* a picture's line, a paragraph of its own: "\x7F<object> <w>x<h>", then
+   'v' when it shows upside down, 'h' mirrored */
 static void pic_line(PTEXT *t, const PIMG *im)
 {
 	char b[48];
@@ -2721,7 +2741,8 @@ static void pic_line(PTEXT *t, const PIMG *im)
 		return;			/* an inline image, or a speck */
 	if (o->len && o->s[o->len - 1] != '\n')
 		sb_addc(o, '\n');
-	snprintf(b, sizeof b, "\x7F%ld %ldx%ld\n", im->obj, (long)(im->dw >> 16), (long)(im->dh >> 16));
+	snprintf(b, sizeof b, "\x7F%ld %ldx%ld%s%s\n", im->obj, (long)(im->dw >> 16), (long)(im->dh >> 16),
+		 im->flip & PIMG_V ? "v" : "", im->flip & PIMG_H ? "h" : "");
 	sb_adds(o, b);
 }
 
@@ -2734,32 +2755,83 @@ typedef struct {
 #define GBIN (8L << 16)		/* the gutter's bins: 8 points */
 #define GBINS 128
 
+#define VLINE (-(4000L << 16))	/* below it: the lines of text set up or down the page */
+
 /*
  * The gutter where too few lines have a gap in it for the vote (lines
  * wholly in their column: the columns' baselines apart, so one isn't set
  * beside the other; Calamus SL's EDOS_01.PDF, 1 Nov 2026): a strip near
- * the middle of the text that at most a tenth of the lines cross without
- * a gap there (votes: the lines with one), with at least three tenths of
- * the lines having text on each side of it. Its middle, or 0.
+ * the middle of the text where at most a tenth of the lines in the body's
+ * size have ink (a gap of 1.5 em is none: a line's two parts, one in each
+ * column), with at least a fifth of them having text on each side of it,
+ * as wide on average as half the left side and two thirds of the right
+ * (columns of text: a contents page's page numbers or a listing's
+ * comments make none, The ST Internals), and most of the left's lines
+ * without text beside them (a table's rows have it). Headings, in a bigger
+ * size, may cross it: they are above the columns (EDOS_01.PDF's title,
+ * page 1). Its middle, or 0.
  */
-static fx clear_strip(const LN *ln, long nl, fx lo, fx width, long nb, const short *votes)
+static fx clear_strip(IX *x, const LN *ln, long nl, fx lo0, fx width, long nb)
 {
-	short cover[GBINS];
-	long k, b, from = -1, run = 0, best = -1, bestrun = 0, nleft, nright;
-	fx g0, g1;
+	fx lo = lo0;		/* lo0: the bins' start */
+	short ink[GBINS], sizes[128];
+	long k, c, b, from = -1, run = 0, best = -1, bestrun = 0, nleft, nright, nbody = 0;
+	fx g0, g1, body = 0, blo = 0x7fffffff, bhi = -0x7fffffff;	/* the body's lines' extent */
+	int top = 0;
 
-	memset(cover, 0, sizeof cover);
+	/* the body's size: the one most lines are in (to a quarter point), and
+	   the lines in it (up to an eighth bigger: ASK Magazine's 9-point line
+	   of ornaments over its 7-point text is not one) */
+	memset(sizes, 0, sizeof sizes);
+	for (k = 0; k < nl; k++)
+		if (ln[k].y > VLINE && ln[k].fs >> 14 < 128)
+			sizes[ln[k].fs >> 14]++;
+	for (k = 1; k < 128; k++)
+		if (sizes[k] > sizes[top])
+			top = (int)k;
+	body = ((fx)top + 1) << 14;		/* the top of its quarter point */
+	memset(ink, 0, sizeof ink);
 	for (k = 0; k < nl; k++) {
-		long b0 = (ln[k].x0 - lo) / GBIN, b1 = (ln[k].x1 - lo) / GBIN;
+		fx r0;
 
-		for (b = b0 < 0 ? 0 : b0; b <= b1 && b < nb; b++)
-			cover[b]++;
+		if (ln[k].y <= VLINE || ln[k].fs > body + (body >> 3))
+			continue;
+		nbody++;
+		if (ln[k].x0 < blo)
+			blo = ln[k].x0;
+		if (ln[k].x1 > bhi)
+			bhi = ln[k].x1;
+		/* each run of glyphs without a gap of 1.5 em: the bins it covers */
+		r0 = x->ch[ln[k].a].x;
+		for (c = ln[k].a + 1; c <= ln[k].b; c++) {
+			fx end = x->ch[c - 1].x + x->ch[c - 1].dx;
+
+			if (c < ln[k].b) {
+				fx fs = x->ch[c].fs < x->ch[c - 1].fs ? x->ch[c].fs : x->ch[c - 1].fs;
+
+				if (x->ch[c].x - end <= fs + (fs >> 1))
+					continue;
+			}
+			{
+				long b0 = (r0 - lo) / GBIN, b1 = (end - lo) / GBIN;
+
+				for (b = b0 < 0 ? 0 : b0; b <= b1 && b < nb; b++)
+					ink[b]++;
+			}
+			if (c < ln[k].b)
+				r0 = x->ch[c].x;
+		}
 	}
-	/* the widest run of such bins within the middle 30-70 % */
+	if (nbody < 8)
+		return 0;
+	/* the widest run of such bins within the middle 25-75 % of the body's
+	   lines (a heading's, or a line of ornaments', may run far wider; ASK
+	   Magazine's sidebar beside its text: 73 %) */
+	lo = blo;
+	width = bhi - blo;
 	for (b = 0; b <= nb; b++) {
-		fx at = lo + b * GBIN + GBIN / 2;
-		int ok = b < nb && (cover[b] - votes[b]) * 10L <= nl && at >= lo + width * 3 / 10 &&
-			 at <= lo + width * 7 / 10;
+		fx at = lo0 + b * GBIN + GBIN / 2;
+		int ok = b < nb && ink[b] * 10L <= nbody && at >= lo + width / 4 && at <= lo + width * 3 / 4;
 
 		if (ok) {
 			if (!run++)
@@ -2772,15 +2844,40 @@ static fx clear_strip(const LN *ln, long nl, fx lo, fx width, long nb, const sho
 	}
 	if (best < 0)
 		return 0;
-	g0 = lo + best * GBIN;
-	g1 = lo + (best + bestrun) * GBIN;
+	g0 = lo0 + best * GBIN;
+	g1 = lo0 + (best + bestrun) * GBIN;
 	nleft = nright = 0;
-	for (k = 0; k < nl; k++) {
-		nleft += ln[k].x0 < g0;
-		nright += ln[k].x1 > g1;
+	{
+		long wl = 0, wr = 0, npair = 0;	/* (in 1/16 points: a page's lines in points would overflow) */
+
+		for (k = 0; k < nl; k++)
+			if (ln[k].y > VLINE && ln[k].fs <= body + (body >> 3)) {
+				fx le = ln[k].x0, rs = ln[k].x1;	/* the left part's end, the right's start */
+
+				for (c = ln[k].a; c < ln[k].b; c++) {
+					if (x->ch[c].x + x->ch[c].dx <= g0)
+						le = x->ch[c].x + x->ch[c].dx;
+					else if (x->ch[c].x >= g1 && rs == ln[k].x1)
+						rs = x->ch[c].x;
+				}
+				npair += ln[k].x0 < g0 && ln[k].x1 > g1;
+				if (ln[k].x0 < g0) {
+					nleft++;
+					wl += (le - ln[k].x0) >> 12;
+				}
+				if (ln[k].x1 > g1) {
+					nright++;
+					wr += (ln[k].x1 - rs) >> 12;
+				}
+			}
+		/* (and most of the left's lines alone on their line: a table's
+		   names each have their row's text beside them, its wrapped
+		   lines alone on the right, The ST Internals' line-A variables,
+		   the Compendium's modes) */
+		if (nleft * 5 < nbody || nright * 5 < nbody || wl * 2 < nleft * ((g0 - lo) >> 12) ||
+		    wr * 3 < nright * 2 * ((lo + width - g1) >> 12) || nleft - npair <= npair)
+			return 0;
 	}
-	if (nleft * 10 < nl * 3 || nright * 10 < nl * 3)
-		return 0;
 	return (g0 + g1) / 2;
 }
 
@@ -2801,6 +2898,8 @@ static long columns(IX *x, LN *ln, long nl)
 	if (nl < 8)
 		return nl;
 	for (k = 0; k < nl; k++) {
+		if (ln[k].y <= VLINE)
+			continue;
 		if (ln[k].x0 < lo)
 			lo = ln[k].x0;
 		if (ln[k].x1 > hi)
@@ -2816,6 +2915,8 @@ static long columns(IX *x, LN *ln, long nl)
 	for (k = 0; k < nl; k++) {
 		long last = -1;
 
+		if (ln[k].y <= VLINE)
+			continue;
 		for (c = ln[k].a + 1; c < ln[k].b; c++) {
 			fx end = x->ch[c - 1].x + x->ch[c - 1].dx, gap = x->ch[c].x - end;
 			/* the smaller of the two sides' sizes: a heading beside the
@@ -2850,18 +2951,21 @@ static long columns(IX *x, LN *ln, long nl)
 	} else
 		gutter = 0;
 	if ((best < 0 || votes[best] < 6 || votes[best] * 10L < nl * 3 ||
-	     gutter < lo + width * 3 / 10 || gutter > lo + width * 7 / 10) && (gutter = clear_strip(ln, nl, lo, width, nb, votes)) == 0)
+	     gutter < lo + width * 3 / 10 || gutter > lo + width * 7 / 10) && (gutter = clear_strip(x, ln, nl, lo, width, nb)) == 0)
 		return nl;
 	left = ln + nl;			/* the room after the lines: the left column, then the right */
-	out = pdf_malloc(x->d, 2 * nl * (long)sizeof(LN));
+	/* out: the lines and those cut in two, 2 x nl at most; right after it
+	   (where out ran on into right before: a page with lines cut at the
+	   gutter lost lines and doubled others, EDOS_01.PDF page 1) */
+	out = pdf_malloc(x->d, 3 * nl * (long)sizeof(LN));
 	if (!out)
 		return nl;
-	right = out + nl;
+	right = out + 2 * nl;
 	for (k = 0; k <= nl; k++) {
 		LN *l = k < nl ? &ln[k] : NULL;
 		long m = -1;
 
-		if (l) {
+		if (l && l->y > VLINE) {
 			if (l->x1 <= gutter + l->fs) {
 				left[nl_++] = *l;
 				continue;
@@ -2902,7 +3006,7 @@ static long columns(IX *x, LN *ln, long nl)
 			out[nout++] = *l;
 	}
 	memcpy(ln, out, (size_t)nout * sizeof(LN));
-	pdf_free(x->d, out, 2 * nl * (long)sizeof(LN));
+	pdf_free(x->d, out, 3 * nl * (long)sizeof(LN));
 	return nout;
 }
 
@@ -2951,6 +3055,55 @@ static void assemble(IX *x, PTEXT *t)
 		if (s->len == 1 && x->txt.s[s->off] == ' ' && fxabs(n->y - s->y) < (s->fs >> 1) && n->x < s->x &&
 		    n->x > s->x - (s->fs >> 1) && fxabs(p->y - s->y) < (s->fs >> 1) && p->x < n->x)
 			s->x = n->x - 1;
+	}
+	/* text set up or down the page (a running title along its edge,
+	   EDOS_01.PDF's "SOFTWARE") would be cut into a letter a line and
+	   glued to the ends of the lines beside it: turned to lie along a line
+	   of its own after the page's text, one for each place it stands */
+	{
+		fx vx = 0, vfs = 0;
+		int up = 0;
+
+		for (i = 0; i < x->nch; i++) {
+			CH *c = &x->ch[i];
+			int k, blank = 1;
+
+			for (k = 0; k < c->len && blank; k++)
+				blank = x->txt.s[c->off + k] == ' ';
+			/* (a space between its words where its letters stand, with
+			   no advance of its own, goes with them) */
+			/* (upright within 7 degrees: a map's slanted labels stay
+			   as they were) */
+			if (fxabs(c->dy) > 8 * fxabs(c->dx) || (blank && vfs && !c->dy && fxabs(c->x - vx) < vfs)) {
+				fx along;
+
+				if (c->dy)
+					up = c->dy > 0;
+				along = up ? c->y : -c->y;
+				vx = c->x;
+				vfs = c->fs;
+				c->y = -c->x - (8000L << 16);
+				c->x = along;
+				c->dx = fxabs(c->dy);
+				c->dy = 0;
+			} else
+				vfs = 0;
+		}
+	}
+	/* a big initial letter (a drop cap: EDOS_01.PDF's "I started", the I
+	   at 14.7 points beside lines of 7.2, its baseline a line below the
+	   first's): taken into the line the text after it starts, as its first
+	   letter, not into the line its baseline is on */
+	for (i = 0; i + 1 < x->nch; i++) {
+		CH *s = &x->ch[i], *n = &x->ch[i + 1];
+
+		if (s->len == 1 && !s->dy && !n->dy && n->fs > 0 && s->fs >= n->fs + (n->fs >> 1) && n->y > s->y &&
+		    n->y - s->y < s->fs && n->x > s->x && n->x - (s->x + s->dx) < n->fs) {
+			s->y = n->y;
+			s->fs = n->fs;
+			if (s->x + s->dx > n->x)
+				s->dx = n->x - s->x;
+		}
 	}
 	{
 		long chars = 0, spaces = 0;

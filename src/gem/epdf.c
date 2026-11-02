@@ -945,6 +945,9 @@ int main(void)
 			menu_icheck(menu.tree, mbar_object(&menu, CMD_LINES), lines_mode);
 		menu_states();
 	}
+	/* the arrow: the desktop leaves the busy bee it showed while EPDF
+	   loaded (Erez's TOS, 2 Nov 2026: the bee stayed the whole time) */
+	graf_mouse(ARROW, 0);
 	if (win_open(x, y, w, h) != 0) {
 		alert(1, "[3][No window is free.|Close one and start EPDF again.][ OK ]");
 		quit_now = 1;
