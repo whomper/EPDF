@@ -867,7 +867,7 @@ int main(void)
 	   with four accessories, 1 KB of it used with no document): an AES
 	   with NVDI needs room to save the screen under a menu's drop-down,
 	   and 0.5's first candidate left too little (the hub's acc_all) */
-	heap_grain = 64L * 1024;
+	heap_grain = HEAP_IDLE;		/* (doc.c: big blocks while a document is open) */
 	ap_id = appl_init();
 	if (ap_id < 0)
 		return 1;
