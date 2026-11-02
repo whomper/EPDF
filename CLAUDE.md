@@ -210,6 +210,14 @@ at first. This section is kept up to date: the build, the tests, what a release 
   white bar under the menu changing fewer) and 0.5.3 went out on 2 Nov (v0.5.3 on f0c05019). Resident
   421,648. Next (the hub): tests/hatari/speed.py to take common's Rig.about (ST:med's About 180 is within
   its 200), a longer document for the shot of the job in the bar, Select all on ST:mono at its 50.
+  Then the family's 6.6 (Erez, 2 Nov; AERA-Atari 408e806, 4a4f886): every file name EPDF gives is in
+  lowercase (epdf.inf, epdf.txc, epdf.hyp; common's crash.log, ehypview.prg), and so is every file a
+  release and its zip carry (`make dist` names them so and fails on a capital); on MiNT's ext2
+  EPDF.INF and epdf.inf are two files. Names shown to the user (the guide, README, alerts) stay in
+  capitals; names from outside are used as they came. files.py fails on an own name with a capital
+  and finds epdf.txc with machines.ci_path. The first release with it says once in its notes: "File
+  names are now in lowercase. On an ext2 drive, delete the old folder and install this release
+  fresh." The hub runs it under FreeMiNT on ext2 first and says when to release (EUpdate first).
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
   checks: `tools/nofpu.sh`); decode streams with `inflate_open`/`inflate_read` so a page needn't fit
   in memory; reuse `common/atari/dspjpeg.c` with `PIC_LIBJPEG` for JPEG on the Falcon; a progressive

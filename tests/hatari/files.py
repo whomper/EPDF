@@ -30,6 +30,7 @@ import importlib.util  # noqa: E402
 _spec = importlib.util.spec_from_file_location("aera_speed", os.path.join(TOP, "common", "tests", "speed", "speed.py"))
 speed = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(speed)
+machines = speed.machines
 
 PAGES = 40
 # a call and its caller: the desktop's and TOS's own come from ROM (EmuTOS
@@ -74,11 +75,16 @@ def run(work, machine):
         r.key("ctrl+q")
         time.sleep(8)
         calls = collections.Counter()
+        upper = set()
         for kind, path, pc in CALL.findall(r.console()):
-            name = path.split("\\")[-1].upper()
+            given = path.split("\\")[-1]
+            name = given.upper()
             if int(pc, 16) < 0xE00000 and name != "LAUNCH.TXT":    # LAUNCH.PRG's own
                 calls[(name, kind)] += 1
-        spilled = os.path.exists(os.path.join(r.hd, "EPDF", "EPDF.TXC")) or calls[("EPDF.TXC", "Fcreate")] > 0
+                if name != "BOOK.PDF" and given != given.lower():  # its own names (6.6)
+                    upper.add(given)
+        txc = machines.ci_path(r.hd, "EPDF/epdf.txc")     # EPDF writes it in lowercase (6.6)
+        spilled = os.path.exists(txc) or calls[("EPDF.TXC", "Fcreate")] > 0
         print("files on %s, %d pages%s" % (r.describe(), PAGES, "" if spilled else " (the text stayed in memory)"))
         bad = 0
         for (name, kind), n in sorted(calls.items()):
@@ -92,7 +98,10 @@ def run(work, machine):
         if others:
             print("FAIL  files the job shouldn't touch: " + ", ".join(others))
             bad += 1
-        if os.path.exists(os.path.join(r.hd, "EPDF", "EPDF.TXC")):
+        if upper:
+            print("FAIL  names not in lowercase (6.6): " + ", ".join(sorted(upper)))
+            bad += 1
+        if os.path.exists(txc):
             print("FAIL  EPDF.TXC left behind after the quit")
             bad += 1
         if not spilled:

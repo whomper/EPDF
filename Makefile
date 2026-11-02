@@ -5,7 +5,7 @@
 #   make test       host unit tests, and no FPU instruction in the Atari programs
 #   make help       binary/EPDF.HYP and .REF from docs/GUIDE.md (HCP=path to hcp:
 #                   common/tools/build-hcp.sh DIR builds it)
-#   make dist       a release's files in dist/: each file, and EPDF-x.y.zip
+#   make dist       a release's files in dist/, named in lowercase: each file, and epdf-x.y.zip
 #   make icons      icons/ and src/gem/icon*.h from common/icons/EPDF.txt, EPDFDOC.txt
 #   make gui-test   EPDF.PRG driven in Hatari (tests/hatari/gui.py)
 #   make files-test each file's opens on a 1 MB ST against the budget (tests/hatari/files.py, 6.5)
@@ -331,17 +331,21 @@ binary/EPDF.HYP: docs/GUIDE.md tools/mkhelp.py VERSION docs/front.json docs/help
 	$(HCP) -q -o $@ build/help/EPDF.STG >/dev/null
 	test -s binary/EPDF.REF
 
-# what a user needs, by name: the program, its guide, the licences and the icons
+# what a user needs, by name: the program, its guide, the licences and the icons.
+# Every file a release carries, and every folder in its zip, is named in
+# lowercase (guidelines 6.6: on MiNT's ext2 EPDF.INF and epdf.inf are two files)
 DIST  := binary/EPDF.PRG binary/EPDF.HYP binary/EPDF.REF NOTICES.TXT
 ICONS := icons/EPDF.RSC icons/EPDFNV.RSC icons/EPDF.ICN icons/EPDFMK.ICN icons/EPDFDOC.RSC icons/EPDFDNV.RSC
+lc = $(shell echo '$(notdir $(1))' | tr A-Z a-z)
 dist: binary/EPDF.PRG help
 	rm -rf dist
 	mkdir -p dist/zip/icons
-	cp $(DIST) $(ICONS) dist/
-	cp $(DIST) dist/zip/
-	cp $(ICONS) dist/zip/icons/
-	cd dist/zip && zip -q -9 -r ../EPDF-$(VERSION_STR).zip .
+	$(foreach f,$(DIST),cp $(f) dist/$(call lc,$(f)) && cp $(f) dist/zip/$(call lc,$(f)) &&) true
+	$(foreach f,$(ICONS),cp $(f) dist/$(call lc,$(f)) && cp $(f) dist/zip/icons/$(call lc,$(f)) &&) true
+	cd dist/zip && zip -q -9 -r ../epdf-$(VERSION_STR).zip .
 	rm -rf dist/zip
+	@up=$$(find dist -name '*[A-Z]*'; unzip -Z1 dist/epdf-$(VERSION_STR).zip | grep '[A-Z]'); \
+	  test -z "$$up" || { echo "dist: not lowercase: $$up"; exit 1; }
 
 gui-test: binary/EPDF.PRG binary/LAUNCH.PRG
 	python3 tests/hatari/gui.py ST:mono build/gui

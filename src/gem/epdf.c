@@ -644,7 +644,7 @@ static void command(int c)
 		quit_now = 1;
 		break;
 	case CMD_GUIDE:
-		if (help_key(start_dir, "EPDF.HYP", NULL, "About"))
+		if (help_key(start_dir, "epdf.hyp", NULL, "About"))
 			about_box();
 		break;
 	case CMD_PREV:
@@ -938,8 +938,8 @@ int main(void)
 		if (n > 3 && start_dir[n - 1] == '\\')
 			start_dir[n - 1] = '\0';
 	}
-	path_join(inf_path, sizeof inf_path, start_dir, "EPDF.INF");
-	path_join(cache_path, sizeof cache_path, start_dir, "EPDF.TXC");
+	path_join(inf_path, sizeof inf_path, start_dir, "epdf.inf");
+	path_join(cache_path, sizeof cache_path, start_dir, "epdf.txc");
 	crash_install(start_dir, "EPDF", app_version);
 	crash_cleanup = crash_quit;
 	help_init();
