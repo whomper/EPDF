@@ -8,7 +8,8 @@
 Since 0.5 a line scrolled moves the rows in the key's turn and draws the
 new rows' text in the next (textwin.c's owed rows). EPDF as the speed rig
 runs it (build/aprof) opens the speed rig's 30-page book; once the pages
-are read, Down is held for 2 s, then Up for 2 s, and after each the
+are read, Down is held for 2 s, then Up, then Shift+Down (pages, their
+text drawn in bands over the turns after), and after each the
 window is shot, then drawn whole (View > Font... with OK: the same font,
 laid out and drawn again) and shot again. The two shots must be the same
 (as EContact's rig checks its card bands).
@@ -49,9 +50,12 @@ def held(r, key, tag):
     """key held 2 s; the shot after it and after the whole drawing:
     gives the pixels they differ by"""
     r.still()
-    r.xdo("keydown", key)
+    keys = key.split("+")
+    for k in keys:
+        r.xdo("keydown", k)
     time.sleep(2)
-    r.xdo("keyup", key)
+    for k in reversed(keys):
+        r.xdo("keyup", k)
     r.still()
     a = shutil.copy(r.shot("still"), os.path.join(r.shots, "%s-held.png" % tag))
     n = r.console().count("EPDF dialog font")
@@ -81,9 +85,9 @@ def run(work, machine):
         time.sleep(120 if machine.startswith("ST") else 60)    # the reading done
         bad = 0
         print(r.describe())
-        for key, tag in (("Down", "down"), ("Up", "up")):
+        for key, tag in (("Down", "down"), ("Up", "up"), ("shift+Down", "page-down")):
             px = held(r, key, tag)
-            print("  %-4s held 2 s: %6d pixels differ from the view drawn whole  %s" % (key, px, "ok" if px == 0 else "NOT THE SAME"))
+            print("  %-10s held 2 s: %6d pixels differ from the view drawn whole  %s" % (key, px, "ok" if px == 0 else "NOT THE SAME"))
             bad |= px != 0
         return bad
     finally:

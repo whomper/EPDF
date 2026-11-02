@@ -646,6 +646,47 @@ void win_draw_owed(void)
 		win_draw_rows(r0, r1);
 }
 
+/*
+ * The event loop's turn for what is owed: a band of rows from the top of
+ * it, as many as fit in about OWE_MS by the last band's time a row, the
+ * rest in the next turns. A page scrolled owes a whole window: on ST:med
+ * its text was 113 ms in one turn (the hub's gemprof page@2, TOS 1.04).
+ */
+#define OWE_MS 60L
+static long owe_us_row = 0;			/* the last band's time a row, in microseconds (0: none yet) */
+
+void win_draw_owed_band(void)
+{
+	long n = owe_us_row > 0 ? OWE_MS * 1000L / owe_us_row : 4, r0 = owe_r0, r1, rest;
+	unsigned long t0;
+
+	if (win < 0 || iconified || owe_r1 <= owe_r0) {
+		owe_r0 = owe_r1 = -1;
+		return;
+	}
+	if (n < 1)
+		n = 1;
+	r1 = r0 + n < owe_r1 ? r0 + n : owe_r1;
+	rest = owe_r1;
+	owe_r0 = owe_r1 = -1;			/* (win_redraw would draw all that is owed) */
+	t0 = tos_ms();
+	win_draw_rows(r0, r1);
+	if (r1 < rest && owe_r1 <= owe_r0) {
+		owe_r0 = r1;			/* the rest in the next turns */
+		owe_r1 = rest;
+	}
+	{
+		/* the band's time a row; down by half a band at most (blank rows
+		   are cheap, the text after them not), at least 1 ms (the
+		   clock's 5 ms steps) */
+		long us = (long)(tos_ms() - t0) * 1000L / (r1 - r0);
+
+		owe_us_row = us < owe_us_row / 2 ? owe_us_row / 2 : us;
+		if (owe_us_row < 1000)
+			owe_us_row = 1000;
+	}
+}
+
 /* the window's rectangles over area, each drawn */
 void win_redraw(const GRECT *area)
 {

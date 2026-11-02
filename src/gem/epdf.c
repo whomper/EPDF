@@ -979,7 +979,7 @@ int main(void)
 			message(msg);
 		if (which == MU_TIMER) {
 			if (win_owed()) {
-				win_draw_owed();	/* the rows a scroll moved in: their text */
+				win_draw_owed_band();	/* the rows a scroll moved in: their text, a band a turn */
 			} else if (arrived >= 0) {
 				win_page_ready(arrived);	/* the page read last turn */
 				win_info();
