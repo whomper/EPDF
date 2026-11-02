@@ -27,7 +27,7 @@ from pdfgen import make_pdf, book  # noqa: E402
 # the window's place in EPDF.INF, and the parts the front page numbers
 WINDOW = "40,40,560,400"
 CROP = (40, 40, 560, 400)
-BADGES = ["300,52", "120,70", "230,88", "300,250"]
+BADGES = ["300,52", "230,72", "300,250", "230,427"]
 
 
 def main(argv):

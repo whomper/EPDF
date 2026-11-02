@@ -197,7 +197,15 @@ at first. This section is kept up to date: the build, the tests, what a release 
   PIC_NO_GIF/PIC_NO_PNG (AERA-Atari 6588b07, this session's patch: resident 424,504, "free-kb 29"
   under NVDI with four accessories). The hub cleared ca99f40e5 and 0.5.2 went out on 2 Nov (v0.5.2
   on a002695e). Next: Select all on ST:mono at its 50, a longer document for speed.py's shot of the
-  row, About against Rig.about, the maps' speed on an ST.
+  row, About against Rig.about, the maps' speed on an ST. Then Erez (2 Nov): "The status bar should be
+  placed at the bottom of the page, just like EWeb does ... says viewing page x / y and then if
+  there is activity going on ... it is stated after that text. Progress is marked with a thin line
+  at the bottom of that text area that is filled from left to right": the window has no info line
+  (as EWeb's); textwin.c's status bar at the foot, always there, ch + 5 high (+ 7 in a tall font):
+  a line along its top, "Viewing page 3 / 8" then the status (found on page ..., copied) and the
+  job's words, and along its foot a line 2 pixels high (3) that fills; white ground (EWeb's grey
+  would need the letters drawn twice: flicker), only the letters that changed and the line's new
+  part drawn, each pixel once. The front page's picture taken again (shots.py's BADGES).
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
   checks: `tools/nofpu.sh`); decode streams with `inflate_open`/`inflate_read` so a page needn't fit
   in memory; reuse `common/atari/dspjpeg.c` with `PIC_LIBJPEG` for JPEG on the Falcon; a progressive

@@ -7,7 +7,8 @@ through common's tests/speed/gemprof.py (its Profiler).
     gemprof.py WORK [MACHINE] [ACTION...] [--top N]
 
     actions: line, lineup, page, next, last, start, selall, lines, about
-             (default: line page next selall lines about); ACTION@N
+             copy (after selall) (default: line page next selall lines
+             about); ACTION@N
              profiles the Nth turn from the action (line@2: the turn
              after the key's)
 
@@ -45,6 +46,7 @@ ACTIONS = {
     "last": ("the last page", lambda r: r.key("shift+ctrl+Home")),
     "start": ("the start", lambda r: r.key("Home")),
     "selall": ("Select all", lambda r: r.key("ctrl+a")),
+    "copy": ("Copy", lambda r: r.key("ctrl+c")),      # (after selall: the selection copied)
     "lines": ("View > The page's lines", lambda r: r.menu(184, 60)),
     "about": ("About box", lambda r: r.menu(36, 28)),
 }

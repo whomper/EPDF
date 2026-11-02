@@ -35,17 +35,21 @@ static unsigned long t_mark;
 #define T_MARK(what) ((void)0)
 #endif
 
-#define WKIND (NAME | CLOSER | FULLER | MOVER | SIZER | INFO | UPARROW | DNARROW | VSLIDE)
+/* no info line: the status bar at the foot says what it said (as EWeb's) */
+#define WKIND (NAME | CLOSER | FULLER | MOVER | SIZER | UPARROW | DNARROW | VSLIDE)
 #define MARGIN 8
 
 static short win = -1;
 static int iconified;
-static GRECT whole;			/* the work area: the progress row's and the text's */
-static short bar_h;			/* the progress row's height while it shows, else 0 */
-static GRECT work;			/* the text's area, as last laid out (whole, less the row) */
+static GRECT whole;			/* the work area: the text's and the status bar's */
+static short bar_h;			/* the status bar's height, at the foot (0: too low a window) */
+static GRECT work;			/* the text's area, as last laid out (whole, less the bar) */
 static short cols, rows;		/* the text's columns, the rows that show whole */
 static int sliders_due;
-static char wname[96], winfo[128];
+static char wname[96];
+static char bar_base[112];		/* the status bar's first words: the page, and the status after it */
+static void bar_compose(void);
+static void bar_laid(void);
 
 short win_handle(void)
 {
@@ -70,11 +74,12 @@ int win_cols(void)
 static void get_work(void)
 {
 	wind_get(win, WF_WORKXYWH, &whole.x, &whole.y, &whole.w, &whole.h);
-	if (bar_h && whole.h < bar_h + 2 * ch)
+	bar_h = (short)(ch + (ch >= 16 ? 7 : 5));	/* (EWeb's: a line, the words, the progress line) */
+	if (whole.h < bar_h + 2 * ch)
 		bar_h = 0;			/* too low a window for it */
 	work = whole;
-	work.y = (short)(work.y + bar_h);
 	work.h = (short)(work.h - bar_h);
+	bar_laid();
 	cols = (short)((work.w - 2 * MARGIN) / cw);
 	if (cols < 1)
 		cols = 1;
@@ -109,10 +114,8 @@ void win_title(void)
 	wind_set_str(win, WF_NAME, wname);
 }
 
-/* the info line: the page at the top, and how the reading goes */
-static long info_page = -1, info_read = -1;	/* what the info line says */
-static int info_opening, info_bar;
-static char status[64];				/* and after it, until the next key */
+/* the status bar's first words: the page at the top, then a status */
+static char status[64];				/* (after the page, until the next key) */
 
 void win_status(const char *st)
 {
@@ -121,35 +124,41 @@ void win_status(const char *st)
 	if (!strcmp(now, status))
 		return;
 	strncpy(status, now, sizeof status - 1);
-	info_page = -1;				/* the line set again */
 	win_info();
+	/* a status is the answer to a key (Copy's "copying...", Find's
+	   "finding..."): drawn at once, the letters that changed, so the key's
+	   own turn shows it (the speed rig's Copy was the copy's first slice,
+	   70 ms on an ST, when it waited for a turn of its own) */
+	if (win_progress_due())
+		win_progress_draw();
 }
 
 void win_info(void)
 {
 	DOCVIEW *v = doc_view();
-	long p = v ? dv_page_at_top(v) : -1, r = v ? doc_read() : -1;
+	static long was_page = -2, was_pages = -2;
+	static int was_opening = -1;
+	static char was_status[sizeof status] = "\377";
+	long p = v ? dv_page_at_top(v) : -1;
 
 	if (win < 0)
 		return;
-	/* the AES draws the line again at each wind_set: only when it changed */
-	if (p == info_page && r == info_read && doc_opening() == info_opening && winfo[0] && (bar_h != 0) == info_bar)
+	/* (a line scrolled asks each time: the words made again only when
+	   they change) */
+	if (p == was_page && doc_pages() == was_pages && doc_opening() == was_opening && !strcmp(status, was_status) && bar_base[0])
 		return;
-	info_bar = bar_h != 0;
-	info_page = p;
-	info_read = r;
-	info_opening = doc_opening();
+	was_page = p;
+	was_pages = doc_pages();
+	was_opening = doc_opening();
+	strcpy(was_status, status);
 	if (!v && doc_opening())
-		snprintf(winfo, sizeof winfo, " Opening %s...", doc_name());	/* (the open goes on in slices) */
+		snprintf(bar_base, sizeof bar_base, "Opening %s...", doc_name());	/* (the open goes on in slices) */
 	else if (!v)
-		snprintf(winfo, sizeof winfo, " Open a PDF with File > Open (^O), or drop one here.");
-	else if (doc_read() < doc_pages() && !bar_h)	/* (the progress row says it while it shows) */
-		snprintf(winfo, sizeof winfo, " Page %ld of %ld  \xF9  reading the text: %ld of %ld%s%s",
-			 dv_page_at_top(v) + 1, doc_pages(), doc_read(), doc_pages(), status[0] ? "  \xF9  " : "", status);
+		snprintf(bar_base, sizeof bar_base, "Open a PDF with File > Open (^O), or drop one here.");
 	else
-		snprintf(winfo, sizeof winfo, " Page %ld of %ld%s%s", dv_page_at_top(v) + 1, doc_pages(),
-			 status[0] ? "  \xF9  " : "", status);
-	wind_set_str(win, WF_INFO, winfo);
+		snprintf(bar_base, sizeof bar_base, "Viewing page %ld / %ld%s%s", dv_page_at_top(v) + 1, doc_pages(),
+			 status[0] ? " \xF9 " : "", status);
+	bar_compose();			/* (drawn in a turn of its own: win_progress_draw) */
 }
 
 /* what the sliders were set to: TOS 1.04's AES draws the slider at each
@@ -221,7 +230,10 @@ void win_layout(void)
 		dv_recount_view(v, rows + 1);	/* the pages in view at once, the rest as they come into view */
 		dv_scroll(v, 0, rows);
 	}
-	sliders();
+	/* the sliders in a turn of their own, as after a scroll: their
+	   wind_set is 40 ms on an ST (View > The page's lines moved them:
+	   EmuTOS 215 -> 260 ms in the turn, gemprof, 2 Nov 2026) */
+	sliders_due = 1;
 	win_info();
 }
 
@@ -707,40 +719,40 @@ void win_draw_owed_band(void)
 }
 
 /*
- * The progress row (Erez, 2 Nov 2026: "a progress bar at the top ... so
- * the user has a notion of what's going on plus an idea how long it will
- * take"; his choices: a row shown only while EPDF works, for the job the
- * user waits on). It takes the top of the work area, a text row and 4
- * pixels high: a frame, the part done filled from the left in whole
- * cells, the words on it ("Reading page 3 of 8 * 30% * 2 min left"),
- * dark on the light part, light on the filled one. The text below moves
- * down a row when it comes and back when it goes (one screen copy each).
+ * The status bar (Erez, 2 Nov 2026: "Like EWeb, placed at the bottom,
+ * says viewing page x / y and then if there is activity going on, such as
+ * opening a page, picture of whatever, it is stated after that text.
+ * Progress is marked with a thin line at the bottom of that text area that
+ * is filled from left to right"): at the foot of the window and always
+ * there, as EWeb's (the window has no info line). A line along its top,
+ * its words ("Viewing page 3 / 8 * Reading page 5 of 8 * 30% * 2 min
+ * left"), and along its foot a line 2 pixels high (3 in a tall font) that
+ * fills from the left as the job goes on. The job is the one the user
+ * waits on (epdf.c's progress()); its words come once it has run half a
+ * second and go a third of a second after it ends.
  *
- * Drawn again at most every 250 ms (the guidelines' progress), and then
- * only what changed, each pixel written once (no flicker: Erez, 1 Nov
- * 2026, "the progress displays flicker every second"): cells newly
- * filled inverted; a letter that changed on the light part in MD_REPLACE,
- * on the filled part in two passes that touch different pixels (MD_ERASE
- * the ground dark, then MD_TRANS the letter light).
+ * Drawn in turns of its own, at most every 250 ms while a job runs (the
+ * guidelines' progress), and then only what changed, each pixel written
+ * once (no flicker: Erez, 1 Nov 2026, "the progress displays flicker
+ * every second"): the letters that changed by text_plain on the white
+ * ground, the line's new part.
  */
-#define MD_ERASE 4
 #define BAR_CELLS 160
-static char bar_now[BAR_CELLS + 1], bar_want[BAR_CELLS + 1];	/* the words as drawn, as wanted, padded */
-static short bar_fc_now, bar_fc_want;	/* cells filled */
-static int bar_go, bar_due;		/* the row wanted; something to draw */
-static int bar_info;			/* the info line to set again, in a turn of its own */
-static int bar_whole;			/* the row's place cleared: the row to draw whole, in a turn of its own */
-static int job_kind;			/* the job shown, 0 none */
+static char bar_now[BAR_CELLS + 1], bar_want[BAR_CELLS + 1];	/* its words as drawn, as wanted, padded */
+static short bar_rib_now, bar_rib_want;	/* the line's pixels filled */
+static int bar_due;			/* something to draw */
+static char bar_job[112];		/* the job's words, "" none */
+static long bar_p = -1;			/* the job's thousandths, -1 not known */
+static int job_kind, job_on;		/* the job running; its words shown */
 static unsigned long job_t0, job_since, idle_since, bar_drawn, eta_at;
 static long job_p0, eta_s = -1;
 
-/* the row's frame (x0, x1 inclusive), its cells' left and count */
-static short bar_x0(void) { return (short)(whole.x + 2); }
-static short bar_x1(void) { return (short)(whole.x + whole.w - 3); }
+static short bar_y(void) { return (short)(whole.y + whole.h - bar_h); }
 static short bar_tx(void) { return (short)(whole.x + MARGIN); }
+static short bar_rib(void) { return ch >= 16 ? 3 : 2; }
 static short bar_cells(void)
 {
-	short n = (short)((bar_x1() - bar_tx()) / cw);
+	short n = (short)((whole.w - 2 * MARGIN) / cw);
 
 	return n < 0 ? 0 : n > BAR_CELLS ? BAR_CELLS : n;
 }
@@ -778,64 +790,42 @@ static void bar_ink(const GRECT *c, short x1, short x2, short y, short h)
 	vr_recfl(vdi_h, p);
 }
 
-/* the same box inverted */
-static void bar_xor(const GRECT *c, short x1, short x2, short y, short h)
+/* its words and its line as they should be */
+static void bar_compose(void)
 {
-	short p[4];
+	short nb = bar_cells(), rib;
+	char w[BAR_CELLS + 1];
+	size_t k;
 
-	if (x1 < c->x)
-		x1 = c->x;
-	if (x2 > c->x + c->w)
-		x2 = (short)(c->x + c->w);
-	if (y < c->y) {
-		h = (short)(h - (c->y - y));
-		y = c->y;
+	if (job_on && bar_job[0])
+		snprintf(w, sizeof w, "%s \xF9 %s", bar_base, bar_job);
+	else
+		snprintf(w, sizeof w, "%s", bar_base);
+	for (k = strlen(w); k < (size_t)nb; k++)
+		w[k] = ' ';
+	w[nb] = 0;
+	rib = job_on && bar_p > 0 ? (short)((long)(whole.w - 2) * bar_p / 1000) : 0;
+	if (memcmp(w, bar_want, (size_t)nb + 1) || rib != bar_rib_want) {
+		memcpy(bar_want, w, (size_t)nb + 1);
+		bar_rib_want = rib;
+		bar_due = 1;
 	}
-	if (y + h > c->y + c->h)
-		h = (short)(c->y + c->h - y);
-	if (x2 <= x1 || h <= 0)
-		return;
-	p[0] = x1;
-	p[1] = y;
-	p[2] = (short)(x2 - 1);
-	p[3] = (short)(y + h - 1);
-	fill_set = 0;
-	scr_xor(vdi_h, p);
 }
 
-/* cells [i0, i1) of s: dark on light, or light on the filled part */
-static void bar_text(const char *s, short i0, short i1, int filled)
+/* the window laid out (opened, sized, its font changed): it is drawn
+   whole next, the bar as it should be */
+static void bar_laid(void)
 {
-	short x = (short)(bar_tx() + i0 * cw), y = (short)(whole.y + 2);
-
-	if (i1 <= i0)
-		return;
-	if (!filled) {
-		vswr_mode(vdi_h, MD_REPLACE);
-		vst_color(vdi_h, 1);
-		text_plain(vdi_h, x, y, s + i0, i1 - i0);
-		return;
-	}
-	vswr_mode(vdi_h, MD_ERASE);	/* the cells' ground dark, the letters' pixels left */
-	vst_color(vdi_h, 1);
-	text_n(vdi_h, x, y, s + i0, i1 - i0);
-	vswr_mode(vdi_h, MD_TRANS);	/* then the letters light */
-	vst_color(vdi_h, 0);
-	text_n(vdi_h, x, y, s + i0, i1 - i0);
-	vswr_mode(vdi_h, MD_REPLACE);
-	vst_color(vdi_h, 1);
+	bar_compose();
+	memcpy(bar_now, bar_want, sizeof bar_now);
+	bar_rib_now = bar_rib_want;
+	bar_due = 0;
 }
 
-/* where the filled part ends, for fc cells filled */
-static short bar_fill_x(short fc, short nb)
-{
-	return fc <= 0 ? (short)(bar_x0() + 1) : fc >= nb ? bar_x1() : (short)(bar_tx() + fc * cw);
-}
-
-/* the row as it was last drawn (bar_now), whole, in c (an expose) */
+/* the bar as it was last drawn (bar_now), whole, in c (an expose) */
 static void draw_bar(const GRECT *c)
 {
-	short x0 = bar_x0(), x1 = bar_x1(), y = whole.y, nb = bar_cells(), clip[4];
+	short y = bar_y(), clip[4];
 
 	clip[0] = c->x;
 	clip[1] = c->y;
@@ -844,51 +834,40 @@ static void draw_bar(const GRECT *c)
 	text_clip(vdi_h, clip);
 	fill_set = 0;
 	blank(c, whole.x, (short)(whole.x + whole.w), y, bar_h);
-	bar_ink(c, x0, (short)(x1 + 1), y, 1);
-	bar_ink(c, x0, (short)(x1 + 1), (short)(y + bar_h - 1), 1);
-	bar_ink(c, x0, (short)(x0 + 1), (short)(y + 1), (short)(bar_h - 2));
-	bar_ink(c, x1, (short)(x1 + 1), (short)(y + 1), (short)(bar_h - 2));
-	bar_text(bar_now, 0, nb, 0);
-	if (bar_fc_now > 0)
-		bar_xor(c, (short)(x0 + 1), bar_fill_x(bar_fc_now, nb), (short)(y + 1), (short)(bar_h - 2));
+	bar_ink(c, whole.x, (short)(whole.x + whole.w), y, 1);
+	vswr_mode(vdi_h, MD_REPLACE);
+	vst_color(vdi_h, 1);
+	text_plain(vdi_h, bar_tx(), (short)(y + 2), bar_now, bar_cells());
+	if (bar_rib_now > 0)
+		bar_ink(c, (short)(whole.x + 1), (short)(whole.x + 1 + bar_rib_now), (short)(y + bar_h - bar_rib()), bar_rib());
 	text_noclip(vdi_h);
 }
 
-/* from bar_now to bar_want in c: only what changed */
+/* from bar_now to bar_want in c: the letters that changed, the line's change */
 static void draw_bar_change(const GRECT *c)
 {
-	short x0 = bar_x0(), x1 = bar_x1(), y = whole.y, ty = (short)(y + 2), nb = bar_cells(), clip[4], i, j;
-	short f0 = bar_fc_now, f1 = bar_fc_want;
+	short y = bar_y(), nb = bar_cells(), clip[4], i, j, ry = (short)(y + bar_h - bar_rib()), x0 = (short)(whole.x + 1);
 
 	clip[0] = c->x;
 	clip[1] = c->y;
 	clip[2] = (short)(c->x + c->w - 1);
 	clip[3] = (short)(c->y + c->h - 1);
 	text_clip(vdi_h, clip);
+	vswr_mode(vdi_h, MD_REPLACE);
+	vst_color(vdi_h, 1);
 	for (i = 0; i < nb; i = j) {
-		int changed = bar_now[i] != bar_want[i], filled = i < f1, newly = i >= f0 && i < f1;
-
 		j = (short)(i + 1);
-		if (changed) {
-			while (j < nb && bar_now[j] != bar_want[j] && (j < f1) == filled)
-				j++;
-			bar_text(bar_want, i, j, filled);
-		} else if (newly) {
-			while (j < nb && bar_now[j] == bar_want[j] && j < f1)
-				j++;
-			bar_xor(c, (short)(bar_tx() + i * cw), (short)(bar_tx() + j * cw), ty, ch);
-		}
+		if (bar_now[i] == bar_want[i])
+			continue;
+		while (j < nb && bar_now[j] != bar_want[j])
+			j++;
+		text_plain(vdi_h, (short)(bar_tx() + i * cw), (short)(y + 2), bar_want + i, j - i);
 	}
-	if (f1 > f0) {
-		/* the fill's new part above and below the cells, and the edges' */
-		short xa = bar_fill_x(f0, nb), xb = bar_fill_x(f1, nb);
-
-		bar_ink(c, xa, xb, (short)(y + 1), 1);
-		bar_ink(c, xa, xb, (short)(y + bar_h - 2), 1);
-		if (f0 == 0)
-			bar_ink(c, (short)(x0 + 1), bar_tx(), ty, ch);
-		if (f1 >= nb && f0 < nb)
-			bar_ink(c, (short)(bar_tx() + nb * cw), x1, ty, ch);
+	if (bar_rib_want > bar_rib_now)
+		bar_ink(c, (short)(x0 + bar_rib_now), (short)(x0 + bar_rib_want), ry, bar_rib());
+	else if (bar_rib_want < bar_rib_now) {
+		fill_set = 0;
+		blank(c, (short)(x0 + bar_rib_want), (short)(x0 + bar_rib_now), ry, bar_rib());
 	}
 	text_noclip(vdi_h);
 }
@@ -908,20 +887,21 @@ void win_progress(int kind, const char *what, long done, long total)
 {
 	unsigned long now = tos_ms();
 	long p = -1;
-	short nb, fc;
-	char w[BAR_CELLS + 1], eta[24];
-	size_t k;
+	char eta[24];
 
 	if (win < 0 || iconified)
 		return;
 	if (!kind) {
 		job_kind = 0;
-		if (bar_h || bar_go) {
+		if (job_on) {
 			if (!idle_since)
 				idle_since = now;
-			else if (now - idle_since >= 300 && bar_go) {
-				bar_go = 0;
-				bar_due = 1;
+			else if (now - idle_since >= 300) {
+				job_on = 0;
+				bar_job[0] = 0;
+				bar_p = -1;
+				bar_compose();
+				log_event("progress", "gone", NULL);
 			}
 		}
 		return;
@@ -939,13 +919,14 @@ void win_progress(int kind, const char *what, long done, long total)
 		eta_s = -1;
 		eta_at = 0;
 	}
-	if (!bar_go) {
+	if (!job_on) {
 		if (now - job_since < 500)
-			return;			/* a short job shows no row */
-		bar_go = 1;
-		bar_due = 1;
+			return;			/* a short job says nothing */
+		job_on = 1;
+		bar_drawn = 0;
+		log_event("progress", "shown", NULL);
 	}
-	if (bar_h && now - bar_drawn < 250)
+	if (now - bar_drawn < 250)
 		return;
 	/* the time left: by how fast this job has gone since it began, said
 	   again at most every second, from its second second */
@@ -961,29 +942,21 @@ void win_progress(int kind, const char *what, long done, long total)
 	if (eta_s >= 0)
 		eta_words(eta_s, eta, sizeof eta);
 	if (p >= 0)
-		snprintf(w, sizeof w, "%s \xF9 %ld%%%s%s", what, p / 10, eta[0] ? " \xF9 " : "", eta);
+		snprintf(bar_job, sizeof bar_job, "%s \xF9 %ld%%%s%s", what, p / 10, eta[0] ? " \xF9 " : "", eta);
 	else
-		snprintf(w, sizeof w, "%s", what);
-	nb = bar_cells();
-	for (k = strlen(w); k < (size_t)nb; k++)
-		w[k] = ' ';
-	w[nb] = 0;
-	fc = p > 0 ? (short)((long)nb * p / 1000) : 0;
-	if (memcmp(w, bar_want, (size_t)nb + 1) || fc != bar_fc_want) {
-		memcpy(bar_want, w, (size_t)nb + 1);
-		bar_fc_want = fc;
-		bar_due = 1;
-	}
+		snprintf(bar_job, sizeof bar_job, "%s", what);
+	bar_p = p;
+	bar_compose();
 }
 
 int win_progress_due(void)
 {
-	return (bar_due || bar_info || bar_whole) && win >= 0 && !iconified;
+	return bar_due && win >= 0 && !iconified && bar_h;
 }
 
 int win_progress_shown(void)
 {
-	return bar_h != 0;
+	return job_on;
 }
 
 /* the pages the window shows, first and last (-1 none) */
@@ -1008,83 +981,11 @@ long win_progress_wait(void)
 {
 	unsigned long now = tos_ms();
 
-	if (win < 0 || iconified || !bar_go || job_kind)
+	if (win < 0 || iconified || !job_on || job_kind)
 		return -1;
 	if (!idle_since)
 		return 0;
 	return now - idle_since >= 300 ? 0 : (long)(300 - (now - idle_since));
-}
-
-/* the text moved down a row for the progress row, or back up: one copy
-   where the whole work area shows, else all of it drawn again */
-static void bar_place(int on)
-{
-	short d = on ? (short)(ch + 4) : 0, old = bar_h;
-	GRECT r;
-
-	if (on && whole.h < d + 2 * ch)
-		return;				/* too low a window: no row */
-	if (owe_r1 > owe_r0)
-		win_draw_owed();		/* the rows owed belong to the text as it stands */
-	bar_h = d;
-	get_work();
-	sliders_due = 1;
-	bar_info = 1;			/* (a wind_set: 40 ms on TOS 1.04, a turn of its own) */
-	if (on) {
-		memcpy(bar_now, bar_want, sizeof bar_now);
-		bar_fc_now = bar_fc_want;
-	}
-	wind_get(win, WF_FIRSTXYWH, &r.x, &r.y, &r.w, &r.h);
-	if (r.x > whole.x || r.y > whole.y || r.x + r.w < whole.x + whole.w || r.y + r.h < whole.y + whole.h ||
-	    whole.x < desk_x || whole.y < desk_y || whole.x + whole.w > desk_x + desk_w || whole.y + whole.h > desk_y + desk_h) {
-		edges_clean = 0;
-		win_redraw(&whole);
-	} else {
-		short pxy[8], clip[4], m = on ? d : old;
-
-		pxy[0] = pxy[4] = whole.x;
-		pxy[2] = pxy[6] = (short)(whole.x + whole.w - 1);
-		pxy[1] = (short)(whole.y + (on ? 0 : m));
-		pxy[3] = (short)(whole.y + whole.h - 1 - (on ? m : 0));
-		pxy[5] = (short)(whole.y + (on ? m : 0));
-		pxy[7] = (short)(whole.y + whole.h - 1 - (on ? 0 : m));
-		clip[0] = whole.x;
-		clip[1] = whole.y;
-		clip[2] = (short)(whole.x + whole.w - 1);
-		clip[3] = (short)(whole.y + whole.h - 1);
-		wind_update(BEG_UPDATE);
-		graf_mouse(M_OFF, NULL);
-		text_clip(vdi_h, clip);
-		scr_rows(vdi_h, pxy);
-		text_noclip(vdi_h);
-		if (on) {
-			/* its place cleared now, the row drawn in the next turn (both
-			   in one were 60 ms on Falcon-4 under NVDI with Courier 14,
-			   the hub's Copy: its turns) */
-			text_clip(vdi_h, clip);
-			fill_set = 0;
-			blank(&whole, whole.x, (short)(whole.x + whole.w), whole.y, bar_h);
-			text_noclip(vdi_h);
-			bar_whole = 1;
-		} else {
-			/* the band at the foot that came in: cleared now, its text
-			   owed to the next turns (as a scroll's rows are) */
-			long r0 = (whole.y + whole.h - m - work.y) / ch;
-			short y0 = (short)(work.y + r0 * ch);
-
-			if (r0 < 0)
-				r0 = 0;
-			text_clip(vdi_h, clip);
-			blank(&whole, whole.x, (short)(whole.x + whole.w), y0, (short)(whole.y + whole.h - y0));
-			text_noclip(vdi_h);
-			owe_r0 = r0;
-			owe_r1 = rows + 1;
-		}
-		graf_mouse(M_ON, NULL);
-		wind_update(END_UPDATE);
-	}
-	bar_drawn = tos_ms();
-	log_event("progress", on ? "shown" : "gone", NULL);
 }
 
 void win_progress_draw(void)
@@ -1092,56 +993,23 @@ void win_progress_draw(void)
 	GRECT r, b, c;
 
 	bar_due = 0;
-	if (win < 0 || iconified)
-		return;
-	if (bar_go != (bar_h != 0)) {
-		bar_place(bar_go);
-		bar_due = bar_h && (memcmp(bar_now, bar_want, sizeof bar_now) || bar_fc_now != bar_fc_want);
-		return;
-	}
-	if (bar_whole) {
-		bar_whole = 0;
-		if (bar_h) {
-			memcpy(bar_now, bar_want, sizeof bar_now);
-			bar_fc_now = bar_fc_want;
-			b = whole;
-			b.h = bar_h;
-			win_redraw(&b);		/* the row whole, where it shows */
-		}
-		bar_drawn = tos_ms();
-		return;
-	}
-	if (bar_info) {
-		bar_info = 0;
-		win_info();
-		bar_due = bar_h && (memcmp(bar_now, bar_want, sizeof bar_now) || bar_fc_now != bar_fc_want);
-		return;
-	}
-	if (!bar_h)
+	if (win < 0 || iconified || !bar_h)
 		return;
 	b = whole;
+	b.y = bar_y();
 	b.h = bar_h;
 	wind_update(BEG_UPDATE);
 	graf_mouse(M_OFF, NULL);
 	wind_get(win, WF_FIRSTXYWH, &r.x, &r.y, &r.w, &r.h);
 	while (r.w > 0 && r.h > 0) {
-		if (overlap(&r, &b, &c)) {
-			if (bar_fc_want < bar_fc_now) {
-				short f = bar_fc_now;
-
-				bar_fc_now = bar_fc_want;	/* a fill going back: the row whole */
-				memcpy(bar_now, bar_want, sizeof bar_now);
-				draw_bar(&c);
-				bar_fc_now = f;
-			} else
-				draw_bar_change(&c);
-		}
+		if (overlap(&r, &b, &c))
+			draw_bar_change(&c);
 		wind_get(win, WF_NEXTXYWH, &r.x, &r.y, &r.w, &r.h);
 	}
 	graf_mouse(M_ON, NULL);
 	wind_update(END_UPDATE);
 	memcpy(bar_now, bar_want, sizeof bar_now);
-	bar_fc_now = bar_fc_want;
+	bar_rib_now = bar_rib_want;
 	bar_drawn = tos_ms();
 }
 
@@ -1169,8 +1037,9 @@ void win_redraw(const GRECT *area)
 	{
 		GRECT b = whole;
 
+		b.y = (short)(whole.y + whole.h - bar_h);
 		b.h = bar_h;
-		has_bar = bar_h && overlap(area, &b, &ba);	/* the progress row's part */
+		has_bar = bar_h && overlap(area, &b, &ba);	/* the status bar's part */
 	}
 	has_text = overlap(&a, &work, &a);
 	if (!has_text && !has_bar)
@@ -1668,7 +1537,6 @@ int win_open(short x, short y, short w, short h)
 		return -1;
 	sl_size = sl_pos = sl_px = -1;	/* a new window: its sliders set */
 	win_title();
-	wind_set_str(win, WF_INFO, " ");
 	wind_open(win, x, y, w, h);
 	iconified = 0;
 	get_work();
