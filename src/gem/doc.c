@@ -386,7 +386,8 @@ void doc_close(void)
 	doc = NULL;
 	npages = done = next = 0;
 	name[0] = '\0';
-	heap_trim();			/* the document's blocks back to TOS (heap_grain's) */
+	heap_trim();			/* the document's blocks back to TOS */
+	heap_grain = 64L * 1024;	/* small again with no document (epdf.c) */
 }
 
 int doc_open(const char *path, int cols, int lines_mode, const char *cache)
@@ -394,6 +395,8 @@ int doc_open(const char *path, int cols, int lines_mode, const char *cache)
 	const char *base;
 
 	doc_close();
+	heap_grain = 0;		/* a document's heap in the libc's own big blocks (64 KB
+				   steps left it in pieces: memory refused on ST-1) */
 	if ((!read_stack && !(read_stack = malloc(READ_STACK))) || (!rt && !(rt = calloc(1, sizeof *rt))) ||
 	    !(odoc = malloc(sizeof *odoc)))
 		return -1;
