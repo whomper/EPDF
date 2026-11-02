@@ -173,12 +173,13 @@ at first. This section is kept up to date: the build, the tests, what a release 
   - **1.0 is the text view, complete:** 0.2 speed on an 8 MHz ST (the guidelines' times), 0.3 big
     documents on ST-1 (streamed content, pictures' memory), 0.4 pictures (DSP JPEG on the Falcon, the
     1/8 preview on a 68000), 0.5 the rest (GDOS font on hardware, AES-256 on a 68000), then 1.0.
-    ("Reports" stood here too: not Erez's word but this session's, written in on 31 Oct; he doesn't
-    know what it means, and the hub has put it to him to drop or define, 2 Nov: left out until then.
-    The GDOS font is covered by the speed rig under NVDI with a GDOS font on ST:mono, ST:med and
-    Falcon-4, AERA-Atari c32220c. The About box on an 8 MHz ST in low or medium is within 200 ms,
-    150 elsewhere: Erez's (a), AERA-Atari 69da4d6, speed.py's Rig.about. Open: maps on an ST, or
-    Falcon/TT only.)
+    ("Reports" stood here too: this session's shorthand for its own 0.5 line of 31 Oct, "anything
+    0.1-0.4 turn up from you", Erez's findings on the releases before it (his EDOS_01.PDF: 0.4.1 and
+    0.5); he was sent the text, 2 Nov. The GDOS font: ST users run NVDI (Erez, 2 Nov), covered by the
+    speed rig under NVDI with a GDOS font on ST:mono, ST:med and Falcon-4, AERA-Atari c32220c. The
+    About box on an 8 MHz ST in low or medium within 200 ms, 150 elsewhere: Erez's (a), AERA-Atari
+    69da4d6, speed.py's Rig.about. Maps on an ST: "work on speed first" (Erez, 2 Nov): the
+    interpreter's cost on a 68000 before the question is put again.)
     Full pages drawn by the Falcon itself (stage 2) are not part of it.
   - **EConvert** (`ECONVERT.PRG`), the AERA PDF converter, after 1.0, for the Falcon and TT (68030;
     an ST is told so). It writes a **converted PDF**: still a valid PDF, its metadata saying it was
