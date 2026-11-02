@@ -352,11 +352,59 @@ static short on_byte(short x)
 	return (x + 4) & ~7;
 }
 
+/* bold in the buffer: the text's box (x, y, w by ch) ORed onto itself a
+   pixel to the right, a word at a time, the bit that leaves a word into
+   the next one's top (vro_cpyfm's S_OR_D took TOS 1.04 2.2 ms a text) */
+static void cpu_bold(short x, short y, short w)
+{
+	short x2 = (short)(x + w - 1), y2 = (short)(y + ch - 1), g, g0, g1, p, r;
+	long step = cpu_bpl >> 1;
+	unsigned short *row;
+
+	if (x < cpu_clip[0] || x2 + 1 > cpu_clip[2] || y < cpu_clip[1] || y2 > cpu_clip[3] || w <= 0)
+		return;
+	g0 = x >> 4;
+	g1 = x2 >> 4;
+	row = (unsigned short *)(cpu_base + (long)y * cpu_bpl) + g0 * cpu_planes;
+	for (r = y; r <= y2; r++, row += step)
+		for (p = 0; p < cpu_planes; p++) {
+			unsigned short *wp = row + p, carry = 0;
+
+			for (g = g0; g <= g1; g++, wp += cpu_planes) {
+				unsigned short m = 0xFFFF, v;
+
+				if (g == g0)
+					m &= (unsigned short)(0xFFFFu >> (x & 15));
+				if (g == g1)
+					m &= (unsigned short)(0xFFFFu << (15 - (x2 & 15)));
+				v = *wp & m;
+				*wp |= (unsigned short)((v >> 1) | (carry << 15));
+				carry = v & 1;
+			}
+			if (carry)
+				*wp |= 0x8000;		/* the box's last pixel into the next word */
+		}
+}
+
 /* bold as TOS draws it, but plain text and its box ORed onto itself a
    pixel to the right (common/ui/text.c's text_fx: the same pixels, on an
    ST a third of vst_effects' time); NVDI's own bold elsewhere */
 static void text_b(short x, short y, const char *s, short n, short flags)
 {
+	if (cpu_base && !(x & 7) && text_plain_state() >= 0 && !get_cookie(0x4E564449L)) {
+		/* in the buffer, on the box's white: text.c's own glyph copy (the
+		   same pixels as the VDI's transparent text there; TOS 1.04's
+		   v_gtext took the box 31 ms), the bold by the CPU too. After
+		   font_sys_push its state is 0: the first text goes through the
+		   VDI as text_at's would, and checks the copy's pixels by it */
+		vswr_mode(vdi_h, MD_TRANS);
+		vst_color(vdi_h, 1);
+		vst_effects(vdi_h, 0);
+		text_plain(vdi_h, x, y, s, n);
+		if (flags & TX_BOLD)
+			cpu_bold(x, y, (short)(n * cw));
+		return;
+	}
 	if ((flags & TX_BOLD) && !get_cookie(0x4E564449L)) {	/* 'NVDI' */
 		MFDB scr;
 		short p[8];
@@ -399,11 +447,13 @@ static void button(short x, short y, short w, short h, const char *label)
 	text_b(on_byte(x + (w - n * cw) / 2), y + (h - ch) / 2, label, n, TX_BOLD);
 }
 
+/* until no button is down: the VDI's view of the mouse (vq_mouse), not
+   graf_mkstate's, an AES call of 4.9 ms on TOS 1.04 as the box opens */
 static void wait_up(void)
 {
-	short mx, my, mb, ks;
+	short mx, my, mb;
 	do {
-		graf_mkstate(&mx, &my, &mb, &ks);
+		vq_mouse(vdi_h, &mb, &mx, &my);
 		if (mb & 3)
 			evnt_timer_(10);
 	} while (mb & 3);
