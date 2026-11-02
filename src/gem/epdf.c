@@ -941,6 +941,14 @@ int main(void)
 	   2026) */
 	if (menu_build(&menu, gl_wchar, gl_hchar, scr_w, scr_h) == 0) {
 		has_menu = menu_bar(menu.tree, 1) != 0;
+		if (!has_menu) {
+			/* (the AES had no room for it: NVDI with four accessories
+			   on a 4 MB Falcon, the hub's acc_all; the keys still work) */
+			char m[16];
+
+			snprintf(m, sizeof m, "%ld", (long)Malloc(-1L) / 1024);
+			log_event("menu-bar-failed", m, NULL);
+		}
 		if (has_menu)
 			menu_icheck(menu.tree, mbar_object(&menu, CMD_LINES), lines_mode);
 		menu_states();
@@ -1070,6 +1078,7 @@ int main(void)
 			}
 		}
 	}
+	log_event("quit", NULL, NULL);
 	window_place_save();
 	win_close();
 	if (has_menu)

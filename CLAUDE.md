@@ -171,7 +171,13 @@ at first. This section is kept up to date: the build, the tests, what a release 
   printed twice at its place comes once, `columns()` no longer runs its output into its right
   column's lines (pages with lines cut at a gutter lost lines and doubled others); a picture placed
   upside down or mirrored is shown as its page shows it ("v"/"h" after the size in its line,
-  PIMG.flip, PICE.flip); the arrow set at the start (the desktop's busy bee stayed).
+  PIMG.flip, PICE.flip); the arrow set at the start (the desktop's busy bee stayed). Its first
+  candidate, 8f626a3d6 (+2,228 bytes), left 0 KB under NVDI with the four accessories on Falcon-4
+  (the hub's acc_all: no menu bar at all; 0.5 had passed with 2 KB): the Adobe Glyph List's 4,200
+  names front-coded in blocks of 16 (pdftab.h's agl_names/agl_blk/agl_uc, tools/gen-tables.py;
+  78 KB of pointers and strings to 44 KB), resident 435,864 (23 KB under 0.5); "menu-bar-failed"
+  (with the KB free) and "quit" logged for the rigs. The guidelines name no reserve yet (the hub's
+  #132: ClaudeST failed at about 54 KB).
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
   checks: `tools/nofpu.sh`); decode streams with `inflate_open`/`inflate_read` so a page needn't fit
   in memory; reuse `common/atari/dspjpeg.c` with `PIC_LIBJPEG` for JPEG on the Falcon; a progressive

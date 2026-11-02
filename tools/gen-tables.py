@@ -7,7 +7,13 @@ reportlab carries them). Needs fontTools and reportlab; run it only to
 change the tables:  python3 tools/gen-tables.py > src/pdftab.h
 
   enc_std/enc_win/enc_mac   code -> Unicode (0: none) for the three base encodings
-  agl                       glyph name -> Unicode, sorted by name
+  agl_names/agl_blk/agl_uc   glyph name -> Unicode, sorted by name: the names
+                            front-coded in blocks of AGL_BLK (each a byte, the
+                            characters it shares with the name before, then
+                            the rest; a block's first shares none), the
+                            blocks' offsets, the characters (0.5.1: 78 KB of
+                            pointers and strings to 47 KB, the room NVDI's
+                            menus need under four accessories)
   cff_std                   CFF's 391 standard strings (SID -> name)
   stdw_*                    advance widths (1/1000 em) of codes 32..255 in WinAnsi
 """
@@ -78,11 +84,28 @@ def main():
         if " " not in v.strip() and int(v, 16) < 0x10000:
             names.append((n, int(v, 16)))
     names.sort()
-    print("\nstruct agl_ent { const char *name; unsigned short uc; };")
-    print("static const struct agl_ent agl_tab[%d] = {" % len(names))
-    for n, u in names:
-        print('\t{"%s", 0x%04X},' % (n, u))
-    print("};")
+    blk = 16
+    assert max(len(n) for n, _ in names) < 64
+    offs, parts, at, prev = [], [], 0, ""
+    for i, (n, u) in enumerate(names):
+        p = 0
+        if i % blk:
+            while p < len(n) and p < len(prev) and n[p] == prev[p]:
+                p += 1
+        else:
+            offs.append(at)
+        assert p < 0x20 and all(ord(c) > 0x20 for c in n)
+        parts.append("\\%03o%s" % (p, n[p:]))
+        at += 1 + len(n) - p
+        prev = n
+    assert at < 0x10000
+    print("\n#define AGL_N %d\n#define AGL_BLK %d\n#define AGL_NBLK %d" % (len(names), blk, len(offs)))
+    print("static const char agl_names[%d] =" % (at + 1))
+    for i in range(0, len(parts), blk):
+        print('\t"%s"' % "".join(parts[i:i + blk]))
+    print("\t;")
+    print(arr("agl_blk", offs, 12, "%d"))
+    print(arr("agl_uc", [u for _, u in names], 12, "0x%04X"))
     for font, tag in (("Helvetica", "helv"), ("Helvetica-Bold", "helvb"), ("Times-Roman", "times"),
                       ("Times-Bold", "timesb"), ("Times-Italic", "timesi"), ("Times-BoldItalic", "timesbi")):
         w = []

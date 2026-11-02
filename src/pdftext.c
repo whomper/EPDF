@@ -62,19 +62,45 @@ static void font_free(PDOC *d, PFONT *f)
 }
 
 /* glyph name -> Unicode */
+/* a block's first name (pdftab.h's agl_names, ended by the next byte
+   under 0x20) against n: <0, 0, >0 as strcmp */
+static int agl_head_cmp(const unsigned char *h, const unsigned char *n)
+{
+	while (*h >= 0x20 && *h == *n)
+		h++, n++;
+	return (*h >= 0x20 ? *h : 0) - *n;
+}
+
+/* a glyph name's character from the Adobe Glyph List, 0 none: the last
+   block whose first name isn't after it, then that block's names made
+   one after another */
 static int agl_find(const char *n)
 {
-	int lo = 0, hi = (int)(sizeof agl_tab / sizeof agl_tab[0]) - 1;
+	const unsigned char *s = (const unsigned char *)n, *p;
+	char buf[64];
+	int lo = 0, hi = AGL_NBLK - 1, i, k;
 
-	while (lo <= hi) {
-		int mid = (lo + hi) / 2, c = strcmp(n, agl_tab[mid].name);
+	while (lo < hi) {
+		int mid = (lo + hi + 1) / 2;
 
-		if (!c)
-			return agl_tab[mid].uc;
-		if (c < 0)
-			hi = mid - 1;
+		if (agl_head_cmp((const unsigned char *)agl_names + agl_blk[mid] + 1, s) <= 0)
+			lo = mid;
 		else
-			lo = mid + 1;
+			hi = mid - 1;
+	}
+	p = (const unsigned char *)agl_names + agl_blk[lo];
+	for (i = lo * AGL_BLK; i < AGL_N && i < (lo + 1) * AGL_BLK; i++) {
+		int c;
+
+		k = *p++;
+		while (*p >= 0x20)
+			buf[k++] = (char)*p++;
+		buf[k] = 0;
+		c = strcmp(buf, n);
+		if (!c)
+			return agl_uc[i];
+		if (c > 0)
+			break;
 	}
 	return 0;
 }
