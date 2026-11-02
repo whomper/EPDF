@@ -386,6 +386,7 @@ void doc_close(void)
 	doc = NULL;
 	npages = done = next = 0;
 	name[0] = '\0';
+	heap_trim();			/* the document's blocks back to TOS (heap_grain's) */
 }
 
 int doc_open(const char *path, int cols, int lines_mode, const char *cache)

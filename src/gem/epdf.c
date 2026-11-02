@@ -862,6 +862,12 @@ int main(void)
 	AEVENT ev;
 	const char *cmd, *v;
 
+	/* the heap takes from GEMDOS what is needed, in 64 KB steps, not a
+	   quarter of the memory free at its first malloc (221 KB of a Falcon
+	   with four accessories, 1 KB of it used with no document): an AES
+	   with NVDI needs room to save the screen under a menu's drop-down,
+	   and 0.5's first candidate left too little (the hub's acc_all) */
+	heap_grain = 64L * 1024;
 	ap_id = appl_init();
 	if (ap_id < 0)
 		return 1;
@@ -952,6 +958,16 @@ int main(void)
 	}
 	crash_offer("EPDF", "next to EPDF.PRG");
 	log_event("started", app_version, NULL);
+	{
+		/* what is left once the window is open (the guidelines, 2.1: an
+		   AES with NVDI needs room for a menu's drop-down; 0.5's first
+		   candidate left too little for it on a Falcon with four
+		   accessories): the largest free block, the heap taken, in use */
+		char m[48];
+
+		snprintf(m, sizeof m, "%ld %ld %ld", (long)Malloc(-1L) / 1024, (heap_st + heap_tt) / 1024, heap_use / 1024);
+		log_event("free-kb", m, NULL);
+	}
 	while (!quit_now) {
 		short which, flags = MU_MESAG | MU_KEYBD | MU_BUTTON;
 		unsigned long t;
