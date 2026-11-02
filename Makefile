@@ -275,8 +275,10 @@ GEM_SRC = src/gem/epdf.c src/gem/doc.c src/gem/textwin.c src/gem/find.c src/gem/
 GEM_OBJ = $(patsubst %.c,build/m68000/%.o,$(GEM_SRC)) build/m68000/version.o
 $(patsubst %.c,build/m68000/%.o,$(GEM_SRC)): XFLAGS += -Isrc/gem -Isrc/view -Icommon/ui -I$(T)/tjpgd -I$(T)/nsgif/include -I$(T)/nsgif/src
 # the Falcon's DSP for JPEGs, from pic.c's own header reader (one 68000
-# program for every Atari, guideline 7.4)
-build/m68000/common/src/pic.o: XFLAGS += -DPIC_TJPGD_DSP
+# program for every Atari, guideline 7.4); no PNG or GIF decoder (a PDF's
+# pictures are JPEG or its own streams: 20 KB of the resident size, the
+# room NVDI's menus want under four accessories, 2 Nov 2026)
+build/m68000/common/src/pic.o: XFLAGS += -DPIC_TJPGD_DSP -DPIC_NO_GIF -DPIC_NO_PNG
 # dialogs drawn partly by the CPU on a 68000 (EPDF.PRG runs on an ST; the
 # profiled build links the same object)
 build/m68000/common/ui/dialog.o: XFLAGS += -DDLG_CPU
