@@ -386,8 +386,7 @@ void doc_close(void)
 	doc = NULL;
 	npages = done = next = 0;
 	name[0] = '\0';
-	heap_trim();			/* the document's blocks back to TOS */
-	heap_grain = HEAP_IDLE;		/* small again with no document */
+	heap_trim();			/* the document's blocks back to TOS (heap_grain's) */
 }
 
 int doc_open(const char *path, int cols, int lines_mode, const char *cache)
@@ -395,15 +394,6 @@ int doc_open(const char *path, int cols, int lines_mode, const char *cache)
 	const char *base;
 
 	doc_close();
-	/* a document's heap in bigger blocks, a quarter of what is free a
-	   step (as the libc's first block was): 64 KB steps left its memory
-	   in many pieces, and ST-1's big.py had refusals in six of the
-	   corpus's documents, none before */
-	{
-		long q = ((long)Malloc(-1L) / 4) & ~0xFFFFL;
-
-		heap_grain = q > HEAP_IDLE ? q : HEAP_IDLE;
-	}
 	if ((!read_stack && !(read_stack = malloc(READ_STACK))) || (!rt && !(rt = calloc(1, sizeof *rt))) ||
 	    !(odoc = malloc(sizeof *odoc)))
 		return -1;
@@ -442,10 +432,13 @@ static long open_done(void)
 		name[0] = '\0';
 		return DOC_FAILED;
 	}
-	/* a quarter of the memory free keeps text, at most 256 KB; the rest
-	   goes to the cache file */
+	/* three sixteenths of the memory free keeps text, at most 256 KB; the
+	   rest goes to the cache file. (A quarter while the libc's heap held a
+	   quarter of the memory already, so a quarter of the rest; with the
+	   heap in 64 KB steps a quarter of all of it left the reader short on
+	   ST-1: memory refused in six of the corpus's documents) */
 	free_mem = (long)Malloc(-1L);
-	budget = free_mem / 4;
+	budget = free_mem / 16 * 3;
 	if (budget > 256L * 1024)
 		budget = 256L * 1024;
 	if (budget < 16L * 1024)

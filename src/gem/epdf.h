@@ -89,8 +89,4 @@ void font_exit(void);
 /* find.c */
 int find_dialog(char *text);		/* text: 65 bytes; 1 when Find was chosen */
 
-/* the heap's step with no document open (heap_grain): what is needed, in
-   64 KB steps, not a quarter of the memory free (the hub's acc_all, 0.5) */
-#define HEAP_IDLE (64L * 1024)
-
 #endif
