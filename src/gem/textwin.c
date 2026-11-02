@@ -502,7 +502,9 @@ static void rows_xor(const GRECT *c, short y0, short y1)
 	p[2] = (short)(x2 - 1);
 	p[3] = y1;
 	fill_set = 0;
+	T_MARK("sel-shape");
 	scr_xor(vdi_h, p);
+	T_MARK("sel-xor");
 }
 
 /*
@@ -1443,6 +1445,7 @@ void win_sel_change(long q0, long r0, long q1, long r1, long p0, long o0, long p
 	int kind, took;
 	const char *s;
 
+	T_START();
 	/* (what a scroll owes drawn first: the XOR goes over finished rows) */
 	if (owe_r1 > owe_r0)
 		win_draw_owed();
@@ -1456,7 +1459,9 @@ void win_sel_change(long q0, long r0, long q1, long r1, long p0, long o0, long p
 	   while the button is held still (5.8, common's click.h) */
 	took = press_update_begin();
 	graf_mouse(M_OFF, NULL);
+	T_MARK("sel-begin");
 	wind_get(win, WF_FIRSTXYWH, &r.x, &r.y, &r.w, &r.h);
+	T_MARK("sel-first");
 	while (r.w > 0 && r.h > 0) {
 		if (overlap(&r, &work, &c)) {
 			short clip[4], box = -1, y = work.y;	/* box: the first row of a run of whole rows, -1 none */
@@ -1496,12 +1501,15 @@ void win_sel_change(long q0, long r0, long q1, long r1, long p0, long o0, long p
 			}
 			if (box >= 0)
 				rows_xor(&c, box, (short)(y - 1));
+			T_MARK("sel-rows");
 			text_noclip(vdi_h);
 		}
 		wind_get(win, WF_NEXTXYWH, &r.x, &r.y, &r.w, &r.h);
 	}
+	T_MARK("sel-next");
 	graf_mouse(M_ON, NULL);
 	press_update_end(took);
+	T_MARK("sel-end");
 }
 
 /* the selection's start shown in the window, a few rows under the top */

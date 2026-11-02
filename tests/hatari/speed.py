@@ -183,10 +183,10 @@ def run(work, machine):
         # separator clicked: the row measured nothing, and a menu left so
         # took the About box's click on TOS 4 with NVDI, the hub, 1 Nov)
         menus = [menu_act(r, "View > The page's lines", speed.WINDOW, 184, 60),
-                 menu_act(r, "About box", speed.DIALOG, 36, 28)]
+                 menu_act(r, "About box", r.about, 36, 28)]
         r.act("About box closed", speed.WINDOW, lambda: r.key("Escape"))
         bad = r.report()
-        print("\nthe progress row as the pages were read: %s  (%s)" % (row_shown, row))
+        print("\nthe status bar's job as the pages were read: %s  (%s)" % (row_shown, row))
         print("\nheld still a second (5.8): pixels held against after the release, before against after")
         for what, ha, ba in held:
             ok = ha == 0 and ba > 0
@@ -205,7 +205,38 @@ def run(work, machine):
                 print("  the menu bar with %s against the system font's: %d pixels differ  %s"
                       % (font, bar, "ok" if bar == 0 else "NOT THE SAME"))
                 bad |= bar != 0
-        return bad
+        return bad, row_shown
+    finally:
+        r.stop()
+
+
+def bar_shot(work, machine):
+    """the status bar's job and its line, for the eye, where the 30 pages
+    were read before the shot (a fast machine, NVDI: the hub's): EPDF
+    started again on a book of 400 pages, the shot as soon as the job
+    shows; gives what it found"""
+    r = speed.Rig(os.path.join(work, machine.replace(":", "_") + "-bar"), machine,
+                  nvdi=os.environ.get("AERA_WITH_NVDI") == "1", display=os.environ.get("XDISPLAY", ":91"))
+    try:
+        prg = os.environ.get("EPDF_PROF_PRG") or os.path.join(TOP, "build", "aprof", "EPDF.PRG")
+        os.makedirs(os.path.join(r.hd, "EPDF"), exist_ok=True)
+        shutil.copy(prg, os.path.join(r.hd, "EPDF", "EPDF.PRG"))
+        if os.environ.get("EPDF_FONT"):
+            r.write("EPDF/EPDF.INF", "FONT=%s\n" % os.environ["EPDF_FONT"])
+        r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
+        make_pdf(os.path.join(r.hd, "LONG.PDF"), book(400))
+        r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\LONG.PDF\n")
+        r.start("C:\\LAUNCH.PRG")
+        for _ in range(600):
+            if "EPDF progress shown" in r.console():
+                break
+            time.sleep(0.1)
+        time.sleep(0.3)                                     # (drawn in its turn)
+        shot = shutil.copy(r.shot("bar"), os.path.join(r.shots, "status-bar-job.png"))
+        con = r.console()
+        found = ("in the shot" if "EPDF progress shown" in con and "EPDF progress gone" not in con else
+                 "came and went before the shot" if "EPDF progress shown" in con else "not shown within 60 s")
+        return found, shot
     finally:
         r.stop()
 
@@ -216,7 +247,10 @@ def main(argv):
     work, machines = argv[0], argv[1:] or ["ST:mono", "ST:med", "Falcon-4:16"]
     bad = 0
     for m in machines:
-        bad |= run(work, m)
+        b, row = run(work, m)
+        bad |= b
+        if row != "in the shot":
+            print("the status bar's job on a book of 400 pages: %s  (%s)" % bar_shot(work, m))
     return bad
 
 
