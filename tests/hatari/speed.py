@@ -147,6 +147,10 @@ def run(work, machine):
         r.act("a line scrolled, pages being read", speed.LINE, lambda: r.key("Down"))
         first = os.path.join(r.shots, "01-a-line-scrolled-pages-being-read.png")
         r.act("a page scrolled, pages being read", speed.PAGE, lambda: r.key("shift+Down"))
+        # the progress row (Erez, 2 Nov 2026) while the book is read: a shot
+        # of it, for the eye (under NVDI, a GDOS font: the hub's)
+        row_shown = "EPDF progress shown" in r.console() and "EPDF progress gone" not in r.console()
+        row = shutil.copy(r.shot("progress"), os.path.join(r.shots, "progress-row.png"))
         r.act("next page", speed.WINDOW, lambda: r.key("ctrl+Right"))
         time.sleep(120 if machine.startswith("ST") else 60)    # the reading done
         r.act("a line scrolled", speed.LINE, lambda: r.key("Down"))
@@ -174,6 +178,7 @@ def run(work, machine):
                  menu_act(r, "About box", speed.DIALOG, 36, 28)]
         r.act("About box closed", speed.WINDOW, lambda: r.key("Escape"))
         bad = r.report()
+        print("\nthe progress row while the pages were read: %s  (%s)" % ("shown" if row_shown else "not shown (the reading done?)", row))
         print("\nheld still a second (5.8): pixels held against after the release, before against after")
         for what, ha, ba in held:
             ok = ha == 0 and ba > 0
