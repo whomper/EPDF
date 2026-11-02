@@ -205,7 +205,11 @@ at first. This section is kept up to date: the build, the tests, what a release 
   a line along its top, "Viewing page 3 / 8" then the status (found on page ..., copied) and the
   job's words, and along its foot a line 2 pixels high (3) that fills; white ground (EWeb's grey
   would need the letters drawn twice: flicker), only the letters that changed and the line's new
-  part drawn, each pixel once. The front page's picture taken again (shots.py's BADGES).
+  part drawn, each pixel once. The front page's picture taken again (shots.py's BADGES). The hub cleared 57dd90f99 (acc_all
+  under NVDI "free-kb 32"; its ST:mono Desk menu check took 2,000 changed pixels, AERA-Atari 8ac3046, the
+  white bar under the menu changing fewer) and 0.5.3 went out on 2 Nov (v0.5.3 on f0c05019). Resident
+  421,648. Next (the hub): tests/hatari/speed.py to take common's Rig.about (ST:med's About 180 is within
+  its 200), a longer document for the shot of the job in the bar, Select all on ST:mono at its 50.
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
   checks: `tools/nofpu.sh`); decode streams with `inflate_open`/`inflate_read` so a page needn't fit
   in memory; reuse `common/atari/dspjpeg.c` with `PIC_LIBJPEG` for JPEG on the Falcon; a progressive
