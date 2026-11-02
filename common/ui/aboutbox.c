@@ -135,8 +135,89 @@ static void clip_screen(void)
 
 static int off_white;		/* draw_off made the box's ground white already */
 
+/* rows y1..y2 of group g: m ORed into every plane's word (a vertical
+   line, or several in one group, down in one pass) */
+static void cpu_vmask(short y1, short y2, short g, unsigned short m)
+{
+	long step = cpu_bpl >> 1;
+	short p;
+
+	if (y1 < cpu_clip[1])
+		y1 = cpu_clip[1];
+	if (y2 > cpu_clip[3])
+		y2 = cpu_clip[3];
+	if (y1 > y2 || !m)
+		return;
+	for (p = 0; p < cpu_planes; p++) {
+		unsigned short *w = (unsigned short *)(cpu_base + (long)y1 * cpu_bpl) + g * cpu_planes + p;
+		short r = (short)(y2 - y1);
+
+		do {
+			*w |= m;
+			w += step;
+		} while (--r >= 0);
+	}
+}
+
+/* pixels x1..x2 of group g as its mask (0 where none are in it) */
+static unsigned short gmask(short g, short x1, short x2)
+{
+	short a = g << 4, b = a + 15;
+
+	if (x1 > b || x2 < a)
+		return 0;
+	if (x1 < a)
+		x1 = a;
+	if (x2 > b)
+		x2 = b;
+	return (unsigned short)((0xFFFFu >> (x1 - a)) & (0xFFFFu << (b - x2)));
+}
+
+/* the frame's sides and the right shadow strip in the buffer, a pass down
+   the rows for each side where most of their rows are (the rest a few
+   rows by cpu_rect): five passes were 13.5 ms of an ST's About box */
+static void cpu_sides(short x, short y, short w, short h)
+{
+	short gl = x >> 4, g, r0 = (short)(x + w - 3), r2 = (short)(x + w + 2);
+
+	/* left: the outer side (rows y..y+h-1) and the inner (y+2..y+h-3) */
+	if (((x + 2) >> 4) == gl) {
+		unsigned short mo = gmask(gl, x, x), mi = gmask(gl, (short)(x + 2), (short)(x + 2));
+		cpu_vmask(y, (short)(y + 1), gl, mo);
+		cpu_vmask((short)(y + 2), (short)(y + h - 3), gl, (unsigned short)(mo | mi));
+		cpu_vmask((short)(y + h - 2), (short)(y + h - 1), gl, mo);
+	} else {
+		cpu_rect(x, y, x, (short)(y + h - 1), 1);
+		cpu_rect((short)(x + 2), (short)(y + 2), (short)(x + 2), (short)(y + h - 3), 1);
+	}
+	/* right: inner x+w-3 (y+2..y+h-3), outer x+w-1 (y..y+h-1), the
+	   shadow's strip x+w..x+w+2 (y+3..y+h+2): their common rows in one
+	   pass a group, the others by cpu_rect */
+	for (g = r0 >> 4; g <= (r2 >> 4); g++) {
+		unsigned short m = (unsigned short)(gmask(g, r0, r0) | gmask(g, (short)(x + w - 1), (short)(x + w - 1)) |
+						    gmask(g, (short)(x + w), r2));
+		cpu_vmask((short)(y + 3), (short)(y + h - 3), g, m);
+	}
+	cpu_rect((short)(x + w - 1), y, (short)(x + w - 1), (short)(y + 2), 1);		/* outer, its top rows */
+	cpu_rect(r0, (short)(y + 2), r0, (short)(y + 2), 1);					/* inner, its first */
+	cpu_rect((short)(x + w - 1), (short)(y + h - 2), (short)(x + w - 1), (short)(y + h - 1), 1);	/* outer, its foot */
+	cpu_rect((short)(x + w), (short)(y + h - 2), r2, (short)(y + h + 2), 1);		/* the strip's foot */
+}
+
 static void box(short x, short y, short w, short h)
 {
+	if (cpu_base) {
+		/* the same pixels, the sides in fewer passes (cpu_sides) */
+		rect_fill(x + 3, y + h, x + w - 1, y + h + 2, 1);	/* the shadow's foot */
+		if (!off_white)
+			rect_fill(x, y, x + w - 1, y + h - 1, 0);
+		cpu_sides(x, y, w, h);
+		line(x, y, x + w - 1, y);
+		line(x + w - 1, y + h - 1, x, y + h - 1);
+		line(x + 2, y + 2, x + w - 3, y + 2);
+		line(x + w - 3, y + h - 3, x + 2, y + h - 3);
+		return;
+	}
 	/* the shadow: its two strips, not a box-sized fill painted over (on
 	   a stock Falcon 15 ms of the About box's 155) */
 	rect_fill(x + w, y + 3, x + w + 2, y + h + 2, 1);
@@ -765,16 +846,32 @@ static int draw_off(void (*draw)(int framed))
 			/* the box's rows: their edge words a row at a time, then
 			   the middle of every row at once (text.c's scr_set_rows:
 			   a row at a time in C was some 400 cycles a row more) */
-			short nw = dh < ob.rows ? dh : ob.rows;
-			unsigned short *dd = d;
-			const unsigned short *uu = u;
+			short nw = dh < ob.rows ? dh : ob.rows, k;
+			unsigned short *dl = d, *dr = d + rw, rk0 = rkeep[0], rk1 = rkeep[1];
+			const unsigned short *ul = u, *ur = u + rw;
 
-			for (r = 0; r < nw; r++, dd += ds, uu += us) {
-				for (i = 0; i < lw; i++)
-					dd[i] = uu[i] & lkeep;
-				for (i = rw; i < rw + 2 * g; i++)
-					dd[i] = uu[i] & rkeep[(i - rw) >= g];
+			/* pointers stepped a row, no index worked out in the loop: in
+			   one plane (ST high) three words a row, the loop's own work
+			   most of the 21 ms it took an ST (the hub's gemprof, TOS 1.04) */
+			if (g == 1) {
+				if (lw)
+					for (k = nw; k > 0; k--, dl += ds, ul += us)
+						*dl = (unsigned short)(*ul & lkeep);
+				for (k = nw; k > 0; k--, dr += ds, ur += us) {
+					dr[0] = (unsigned short)(ur[0] & rk0);
+					dr[1] = (unsigned short)(ur[1] & rk1);
+				}
+			} else {
+				for (k = nw; k > 0; k--, dl += ds, ul += us, dr += ds, ur += us) {
+					for (i = 0; i < lw; i++)
+						dl[i] = (unsigned short)(ul[i] & lkeep);
+					for (i = 0; i < g; i++) {
+						dr[i] = (unsigned short)(ur[i] & rk0);
+						dr[g + i] = (unsigned short)(ur[g + i] & rk1);
+					}
+				}
 			}
+			r = nw;
 			scr_set_rows((unsigned char *)(d + lw), ds * 2, nw, (short)((rw - lw) * 2), 0);
 			d += (long)nw * ds;
 			u += (long)nw * us;
