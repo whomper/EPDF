@@ -157,7 +157,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   redraw), bg_tick_at with the event's mouse, the hub's About steps (the frame, shadow, text and
   bold by the CPU into its buffer). TOS 1.04: ST:mono all within for the first time (About 140,
   a page 55, Select all 45); ST:med only About over (185: the limit is with Erez). Resident
-  458,944. The heap takes 64 KB steps with no document (heap_grain, HEAP_IDLE: 0.5's first
+  458,944. The heap takes 64 KB steps with no document (heap_grain, set in epdf.c and doc.c: 0.5's first
   candidate left the Desk menu no room to drop under NVDI with the four accessories; now 149 KB
   more free than 0.4.2) and, at doc_open, one block of a quarter of what is free, then the
   libc's doubling; known: ST-1's big.py has memory refused, and recovered, in manual-compendium
