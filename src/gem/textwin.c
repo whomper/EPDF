@@ -567,7 +567,10 @@ static void draw_rows(const GRECT *c, long r0, long r1)
 			{
 				short end = (short)(x + n * cw), pad = end < right ? (short)((right - end + cw - 1) / cw) : 0;
 
-				if (pad > 0 && pad <= PAD_MAX && n + pad <= (long)sizeof padded) {
+				/* (spaces after the text where the CPU draws it, cheaper than
+				   a fill; through the VDI, a GDOS font under NVDI, each is a
+				   glyph to draw: the fill, the hub's ST:mono with Courier 14) */
+				if (pad > 0 && pad <= PAD_MAX && n + pad <= (long)sizeof padded && text_plain_state() >= 0) {
 					memcpy(padded, vis, (size_t)n);
 					memset(padded + n, ' ', (size_t)pad);
 					text_plain(vdi_h, x, y, padded, n + pad);	/* MD_REPLACE, pen 1, no effects: set above */
