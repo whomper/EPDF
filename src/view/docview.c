@@ -347,6 +347,7 @@ int dv_row(DOCVIEW *v, long r, int *kind, const char **s, long *n, long *page, l
 				*kind = DV_PIC;
 				v->pic.obj = obj;
 				v->pic.flip = fl;
+				v->pic.page = p;
 				v->pic.rows = pic_rows(v, w, h, &v->pic.w, &v->pic.h);
 				v->pic.row = r - lr[lo];
 				*off = (long)(*s - (const char *)tv->text);

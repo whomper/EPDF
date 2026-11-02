@@ -589,6 +589,11 @@ struct PCSRC {
 	int qh, qn, qfin;		/* until the end (its padding) */
 };
 
+long pdf_stream_left(const PCSRC *s)
+{
+	return s ? s->left : 0;
+}
+
 #define PCQ 512				/* AES: the raw bytes taken at a time, about 60 ms on an ST */
 
 static int raw_get(PCSRC *s, unsigned char *buf, long n)

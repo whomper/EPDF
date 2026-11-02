@@ -41,6 +41,11 @@ int doc_pic_start(void);		/* a picture the window wants: its decoding begun */
 int doc_pic_slice(unsigned long ms, long *obj);	/* 1 when it is done: *obj */
 int doc_pic_rows(long *obj, long *from, long *to);	/* rows made since asked: from, to */
 int doc_pic_busy(void);
+/* the progress row's: the page being read (-1 none), *prog how far
+   through it in thousandths; the picture being made, its page and
+   rows made of all (*of 0: not made a row at a time) */
+long doc_reading(int *prog);
+int doc_pic_progress(long *page, long *made, long *of);
 const char *doc_status(void);		/* the About box's line */
 const char *doc_page_text(long n, long *len);	/* NULL when not read yet */
 long doc_page_len(long n);		/* -1 when not read yet; nothing read */
@@ -72,6 +77,17 @@ void win_sliders(void);
 void win_where(short *x, short *y, short *w, short *h);
 int win_message(const short *msg);
 void win_status(const char *s);		/* after the info line's page, until cleared (NULL) */
+/* the progress row (Erez, 2 Nov 2026): the job running now, kind > 0, its
+   words and how far (done of total; total 0: not known), or kind 0
+   none; called every turn. The row shows once a job has run half a
+   second and goes when none has for a third; it is drawn in a turn of
+   its own (win_progress_due, win_progress_draw), at most every 250 ms */
+void win_progress(int kind, const char *what, long done, long total);
+int win_progress_due(void);
+void win_progress_draw(void);
+int win_progress_shown(void);
+long win_progress_wait(void);
+void win_pages_shown(long *p0, long *p1);	/* the first and last page in the window */		/* ms until the row may go (-1: not waiting to) */
 int win_hit(short mx, short my, long *page, long *off);
 void win_draw_span(long p0, long o0, long p1, long o1);
 /* the selection changed from span q to span p (p0 or q0 < 0: none): the rows whose look changed drawn */

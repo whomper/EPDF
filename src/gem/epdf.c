@@ -458,7 +458,7 @@ static int copy_step(void)
 		cp.at = 0;
 		/* the progress every quarter of a second (the guidelines' Speed);
 		   the AES draws the info line again at each one */
-		if (cp.p1 > cp.p0 && tos_ms() - cp.said >= 250) {
+		if (cp.p1 > cp.p0 && tos_ms() - cp.said >= 250 && !win_progress_shown()) {
 			char msg[48];
 
 			snprintf(msg, sizeof msg, "copying... %ld of %ld pages", cp.p - cp.p0, cp.p1 - cp.p0 + 1);
@@ -816,6 +816,38 @@ static void message(const short *msg)
 	}
 }
 
+/* the progress row's job (Erez, 2 Nov 2026: the one the user waits on):
+   a copy, a search, the document being opened, a page in the window being
+   read (within a slow page too), a picture being made, the rest of the
+   pages being read */
+static void progress(void)
+{
+	char w[64];
+	long pg, made, of, n = doc_pages(), p0, p1, rp;
+	int pm = 0, pic;
+
+	rp = doc_reading(&pm);
+	win_pages_shown(&p0, &p1);
+	pic = doc_pic_progress(&pg, &made, &of);
+	if (cp.on) {
+		snprintf(w, sizeof w, "Copying page %ld of %ld", cp.p - cp.p0 + 1 > cp.p1 - cp.p0 + 1 ? cp.p1 - cp.p0 + 1 : cp.p - cp.p0 + 1,
+			 cp.p1 - cp.p0 + 1);
+		win_progress(4, w, cp.p - cp.p0, cp.p1 - cp.p0 + 1);
+	} else if (find_dir) {
+		snprintf(w, sizeof w, "Searching page %ld of %ld", find_page + 1, n);
+		win_progress(3, w, n + 1 - find_left, n);
+	} else if (doc_opening()) {
+		win_progress(5, "Opening the document", 0, 0);
+	} else if (rp >= 0 && (!pic || (rp >= p0 && rp <= p1))) {
+		snprintf(w, sizeof w, "Reading page %ld of %ld", rp + 1, n);
+		win_progress(1, w, doc_read() * 1000L + pm, n * 1000L);
+	} else if (pic) {
+		snprintf(w, sizeof w, "Picture on page %ld", pg + 1);	/* the one in view, before pages out of it */
+		win_progress(2, w, made, of);
+	} else
+		win_progress(0, NULL, 0, 0);
+}
+
 /* after a crash (common/atari/crash.c): GEM closed down before it quits */
 static void crash_quit(const char *what)
 {
@@ -984,11 +1016,24 @@ int main(void)
 		unsigned long t;
 		int pending = doc_pending() || find_dir || doc_pic_busy() || pics_waiting() || cp.on;
 
+		progress();
+
 		/* the sliders after a scroll, once no key waits; the reading
 		   on while nothing else does */
-		if (win_owed() || win_sliders_due() || menus_due || pending || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0)
+		if (win_owed() || win_sliders_due() || menus_due || pending || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0 ||
+		    win_progress_due())
 			flags |= MU_TIMER;
-		t = win_owed() || win_sliders_due() || menus_due || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0 ? 0 : bg_timer(pending, 1000);
+		t = win_owed() || win_sliders_due() || menus_due || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0 ||
+		    win_progress_due() ? 0 : bg_timer(pending, 1000);
+		{
+			long pw = win_progress_wait();	/* the row to go once nothing has run for a while */
+
+			if (pw >= 0) {
+				if (!(flags & MU_TIMER) || (unsigned long)pw < t)
+					t = (unsigned long)pw;
+				flags |= MU_TIMER;
+			}
+		}
 		/* either button going down (0x100: the AES's "any of them"), one
 		   click (5.8: the press at once, not held back for the
 		   double-click time); a double click timed by press_double */
@@ -1018,6 +1063,8 @@ int main(void)
 			} else if (rows_pic >= 0) {
 				win_pic_rows(rows_pic, rows_from, rows_to);	/* its rows made last turn */
 				rows_pic = -1;
+			} else if (win_progress_due()) {
+				win_progress_draw();	/* the progress row, a turn of its own */
 			} else if (win_sliders_due()) {
 				win_sliders();
 			} else if (menus_due) {

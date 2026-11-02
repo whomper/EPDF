@@ -37,6 +37,7 @@ typedef struct {
 	long obj;			/* its image XObject */
 	int w, h;			/* shown at w x h pixels */
 	int flip;			/* DV_FLIPV: its rows bottom up, DV_FLIPH: right to left */
+	long page;			/* the page it is on */
 	long row, rows;			/* this row, of rows */
 } DVPIC;
 

@@ -148,6 +148,9 @@ typedef struct pdoc {
 	void *stop_ctx;
 	int stopping;
 	unsigned pause_tick;
+	/* the page being read: how far through its content streams, in
+	   thousandths (their stored bytes read; a progress bar's) */
+	int page_prog;
 	char err[96];
 } PDOC;
 
@@ -186,6 +189,7 @@ typedef struct PCSRC PCSRC;
 PCSRC *pdf_stream_open(PDOC *d, POBJ *o, long onum);
 long pdf_stream_read(PCSRC *s, unsigned char *out, long n);
 void pdf_stream_close(PCSRC *s);
+long pdf_stream_left(const PCSRC *s);	/* its stored bytes not read yet */
 /* the same for a scan or a JPEG (CCITTFaxDecode, DCTDecode; alone or
    after Flate): the coded bytes, before the picture's own filter */
 PCSRC *pdf_stream_open_coded(PDOC *d, POBJ *o, long onum);

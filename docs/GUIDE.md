@@ -31,7 +31,14 @@ a screen 640 pixels wide or more. EPDF takes about 390 KB when it starts, and mo
 ## Windows and menus
 
 EPDF has one window. Its title is the document's name; the line under it says which page is at the
-top of the window and, while EPDF is still reading the document, how far it has got.
+top of the window.
+
+**The progress bar.** While EPDF works on something you wait for, a bar at the top of the window
+fills from the left and says what it is doing, how far it has got and about how long is left:
+"Reading page 3 of 8 · 30% · 2 min left" while it reads the document's text (a slow page, such as a
+map on an ST, fills it too), "Picture on page 1" while a picture is made, "Searching page 5 of 8",
+"Copying page 2 of 12". It comes when the work has gone on for half a second and goes when the
+work is done, the text moving down a line and back.
 
 Every page follows the one before, under a line that names it ("Page 3"). EPDF reads the text a
 page at a time while you read, starting with the page you are on; a page it hasn't read yet shows
@@ -40,7 +47,7 @@ gives way to you at once.
 
 - **File:** Open... (^O), Quit (^Q).
 - **Edit:** Copy (^C) puts the text you selected on the clipboard (a big selection is copied a
-  page at a time, with its progress under the title; Esc stops it); Select all (^A); Find... (^F)
+  page at a time, with its progress in the bar; Esc stops it); Select all (^A); Find... (^F)
   looks for a word or a phrase, whatever its case, across the lines it was set on; Find next (^G)
   and Find previous (⇧^G) look again. A search goes round the whole document, reading pages it
   hasn't read yet first, and says on the line under the title where it found the text.

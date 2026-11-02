@@ -216,6 +216,7 @@ static void sink_row(void *u, long y, const unsigned short *px)
 	}
 	if (k->nplanes == 16) {
 		memcpy((unsigned char *)e->bm.fd_addr + y * k->row, px, (size_t)k->w * 2);
+		e->made = y + 1;
 		if (!(e->flip & DV_FLIPV))
 			e->ready = y + 1;
 		return;
@@ -227,6 +228,7 @@ static void sink_row(void *u, long y, const unsigned short *px)
 		for (x = 0; x < k->w; x++)
 			if (k->pens[x] & 1)
 				o[x >> 3] |= (unsigned char)(0x80 >> (x & 7));
+		e->made = y + 1;
 		if (!(e->flip & DV_FLIPV))
 			e->ready = y + 1;
 		return;
@@ -274,6 +276,7 @@ int pics_band(void)
 	dst.fd_addr = (unsigned char *)k->e->bm.fd_addr + k->b0 * k->row;
 	dst.fd_stand = 0;
 	vr_trnfm(vdi_h, &src, &dst);
+	k->e->made = k->b0 + k->bn;
 	if (!(k->e->flip & DV_FLIPV))
 		k->e->ready = k->b0 + k->bn;	/* (upside down: shown when it is whole, turned) */
 	k->full = 0;
@@ -292,6 +295,7 @@ int pics_rows(PDOC *d, PICE *e, int nplanes, PIC_PAL *pl, int *why)
 	k.wd = (e->w + 15) / 16;
 	k.row = k.wd * 2 * nplanes;
 	e->ready = 0;
+	e->made = 0;
 	if (nplanes != 16) {
 		k.pens = malloc((size_t)e->w);
 		k.dt = pic_dither_open(e->w, pl);
@@ -368,6 +372,7 @@ PICE *pics_get(long obj, int w, int h, int flip)
 	cache[best].w = w;
 	cache[best].h = h;
 	cache[best].flip = flip;
+	cache[best].made = 0;
 	cache[best].state = PICS_WANTED;
 	cache[best].used = tick;
 	return &cache[best];

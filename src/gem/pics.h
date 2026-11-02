@@ -11,6 +11,8 @@ typedef struct {
 	long obj;
 	int w, h;
 	int flip;			/* DV_FLIPV: made upside down, then turned; DV_FLIPH: mirrored */
+	long page;			/* the page it is on (the progress row's words) */
+	long made;			/* its rows made so far, shown or not (the progress row's) */
 	int state, why;
 	MFDB bm;			/* the screen's own bitmap, in ST RAM, when bm.fd_addr */
 	long ready;			/* its rows made, drawn from the top down while it is made a

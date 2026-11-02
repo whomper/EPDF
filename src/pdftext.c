@@ -1869,7 +1869,31 @@ typedef struct CPIECES {
 	SBUF whole;			/* or decoded whole */
 	long wpos;
 	int nl;				/* a line end owed after a piece */
+	long slen;			/* the piece's stored bytes, when it was opened */
 } CPIECES;
+
+/* how far through the page's content: the pieces done and this one's
+   stored bytes read (PDOC.page_prog, the progress row's) */
+static void pieces_prog(CPIECES *c)
+{
+	long in = 0, a = 0, b = 0;
+
+	if (c->s && c->slen > 0) {
+		a = c->slen - pdf_stream_left(c->s);
+		b = c->slen;
+	} else if (c->whole.s && c->whole.len > 0) {
+		a = c->wpos;
+		b = c->whole.len;
+	}
+	while (b > (1L << 20))		/* (1000 x the bytes in a long) */
+		a >>= 1, b >>= 1;
+	if (b > 0)
+		in = a * 1000L / b;
+	if (in > 1000)
+		in = 1000;
+	if (c->n > 0)
+		c->d->page_prog = (int)(((c->k > 0 ? c->k - 1 : 0) * 1000L + in) / c->n);
+}
 
 static long pieces_read(CPIECES *c, unsigned char *out, long n)
 {
@@ -1920,8 +1944,10 @@ static long pieces_read(CPIECES *c, unsigned char *out, long n)
 			if (!so || so->t != PO_DICT)
 				continue;
 			c->s = pdf_stream_open(d, so, onum);
-			if (c->s)
+			if (c->s) {
+				c->slen = pdf_stream_left(c->s);
 				continue;
+			}
 			c->wpos = 0;
 			if (pdf_stream(d, so, onum, &c->whole, &term, 32L << 20) != 0 || !c->whole.len) {
 				sb_free(&c->whole);
@@ -1950,6 +1976,7 @@ static void refill(IX *x, const unsigned char **pp, const unsigned char **pe)
 		if (got)
 			pause_point(x->d);
 		r = pieces_read(x->src, x->win + keep + got, k);
+		pieces_prog(x->src);
 		if (r <= 0) {
 			if (!got)
 				x->src_end = 1;
@@ -3236,6 +3263,7 @@ int pdf_page_text(PDOC *d, long n, PTEXT *t)
 	x.d = d;
 	x.t = t;
 	d->stopping = 0;
+	d->page_prog = 0;
 	sb_init(&x.txt);
 	pg = pdf_page(d, n, &res, &box, &rot);
 	if (!pg) {

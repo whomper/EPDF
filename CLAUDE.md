@@ -177,7 +177,21 @@ at first. This section is kept up to date: the build, the tests, what a release 
   names front-coded in blocks of 16 (pdftab.h's agl_names/agl_blk/agl_uc, tools/gen-tables.py;
   78 KB of pointers and strings to 44 KB), resident 435,864 (23 KB under 0.5); "menu-bar-failed"
   (with the KB free) and "quit" logged for the rigs. The guidelines name no reserve yet (the hub's
-  #132: ClaudeST failed at about 54 KB).
+  #132: ClaudeST failed at about 54 KB). The hub cleared 5ae99e168 (acc_all under NVDI "free-kb
+  18 2 1") and 0.5.1 went out on 2 Nov (v0.5.1 on 5573c536); known in its notes: ST high under NVDI
+  with a 14-point GDOS font, a new page about a third of a second. The progress row (Erez, 2 Nov: "a progress bar
+  at the top ... an idea how long it will take"; his choices: a row shown only while EPDF works, the
+  job the user waits on): textwin.c's win_progress (bar_h, whole/work), epdf.c's progress() each
+  turn: Copy, a search, opening, the pages read (PDOC.page_prog within a page: its content streams'
+  stored bytes read), a picture (PICE.made rows); shown after 0.5 s of a job, gone after 0.3 s of
+  none, the text moved a row by one copy; drawn in turns of its own at most every 250 ms, only what
+  changed, each pixel once (cells newly filled inverted, a changed letter on the filled part by
+  MD_ERASE then MD_TRANS); the time left from the job's rate, from its second second. The hub's first ST runs under
+  NVDI with Courier 10 Pitch 14 (TOS 1.04): ST:mono's next page and The page's lines 325 (300), two
+  thirds of it NVDI's v_gtext (its gemprof); where the text goes through the VDI
+  (text_plain_state() < 0) win_draw_all clears the rows' area and owes their text to the bands of
+  about 60 ms (the hub's option (a)); a row drawn by the VDI ends with a fill, not with spaces.
+  `-DEPDF_BAND_ALWAYS` (XOPT) bands on any font, for the rigs here, which have no NVDI.
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
   checks: `tools/nofpu.sh`); decode streams with `inflate_open`/`inflate_read` so a page needn't fit
   in memory; reuse `common/atari/dspjpeg.c` with `PIC_LIBJPEG` for JPEG on the Falcon; a progressive

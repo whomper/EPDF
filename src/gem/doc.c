@@ -308,6 +308,27 @@ int doc_pic_busy(void)
 	return rpic != NULL;
 }
 
+/* the progress row's (Erez, 2 Nov 2026) */
+long doc_reading(int *prog)
+{
+	if (!doc || done >= npages)
+		return -1;
+	*prog = rpage >= 0 && !rdone ? doc->page_prog : 0;
+	if (*prog > 990)
+		*prog = 990;			/* its content read, the page still being put together */
+	return rpage >= 0 ? rpage : next;
+}
+
+int doc_pic_progress(long *page, long *made, long *of)
+{
+	if (!rpic)
+		return 0;
+	*page = rpic->page;
+	*made = rpic->made;
+	*of = rpic->h;			/* (made whole, by the DSP or as a standard bitmap: 0 until done) */
+	return 1;
+}
+
 #ifdef EPDF_STACKS
 /* a test build's report: how much of each stack has been used */
 static void stacks_used(void)
