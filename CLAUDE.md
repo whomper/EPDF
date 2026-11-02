@@ -149,7 +149,20 @@ at first. This section is kept up to date: the build, the tests, what a release 
   page, a page while reading and Select all within their times (TOS 1.04: 195, 110, 45), five-place
   fractions read right, AES-256 opened in the reader's turns. Resident 449,236. Over on TOS 1.04: a
   line 80 (TOS's own drawing, the hub thinks), View > The page's lines 305, About 230 (200 with the
-  hub's e9f041d). On main after it: the reading stretches (EDOS_01.PDF held an ST 17 s at a time).
+  hub's e9f041d). 0.5 went out on 2 Nov (v0.5 on d29ef93b, cleared on 6408af58): the reading
+  stretches (EDOS_01.PDF held an ST 17 s at a time; now about 0.2 s: font heads, the chunks'
+  merge sort, inflate's turns, two file windows; MEASURE's gap_ms, tools/gapat.py), the sliders
+  set only when they move a pixel, a line in two turns and what a scroll owes drawn in bands of
+  about 60 ms (textwin.c's owe_r0/owe_r1; tests/hatari/hold.py checks a held key against a whole
+  redraw), bg_tick_at with the event's mouse, the hub's About steps (the frame, shadow, text and
+  bold by the CPU into its buffer). TOS 1.04: ST:mono all within for the first time (About 140,
+  a page 55, Select all 45); ST:med only About over (185: the limit is with Erez). Resident
+  458,944. The heap takes 64 KB steps with no document (heap_grain, HEAP_IDLE: 0.5's first
+  candidate left the Desk menu no room to drop under NVDI with the four accessories; now 149 KB
+  more free than 0.4.2) and, at doc_open, one block of a quarter of what is free, then the
+  libc's doubling; known: ST-1's big.py has memory refused, and recovered, in manual-compendium
+  and scan-stinternals (none lost), to be looked at again with the hub's task #98 (the family's
+  first heap block). Still to look at: ST:med's page third band (120 ms on TOS 1.04).
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
   checks: `tools/nofpu.sh`); decode streams with `inflate_open`/`inflate_read` so a page needn't fit
   in memory; reuse `common/atari/dspjpeg.c` with `PIC_LIBJPEG` for JPEG on the Falcon; a progressive
