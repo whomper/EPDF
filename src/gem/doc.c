@@ -606,8 +606,8 @@ const char *doc_status(void)
 	if (!doc)
 		return "No document";
 	if (done < npages)
-		snprintf(s, sizeof s, "%s  \xF9  %ld of %ld pages read", name, done, npages);
+		snprintf(s, sizeof s, "%s  \xFA  %ld of %ld pages read", name, done, npages);
 	else
-		snprintf(s, sizeof s, "%s  \xF9  %ld page%s", name, npages, npages == 1 ? "" : "s");
+		snprintf(s, sizeof s, "%s  \xFA  %ld page%s", name, npages, npages == 1 ? "" : "s");
 	return s;
 }

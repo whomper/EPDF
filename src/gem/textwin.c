@@ -157,7 +157,7 @@ void win_info(void)
 		snprintf(bar_base, sizeof bar_base, "Open a PDF with File > Open (^O), or drop one here.");
 	else
 		snprintf(bar_base, sizeof bar_base, "Viewing page %ld / %ld%s%s", dv_page_at_top(v) + 1, doc_pages(),
-			 status[0] ? " \xF9 " : "", status);
+			 status[0] ? " \xFA " : "", status);
 	bar_compose();			/* (drawn in a turn of its own: win_progress_draw) */
 }
 
@@ -800,7 +800,7 @@ static void bar_compose(void)
 	size_t k;
 
 	if (job_on && bar_job[0])
-		snprintf(w, sizeof w, "%s \xF9 %s", bar_base, bar_job);
+		snprintf(w, sizeof w, "%s \xFA %s", bar_base, bar_job);
 	else
 		snprintf(w, sizeof w, "%s", bar_base);
 	for (k = strlen(w); k < (size_t)nb; k++)
@@ -944,7 +944,7 @@ void win_progress(int kind, const char *what, long done, long total)
 	if (eta_s >= 0)
 		eta_words(eta_s, eta, sizeof eta);
 	if (p >= 0)
-		snprintf(bar_job, sizeof bar_job, "%s \xF9 %ld%%%s%s", what, p / 10, eta[0] ? " \xF9 " : "", eta);
+		snprintf(bar_job, sizeof bar_job, "%s \xFA %ld%%%s%s", what, p / 10, eta[0] ? " \xFA " : "", eta);
 	else
 		snprintf(bar_job, sizeof bar_job, "%s", what);
 	bar_p = p;
