@@ -22,6 +22,7 @@
 #include "render.h"
 #include "pdfimg.h"
 #include "cvjpeg.h"
+#include "conv.h"
 
 /* ------------------------------------------------------------------ fixed point */
 static void mat_mul6(const fx *a, const fx *b, fx *o)
@@ -461,6 +462,8 @@ static int is_colour(uint16_t c)
 /* ------------------------------------------------------------------ painting */
 static void paint(RS *s, int fill, int evenodd, int stroke, int close)
 {
+	if (cv_turn)
+		cv_turn();		/* (each painting a turn: a map's are many) */
 	RPAGE *r = s->r;
 	RGS *g = &s->gs[s->sp];
 	RCLIP b;
@@ -730,7 +733,20 @@ static unsigned char *read_file(const char *path, long *len)
 	if (!h)
 		return NULL;
 	b = size > 0 ? malloc((size_t)size) : NULL;
-	got = b ? pdf_os_read(h, 0, b, size) : -1;
+	got = b ? 0 : -1;
+	/* 32 KB at a time, a turn between (a font of 400 KB at once was a
+	   stretch of some 150 ms on a Falcon) */
+	while (b && got < size) {
+		long k = size - got < 32768L ? size - got : 32768L, r = pdf_os_read(h, got, b + got, k);
+
+		if (r != k) {
+			got = -1;
+			break;
+		}
+		got += k;
+		if (cv_turn)
+			cv_turn();
+	}
 	pdf_os_close(h);
 	if (got != size) {
 		free(b);
@@ -744,8 +760,11 @@ static void gc_flush(RFONTS *f)
 {
 	int i;
 
-	for (i = 0; i < f->npool; i++)
+	for (i = 0; i < f->npool; i++) {
 		free(f->pool[i].bm);
+		if ((i & 63) == 63 && cv_turn)
+			cv_turn();	/* (1,200 blocks freed: some 100 ms of a Falcon) */
+	}
 	f->npool = 0;
 	f->gbytes = 0;
 	memset(f->gh, 0, sizeof f->gh);
@@ -780,8 +799,26 @@ static FT_Face face_for(RPAGE *r, long prog, const char *base)
 		POBJ *o = pdf_get(r->d, prog);
 		SBUF b;
 		const char *term = NULL;
+		PCSRC *src = o && o->t == PO_DICT ? pdf_stream_open(r->d, o, prog) : NULL;
 
-		if (o && o->t == PO_DICT && pdf_stream(r->d, o, prog, &b, &term, 8L << 20) == 0 && !term && b.len > 0) {
+		sb_init(&b);
+		if (src) {
+			/* a piece at a time, a turn between (a font unpacked at once
+			   was a stretch of 150 ms on a Falcon) */
+			unsigned char piece[4096];
+			long k;
+
+			while ((k = pdf_stream_read(src, piece, sizeof piece)) > 0 && b.len < (8L << 20)) {
+				if (!sb_add(&b, (const char *)piece, k))
+					break;
+				if (cv_turn)
+					cv_turn();
+			}
+			pdf_stream_close(src);
+			if (k < 0)
+				sb_free(&b);
+		}
+		if (src ? b.len > 0 : (o && o->t == PO_DICT && pdf_stream(r->d, o, prog, &b, &term, 8L << 20) == 0 && !term && b.len > 0)) {
 			f->e[v].buf = (unsigned char *)b.s;
 			f->e[v].len = b.len;
 		} else
@@ -822,11 +859,18 @@ static FT_Face face_for(RPAGE *r, long prog, const char *base)
 			}
 		}
 	}
+	if (cv_turn)
+		cv_turn();
+	cv_phase = "face";
 	if (!f->e[v].buf || FT_New_Memory_Face(f->lib, f->e[v].buf, f->e[v].len, 0, &f->e[v].face)) {
+		cv_phase = "render";
 		f->e[v].face = NULL;
 		f->e[v].bad = 1;
 		return NULL;
 	}
+	cv_phase = "render";
+	if (cv_turn)
+		cv_turn();
 	return f->e[v].face;
 }
 
@@ -912,8 +956,10 @@ static void glyph_hook(void *u, long prog, int kind, const char *base, int comp,
 			FT_Bitmap *bm;
 			int y;
 
+			cv_phase = "glyph";
 			if (!(gid = glyph_index(face, comp, code, uni)) || FT_Set_Char_Size(face, 0, (FT_F26Dot6)(sz >> 10), 72, 72)) {
 				r->glyphs_missed++;
+				cv_phase = "render";
 				return;
 			}
 			dl.x = dl.y = 0;
@@ -921,9 +967,13 @@ static void glyph_hook(void *u, long prog, int kind, const char *base, int comp,
 			if (FT_Load_Glyph(face, gid, FT_LOAD_NO_BITMAP | FT_LOAD_NO_HINTING) ||
 			    FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL)) {
 				r->glyphs_missed++;
+				cv_phase = "render";
 				return;
 			}
 			bm = &face->glyph->bitmap;
+			cv_phase = "render";
+			if (cv_turn)
+				cv_turn();	/* (a glyph made: some ms of FreeType on a Falcon) */
 			if (bm->pixel_mode != FT_PIXEL_MODE_GRAY)
 				return;
 			if (!f->pool && !(f->pool = malloc(GC_MAX * sizeof *f->pool)))
@@ -954,6 +1004,9 @@ static void glyph_hook(void *u, long prog, int kind, const char *base, int comp,
 			rc_mask(&r->c, ox + e->left, oy - e->top, e->bm, e->w, e->h, e->w,
 				(mode & 3) == 1 ? g->stroke.col : g->fill.col, &g->clip);
 	}
+	/* (a line's glyphs from the cache: some ms of the Falcon's every 4) */
+	if ((r->glyphs & 3) == 0 && cv_turn)
+		cv_turn();
 }
 
 /* ------------------------------------------------------------------ pictures */
@@ -996,7 +1049,11 @@ static void image_hook(void *u, long obj, const fx *ctm)
 	if (h < 1) h = 1;
 	if (w > 2048) w = 2048;
 	if (h > 2048) h = 2048;
+	if (cv_turn)
+		cv_turn();
 	p = cv_image(r->d, obj, (int)w, (int)h, &why);
+	if (cv_turn)
+		cv_turn();
 	if (!p) {
 		r->images_missed++;
 		return;
@@ -1049,6 +1106,8 @@ void render_done(RPAGE *r)
 			if (r->fonts->e[i].face)
 				FT_Done_Face(r->fonts->e[i].face);
 			free(r->fonts->e[i].buf);
+			if (r->fonts->e[i].face && cv_turn)
+				cv_turn();
 		}
 		FT_Done_FreeType(r->fonts->lib);
 		free(r->fonts);

@@ -28,6 +28,8 @@ typedef struct {
 /* the turn the long loops (dithers, deflate, fills) ask for; set by
    cv_convert while it runs (NULL none) */
 extern int (*cv_turn)(void);
+/* what the converter is at ("render", "text", "picture", "mono"...), for a log */
+extern const char *cv_phase;
 
 typedef struct {
 	long pages, in_bytes, out_bytes, ms;

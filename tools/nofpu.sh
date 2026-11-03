@@ -7,7 +7,9 @@ OBJDUMP=${OBJDUMP:-m68k-linux-gnu-objdump}
 bad=0
 for f in "$@"; do
 	[ -f "$f" ] || continue
-	n=$($OBJDUMP -d "$f" | awk -F'\t' 'NF >= 3 { split($3, w, " "); if (w[1] ~ /^f[a-z]/) print }' | wc -l)
+	# (decoded as a 68030's: with ColdFire's mnemonics a switch's jump
+	# table read as "ff1")
+	n=$($OBJDUMP -m m68k:68030 -d "$f" | awk -F'\t' 'NF >= 3 { split($3, w, " "); if (w[1] ~ /^f[a-z]/) print }' | wc -l)
 	if [ "$n" -ne 0 ]; then
 		echo "nofpu: $f has $n FPU instructions"
 		bad=1

@@ -270,6 +270,7 @@ static void set_radio(short first, short last, short on)
 static CORO main_co, work_co;
 static char *work_stack;
 static int working;			/* the batch under way */
+static int fresh;			/* just begun: its first slice in the next turn */
 static int stop_now;			/* Stop: the next turn says stop */
 static int work_done;			/* the batch has finished (its stack is idle) */
 static unsigned long slice_end;
@@ -279,11 +280,32 @@ static unsigned long t_file, t_batch;	/* when they began */
 static long batch_bytes, bytes_done;
 static int n_ok, n_failed;
 
+#ifdef TURN_DEBUG
+static unsigned long n_turns;
+#endif
+
 static int turn(void *u)
 {
+#ifdef TURN_DEBUG
+	n_turns++;
+	static unsigned long last;
+	static const char *lastph = "";
+	unsigned long now = tos_ms();
+
+	if (last && now - last > 25) {
+		char a[60];
+
+		snprintf(a, sizeof a, "%lu ms %s-%s", now - last, lastph, cv_phase);
+		log_event("long-turn", a, NULL);
+	}
+#endif
 	(void)u;
 	if (tos_ms() >= slice_end)
 		coro_switch(&work_co, &main_co);
+#ifdef TURN_DEBUG
+	last = tos_ms();
+	lastph = cv_phase;
+#endif
 	return stop_now;
 }
 
@@ -490,12 +512,30 @@ static void redraw_obj(short o)
 	wind_update(END_UPDATE);
 }
 
-static void redraw_all(void)
+/* the file's line and bar to the batch's, one rectangle drawn once
+   (four objects drawn one by one were 80 ms of a Falcon's turn) */
+static void redraw_progress(void)
 {
-	GRECT a = work_area();
+	GRECT g;
+	short y2;
 
+	objc_offset(tree, T_FILE, &g.x, &g.y);
+	objc_offset(tree, BAR2, &g.w, &y2);
+	g.w = tree[T_FILE].ob_width;
+	g.h = (short)(y2 + tree[BAR2].ob_height - g.y);
 	wind_update(BEG_UPDATE);
-	draw(&a, BOX);
+#ifdef TURN_DEBUG
+	{
+		unsigned long t0 = tos_ms();
+		char q[24];
+
+		draw(&g, BOX);
+		snprintf(q, sizeof q, "%lu ms", tos_ms() - t0);
+		log_event("bar-draw", q, NULL);
+	}
+#else
+	draw(&g, BOX);
+#endif
 	wind_update(END_UPDATE);
 }
 
@@ -616,35 +656,55 @@ static void begin(void)
 	t_batch = tos_ms();
 	log_event("batch", NULL, NULL);
 	texts();
-	redraw_all();
+	redraw_obj(B_GO);		/* (Stop; the bars come in the turns after: the key's turn short) */
+	fresh = 2;
 }
 
-static void finished(void)
+/* the batch's end, its first turn: the button says Convert again */
+static void finish_button(void)
 {
-	int i, stopped = stop_now;
+	tree[B_GO].ob_spec = (long)"Convert";
+	redraw_obj(B_GO);
+}
 
+/* its second: the progress lines and bars cleared (only what changed:
+   the whole window was 135 ms of a Falcon's turn) */
+static void finish_progress(void)
+{
 	working = 0;
 	texts();
-	redraw_all();
-	log_event("batch-done", stopped ? "stopped" : "done", NULL);
-	for (i = 0; i < nfiles; i++)
-		if (files[i].state == 2) {
-			alert(1, "[1][%d converted.|%.30s couldn't be:|%.30s][ OK ]", n_ok, base_of(files[i].path), files[i].why);
-			return;
-		}
-	if (stopped)
+	redraw_progress();
+	log_event("batch-done", stop_now ? "stopped" : "done", NULL);
+#ifdef TURN_DEBUG
+	{
+		char q[24];
+
+		snprintf(q, sizeof q, "%lu", n_turns);
+		log_event("turns", q, NULL);
+	}
+#endif
+}
+
+/* its third: what came of it, and the files done off the list (the
+   failed ones stay) */
+static void finished(void)
+{
+	int i, j, failed = -1;
+
+	for (i = 0; i < nfiles && failed < 0; i++)
+		if (files[i].state == 2)
+			failed = i;
+	if (failed >= 0)
+		alert(1, "[1][%d converted.|%.30s couldn't be:|%.30s][ OK ]", n_ok, base_of(files[failed].path),
+		      files[failed].why);
+	else if (stop_now)
 		alert(1, "[1][Stopped. %d converted;|the one under way was left out.][ OK ]", n_ok);
 	else
 		alert(1, "[1][%d converted.][ OK ]", n_ok);
-	/* the batch done: its files off the list (the failed ones stay) */
-	{
-		int j = 0;
-
-		for (i = 0; i < nfiles; i++)
-			if (files[i].state != 1)
-				files[j++] = files[i];
-		nfiles = j;
-	}
+	for (i = j = 0; i < nfiles; i++)
+		if (files[i].state != 1)
+			files[j++] = files[i];
+	nfiles = j;
 	texts();
 	redraw_obj(T_FILES);
 }
@@ -967,7 +1027,7 @@ int main(void)
 	while (!quit_now || working) {
 		short which, flags = MU_MESAG | MU_KEYBD | MU_BUTTON;
 
-		if (working)
+		if (working || fresh == 5)
 			flags |= MU_TIMER;
 		which = evnt_multi_(flags, 1, 1, 1, 0, msg, &ev);
 		if (which & MU_KEYBD)
@@ -976,31 +1036,52 @@ int main(void)
 			click(ev.mx, ev.my);
 		if (which & MU_MESAG)
 			message(msg);
+		if (fresh == 5 && !working) {
+			fresh = 0;
+			finished();
+			continue;
+		}
 		if (working) {
 			/* a slice of the batch, then its bars where they moved (at
 			   most four times a second, each the part that grew) */
-			slice_end = tos_ms() + 40;
-			coro_switch(&main_co, &work_co);
-			if (work_done) {
-				finished();
+			int drawn = 0;
+
+			if (fresh == 2) {
+				fresh = 1;	/* (the key's turn: nothing more in it) */
+				continue;
+			}
+			if (fresh == 3) {
+				fresh = 4;
+				finish_button();
+				continue;
+			}
+			if (fresh == 4) {
+				fresh = 5;
+				finish_progress();
 				last1 = last2 = -1;
 				continue;
 			}
-			if (tos_ms() - last_bar >= 250) {
+			if (tos_ms() - last_bar >= 250 || fresh) {
 				long a = share_file(), b = share_batch();
 
 				last_bar = tos_ms();
-				if (a != last1 || b != last2) {
+				if (a != last1 || b != last2 || fresh) {
 					progress_texts();
-					redraw_obj(T_FILE);
-					redraw_obj(BAR1);
-					redraw_obj(T_BATCH);
-					redraw_obj(BAR2);
-					if (last1 < 0)
-						redraw_obj(B_GO);
+					redraw_progress();
 					last1 = a;
 					last2 = b;
+					drawn = 1;
 				}
+				fresh = 0;
+			}
+			/* a slice, in a turn of its own (the bars drawn and a slice
+			   in one turn were 150 ms on a Falcon) */
+			if (!drawn) {
+				slice_end = tos_ms() + 15;	/* (the turns' own granularity takes it to some 40) */
+				coro_switch(&main_co, &work_co);
+				if (work_done)
+					fresh = 3;	/* (the window and its alert in a turn of their own) */
+				continue;
 			}
 		}
 	}

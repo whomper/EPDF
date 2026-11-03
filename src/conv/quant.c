@@ -63,8 +63,11 @@ int quant(const uint16_t *px, long count, int ncol, unsigned char (*pal)[3], uns
 
 	if (!hist)
 		return 0;
-	for (i = 0; i < count; i++)
+	for (i = 0; i < count; i++) {
+		if ((i & 16383) == 16383 && cv_turn)
+			cv_turn();
 		hist[px[i]]++;
+	}
 	for (i = 0; i < 65536; i++)
 		nc += hist[i] != 0;
 	cols = malloc((size_t)(nc ? nc : 1) * sizeof *cols);
@@ -84,6 +87,8 @@ int quant(const uint16_t *px, long count, int ncol, unsigned char (*pal)[3], uns
 	box[0].pixels = count;
 	box_fit(&box[0], cols);
 	while (nb < ncol) {
+		if ((nb & 7) == 7 && cv_turn)
+			cv_turn();
 		/* the box to split: the most pixels times its widest side */
 		long best = -1, score = -1, j, half, acc = 0;
 		int ax = 0;
@@ -178,7 +183,7 @@ void dither_mono(const uint16_t *px, int w, int h, unsigned char *out)
 		unsigned char *o = out + (long)y * rb;
 		const unsigned char *t = thr + (y & 7) * 8;
 
-		if ((y & 31) == 31 && cv_turn)
+		if ((y & 3) == 3 && cv_turn)
 			cv_turn();
 
 		for (x = 0; x < w; x++) {
@@ -237,7 +242,7 @@ void dither_pal(const uint16_t *px, int w, int h, const unsigned char (*pal)[3],
 		unsigned char *o = out + (long)y * rb;
 		const short *t = off + (y & 7) * 8;
 
-		if ((y & 31) == 31 && cv_turn)
+		if ((y & 3) == 3 && cv_turn)
 			cv_turn();
 
 		for (x = 0; x < w; x++) {

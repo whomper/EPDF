@@ -30,13 +30,15 @@
 #define DRAW_ID 900000000L		/* a drawing's number in the text until it has its object */
 
 int (*cv_turn)(void);
+const char *cv_phase = "";
 static const CVOPT *turn_o;
 static int stopped;
 
 /* the caller's turn (CVOPT.turn), for the loops and the reader's stop hook */
 static int turn_now(void)
 {
-	if (!stopped && turn_o && turn_o->turn && turn_o->turn(turn_o->u))
+	/* (asked after a stop too: the closing hands the machine back) */
+	if (turn_o && turn_o->turn && turn_o->turn(turn_o->u))
 		stopped = 1;
 	return stopped;
 }
@@ -134,9 +136,12 @@ static void w_obj(PW *w, long num)
 static void w_stream(PW *w, long num, const char *dict, const unsigned char *d, long n)
 {
 	SBUF z;
+	const char *was = cv_phase;
 
 	sb_init(&z);
+	cv_phase = "deflate";
 	if (zdeflate(d, n, &z)) {
+		cv_phase = was;
 		w->bad = 1;
 		sb_free(&z);
 		return;
@@ -145,9 +150,11 @@ static void w_stream(PW *w, long num, const char *dict, const unsigned char *d, 
 	w_bytes(w, "<< ", 3);
 	w_bytes(w, dict, (long)strlen(dict));	/* (a palette's string is longer than w_printf's) */
 	w_printf(w, " /Filter /FlateDecode /Length %ld >>\nstream\n", z.len);
+	cv_phase = "file";
 	w_bytes(w, z.s, z.len);
 	w_printf(w, "\nendstream\nendobj\n");
 	sb_free(&z);
+	cv_phase = was;
 }
 
 /* a string for the file: ( ) \ escaped, the rest as it is (Latin-1) */
@@ -210,10 +217,13 @@ static int w_picture(PW *w, long num, const uint16_t *px, int pw, int ph, int jp
 		d = calloc((size_t)rb * ph, 1);
 		if (!d)
 			return -1;
-		for (y = 0; y < ph; y++)
+		for (y = 0; y < ph; y++) {
+			if ((y & 31) == 31)
+				turn_now();
 			for (x = 0; x < pw; x++)
 				if (G8(px[(long)y * pw + x]) >= 128)
 					d[y * rb + (x >> 3)] |= (unsigned char)(0x80 >> (x & 7));
+		}
 		snprintf(dict, sizeof dict, "/Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceGray "
 			 "/BitsPerComponent 1", pw, ph);
 		w_stream(w, num, dict, d, rb * ph);
@@ -336,6 +346,9 @@ static uint16_t *crop(const RCANVAS *c, const RCLIP *b, int pw, int ph)
 	}
 	for (y = 0; y < ph; y++) {
 		int y0 = b->y0 + (int)((long)y * bh / ph), y1 = b->y0 + (int)((long)(y + 1) * bh / ph);
+
+		if ((y & 15) == 15)
+			turn_now();
 
 		if (y1 <= y0)
 			y1 = y0 + 1;
@@ -549,6 +562,7 @@ static int convert_page(CV *c, long n)
 	long pwpt, phpt;
 
 	/* the page drawn: its drawings, and its whole pictures */
+	cv_phase = "render";
 	drawn = render_page(r, n, PAGE_W) == 0;
 	if (drawn)
 		nd = render_drawings(r, dw, NDRAW);
@@ -571,6 +585,7 @@ static int convert_page(CV *c, long n)
 	t.cut = cut;
 	t.cut_obj = cut_obj;
 	t.ncut = nd;
+	cv_phase = "text";
 	pdf_page_text(&c->d, n, &t);
 	for (i = 0; i < t.text.len; i++)
 		if (t.text.s[i] == '\v')
@@ -609,7 +624,10 @@ static int convert_page(CV *c, long n)
 			if (src >= DRAW_ID && src < DRAW_ID + nd) {
 				/* a drawing: cut from the page drawn */
 				const RDRAWING *g = &dw[src - DRAW_ID];
-				uint16_t *px = crop(&r->c, &g->px, pw, ph);
+				uint16_t *px;
+
+				cv_phase = "drawing";
+				px = crop(&r->c, &g->px, pw, ph);
 
 				if (px) {
 					obj = w_new(w);
@@ -620,7 +638,10 @@ static int convert_page(CV *c, long n)
 				}
 			} else if ((obj = pic_known(c, src, pw, flip)) < 0) {
 				int why = 0;
-				PIC *p = cv_image(&c->d, src, pw, ph, &why);
+				PIC *p;
+
+				cv_phase = "picture";
+				p = cv_image(&c->d, src, pw, ph, &why);
 
 				if (p && p->w == pw && p->h == ph) {
 					flip_px(p->px, pw, ph, flip);
@@ -665,6 +686,7 @@ static int convert_page(CV *c, long n)
 	free(at);
 	ptext_free(&t);
 	textobj = w_new(w);
+	cv_phase = "write";
 	w_stream(w, textobj, "", (const unsigned char *)(txt.s ? txt.s : ""), txt.len);
 	/* the page whole */
 	if (drawn && c->o->pages != CV_PAGES_NONE) {
@@ -673,6 +695,7 @@ static int convert_page(CV *c, long n)
 		char dict[256];
 
 		if (d) {
+			cv_phase = "mono";
 			dither_mono(r->c.px, r->c.w, r->c.h, d);
 			mono = w_new(w);
 			snprintf(dict, sizeof dict, "/Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceGray "
@@ -695,6 +718,7 @@ static int convert_page(CV *c, long n)
 				char dc[512];
 				int o, q;
 
+				cv_phase = "colour";
 				dither_pal(r->c.px, r->c.w, r->c.h, (const unsigned char (*)[3])pal, nc, d);
 				colour = w_new(w);
 				o = snprintf(dc, sizeof dc, "/Type /XObject /Subtype /Image /Width %d /Height %d "
@@ -768,7 +792,13 @@ int cv_convert(const char *in, const char *out, const CVOPT *o, CVSTAT *st, char
 	}
 	c->o = o;
 	c->st = st;
-	if (pdf_open(&c->d, in)) {
+	stopped = 0;
+	turn_o = o;
+	cv_turn = turn_now;
+	/* (opened with the turns: a big file's table, an AES-256 key) */
+	if (pdf_open_hook(&c->d, in, reader_turn, c)) {
+		cv_turn = NULL;
+		turn_o = NULL;
 		snprintf(err, (size_t)errlen, "%s", c->d.err[0] ? c->d.err : "can't be read");
 		free(c);
 		return -1;
@@ -788,9 +818,6 @@ int cv_convert(const char *in, const char *out, const CVOPT *o, CVSTAT *st, char
 	}
 	st->pages = c->npages;
 	st->in_bytes = c->d.size;
-	stopped = 0;
-	turn_o = o;
-	cv_turn = turn_now;
 	c->d.stop = reader_turn;	/* (every few operators while a page is read or drawn) */
 	c->d.stop_ctx = c;
 	if (render_init(&c->r, &c->d, o->fontdir)) {
@@ -859,13 +886,18 @@ done:
 			rc = -1;
 		}
 		st->out_bytes = c->w.pos;
-		if (rc)
+		turn_now();
+		if (rc) {
 			cv_remove(out);
+			turn_now();
+		}
 	}
 	if (rc == -2)
 		snprintf(err, (size_t)errlen, "stopped");
 	render_done(&c->r);
+	turn_now();
 	pdf_close(&c->d);
+	turn_now();
 	cv_turn = NULL;
 	turn_o = NULL;
 	free(c->pages);

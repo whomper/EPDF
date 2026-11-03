@@ -54,12 +54,21 @@ void rc_clear(RCANVAS *c, uint16_t px)
 {
 	long i, n = (long)c->w * c->h;
 
-	if ((px >> 8) == (px & 255)) {
-		memset(c->px, px & 255, (size_t)n * 2);	/* (white: a long at a time) */
-		return;
+	/* in bands of 32 rows, a turn after each: a page of 640 is a MB,
+	   145 ms on a Falcon in one piece */
+	long band = (long)c->w * 32;
+
+	for (i = 0; i < n; i += band) {
+		long k = n - i < band ? n - i : band, j;
+
+		if ((px >> 8) == (px & 255))
+			memset(c->px + i, px & 255, (size_t)k * 2);	/* (white: a long at a time) */
+		else
+			for (j = 0; j < k; j++)
+				c->px[i + j] = px;
+		if (cv_turn)
+			cv_turn();
 	}
-	for (i = 0; i < n; i++)
-		c->px[i] = px;
 }
 
 /* ------------------------------------------------------------------ paths */
@@ -363,7 +372,7 @@ void rc_fill(RCANVAS *c, const RPATH *p, int evenodd, uint16_t col, const RCLIP 
 	for (y = k.y0; y < k.y1; y++) {
 		int sub, any = 0;
 
-		if ((y & 63) == 63 && cv_turn)
+		if ((y & 7) == 7 && cv_turn)
 			cv_turn();
 		int32_t lo = k.x0 << 16, hi = k.x1 << 16;
 

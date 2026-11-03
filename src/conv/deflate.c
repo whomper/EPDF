@@ -19,6 +19,7 @@
 #define MINM 3
 #define MAXM 258
 #define CHAIN 48			/* matches tried at most */
+#define NICE 128			/* a match this long is taken at once */
 #define BLOCK 65536			/* symbols a block */
 
 typedef struct {
@@ -191,22 +192,43 @@ static const unsigned short dbase[30] = { 1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 4
 static const unsigned char dext[30] = { 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10,
 					11, 11, 12, 12, 13, 13 };
 
+/* a length's code (3..258) and a distance's (1..32768), from tables made
+   once: the searches were most of a block's time on a Falcon */
+static unsigned char ltab[259], dtab_lo[257], dtab_hi[256];
+static int tabs_made;
+
+static void make_tabs(void)
+{
+	int i, c;
+
+	for (i = 3, c = 0; i <= 258; i++) {
+		while (c < 28 && lbase[c + 1] <= i)
+			c++;
+		ltab[i] = (unsigned char)c;
+	}
+	for (i = 1, c = 0; i <= 256; i++) {
+		while (c < 29 && dbase[c + 1] <= i)
+			c++;
+		dtab_lo[i] = (unsigned char)c;
+	}
+	for (i = 0, c = 0; i < 256; i++) {	/* distances 257..32768 by (d - 1) >> 7 */
+		int d = (i << 7) + 1;
+
+		while (c < 29 && dbase[c + 1] <= d)
+			c++;
+		dtab_hi[i] = (unsigned char)c;
+	}
+	tabs_made = 1;
+}
+
 static int lcode(int l)
 {
-	int i = 0;
-
-	while (i < 28 && lbase[i + 1] <= l)
-		i++;
-	return i;
+	return ltab[l];
 }
 
 static int dcode(int d)
 {
-	int i = 0;
-
-	while (i < 29 && dbase[i + 1] <= d)
-		i++;
-	return i;
+	return d <= 256 ? dtab_lo[d] : dtab_hi[(d - 1) >> 7];
 }
 
 /* a symbol: a literal (len 0) or a match (len, dist) */
@@ -225,16 +247,24 @@ static void block(BW *w, const SYM *s, long n, int last)
 	int nl = 286, nd = 30, nc = 19, na, nr = 0, i;
 	long k;
 
-	for (k = 0; k < n; k++)
+	for (k = 0; k < n; k++) {
+		if ((k & 2047) == 2047 && cv_turn)
+			cv_turn();
 		if (!s[k].len)
 			lf[s[k].dist]++;
 		else {
 			lf[257 + lcode(s[k].len)]++;
 			df[dcode(s[k].dist)]++;
 		}
+	}
 	lf[256] = 1;
+	cv_phase = "deflate-codes";
+	if (cv_turn)
+		cv_turn();
 	lengths(lf, 286, 15, ll);
 	lengths(df, 30, 15, dl);
+	if (cv_turn)
+		cv_turn();
 	/* a code of one symbol made two (a complete code: some decoders
 	   refuse one that isn't) */
 	{
@@ -296,6 +326,7 @@ static void block(BW *w, const SYM *s, long n, int last)
 	codes(ll, 286, lc);
 	codes(dl, 30, dc);
 	codes(cl, 19, cc);
+	cv_phase = "deflate-emit";
 	put(w, last ? 1 : 0, 1);
 	put(w, 2, 2);			/* dynamic */
 	put(w, (unsigned)(nl - 257), 5);
@@ -313,6 +344,8 @@ static void block(BW *w, const SYM *s, long n, int last)
 			put(w, rx[i], 7);
 	}
 	for (k = 0; k < n; k++) {
+		if ((k & 127) == 127 && cv_turn)
+			cv_turn();	/* (a block's 64 K symbols written: 300 ms on a Falcon) */
 		if (!s[k].len)
 			put(w, lc[s[k].dist], ll[s[k].dist]);
 		else {
@@ -341,6 +374,8 @@ static unsigned long adler(const unsigned char *d, long n)
 			a += *d++;
 			b += a;
 		}
+		if (cv_turn)
+			cv_turn();	/* (a colour page's 265 KB: 300 ms on a Falcon) */
 		a %= 65521;
 		b %= 65521;
 	}
@@ -356,7 +391,10 @@ int zdeflate(const unsigned char *d, long n, SBUF *out)
 
 	memset(&w, 0, sizeof w);
 	w.out = out;
-	sy = calloc(BLOCK, sizeof *sy);
+	if (!tabs_made)
+		make_tabs();
+	cv_phase = "deflate-init";
+	sy = malloc(BLOCK * sizeof *sy);	/* (not cleared: each is written before block() reads it) */
 	head = malloc(HSIZE * sizeof *head);
 	prev = malloc(WSIZE * sizeof *prev);
 	if (!sy || !head || !prev) {
@@ -367,6 +405,9 @@ int zdeflate(const unsigned char *d, long n, SBUF *out)
 	}
 	for (i = 0; i < HSIZE; i++)
 		head[i] = -1;
+	if (cv_turn)
+		cv_turn();
+	cv_phase = "deflate-parse";
 	sb_addc(out, 0x78);
 	sb_addc(out, (char)0x9C);
 #define HASH(p) ((((unsigned long)(p)[0] << 10) ^ ((unsigned long)(p)[1] << 5) ^ (p)[2]) & (HSIZE - 1))
@@ -388,10 +429,17 @@ int zdeflate(const unsigned char *d, long n, SBUF *out)
 					if (l > best) {
 						best = l;
 						bd = (int)(i - c);
-						if (l >= lim)
+						/* good enough (zlib's nice length): a dither's
+						   patterns match long at every candidate, 48
+						   compares of 250 bytes a symbol */
+						if (l >= lim || l >= NICE)
 							break;
 					}
 				}
+				/* a long one found: fewer candidates after it (zlib's
+				   good length) */
+				if (best >= 32 && tries > 8)
+					tries = 8;
 				c = prev[c & WMASK];
 			}
 			prev[i & WMASK] = head[h];
@@ -418,7 +466,7 @@ int zdeflate(const unsigned char *d, long n, SBUF *out)
 			ns++;
 			i++;
 		}
-		if ((ns & 4095) == 4095 && cv_turn)
+		if ((ns & 127) == 127 && cv_turn)
 			cv_turn();
 		if (ns == BLOCK) {
 			block(&w, sy, ns, 0);
@@ -427,6 +475,7 @@ int zdeflate(const unsigned char *d, long n, SBUF *out)
 	}
 	block(&w, sy, ns, 1);
 	flush(&w);
+	cv_phase = "deflate-adler";
 	ad = adler(d, n);
 	sb_addc(out, (char)(ad >> 24));
 	sb_addc(out, (char)(ad >> 16));

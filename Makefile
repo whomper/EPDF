@@ -472,6 +472,19 @@ build/times/EPDF.PRG: binary/EPDF.PRG build/aprof/gem.o build/times/textwin.o
 speed-test: build/aprof/EPDF.PRG binary/LAUNCH.PRG
 	python3 tests/hatari/speed.py build/speed
 .PHONY: speed-test
+# EConvert's the same way (a 68030's: tests/hatari/econv_speed.py, Falcon-4)
+build/aprof/gem30.o: common/atari/gem.c $(HDRS) | build
+	mkdir -p build/aprof
+	$(XCC) $(XFLAGS) -m68030 -msoft-float -DAES_PROFILE=20 -c -o $@ $<
+build/aprof/ECONVERT.PRG: binary/ECONVERT.PRG build/aprof/gem30.o
+	$(XCC) -m68030 -msoft-float -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
+	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/aprof/econvert.elf \
+	  build/m68030cv/crt0_ec.o build/m68030/nf.o build/m68030cv/crash_s.o build/m68030cv/coro.o \
+	  $(filter-out build/m68030cv/common/atari/gem.o,$(EC_OBJS)) build/aprof/gem30.o -lgcc
+	PRGFLAGS=7 python3 common/tools/elf2tos.py build/aprof/econvert.elf $@
+econv-speed-test: build/aprof/ECONVERT.PRG binary/LAUNCH.PRG
+	python3 tests/hatari/econv_speed.py build/econv-speed
+.PHONY: econv-speed-test
 
 # the stacks' use (EPDF.PRG with doc.c built -DEPDF_STACKS): "EPDF stacks ..."
 # every 25 pages and at the end, for sizing READ_STACK and PIC_STACK
