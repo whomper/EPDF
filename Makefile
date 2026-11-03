@@ -182,7 +182,7 @@ $(eval $(call FT_BUILD,m68030))
 FT_OBJS = $(patsubst $(FT)/src/%.c,ft/%.o,$(filter $(FT)/src/%,$(FT_SRC))) ft/epdf/ftsystem.o ft/setjmp.o
 
 # EConvert's converter on this computer (src/conv/, FreeType built for the host in build/host-ft)
-CONV_SRC = src/conv/conv.c src/conv/render.c src/conv/raster.c src/conv/cvjpeg.c src/conv/deflate.c src/conv/quant.c common/src/charset.c
+CONV_SRC = src/conv/conv.c src/conv/render.c src/conv/raster.c src/conv/cvjpeg.c src/conv/deflate.c src/conv/quant.c src/conv/jpegenc.c common/src/charset.c
 HFT_OBJS = $(patsubst $(FT)/src/%.c,build/host-ft/%.o,$(filter $(FT)/src/%,$(FT_SRC))) build/host-ft/epdf/ftsystem.o
 build/host-ft/%.o: $(FT)/src/%.c
 	@mkdir -p $(dir $@)

@@ -19,6 +19,7 @@
 #include "cvio.h"
 #include "deflate.h"
 #include "quant.h"
+#include "jpegenc.h"
 #include "render.h"
 #include "cvjpeg.h"
 #include "charset.h"
@@ -150,7 +151,19 @@ static void w_str(PW *w, const char *s)
 
 /* a picture's pixels written as an image XObject: 1 bit when it is black
    and white, grey when it is grey, else 256 colours of its own */
-static int w_picture(PW *w, long num, const uint16_t *px, int pw, int ph)
+/* a stream's object with its bytes as they are (a JPEG: DCTDecode) */
+static void w_raw(PW *w, long num, const char *dict, const unsigned char *d, long n)
+{
+	w_obj(w, num);
+	w_bytes(w, "<< ", 3);
+	w_bytes(w, dict, (long)strlen(dict));
+	w_printf(w, " /Length %ld >>\nstream\n", n);
+	w_bytes(w, d, n);
+	w_printf(w, "\nendstream\nendobj\n");
+}
+
+/* jpeg: the batch's "JPEG (small)": a photo or a grey picture as a JPEG */
+static int w_picture(PW *w, long num, const uint16_t *px, int pw, int ph, int jpeg)
 {
 	long n = (long)pw * ph, i, mid = 0;
 	int grey = 1;
@@ -188,6 +201,38 @@ static int w_picture(PW *w, long num, const uint16_t *px, int pw, int ph)
 		w_stream(w, num, dict, d, rb * ph);
 		free(d);
 		return 0;
+	}
+	if (jpeg) {
+		/* a photo only: a picture of 256 colours or fewer is kept exact
+		   (a chart, a drawing, a few-coloured graphic: smaller packed than
+		   as a JPEG, and sharp) */
+		unsigned char *seen = calloc(8192, 1);
+		long nc = 0;
+
+		if (seen) {
+			for (i = 0; i < n && nc <= 256; i++)
+				if (!(seen[px[i] >> 3] & (1 << (px[i] & 7)))) {
+					seen[px[i] >> 3] |= (unsigned char)(1 << (px[i] & 7));
+					nc++;
+				}
+			free(seen);
+			if (nc <= 256)
+				jpeg = 0;
+		}
+	}
+	if (jpeg) {
+		SBUF j;
+		char dict[160];
+
+		sb_init(&j);
+		if (jpeg_encode(px, pw, ph, grey, 75, &j) == 0) {
+			snprintf(dict, sizeof dict, "/Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /%s "
+				 "/BitsPerComponent 8 /Filter /DCTDecode", pw, ph, grey ? "DeviceGray" : "DeviceRGB");
+			w_raw(w, num, dict, (const unsigned char *)j.s, j.len);
+			sb_free(&j);
+			return 0;
+		}
+		sb_free(&j);
 	}
 	d = malloc((size_t)n);
 	if (!d)
@@ -526,7 +571,7 @@ static int convert_page(CV *c, long n)
 
 				if (px) {
 					obj = w_new(w);
-					if (w_picture(w, obj, px, pw, ph))
+					if (w_picture(w, obj, px, pw, ph, 0))	/* (a drawing: never a JPEG) */
 						obj = -1;
 					free(px);
 					c->st->drawings++;
@@ -538,7 +583,7 @@ static int convert_page(CV *c, long n)
 				if (p && p->w == pw && p->h == ph) {
 					flip_px(p->px, pw, ph, flip);
 					obj = w_new(w);
-					if (w_picture(w, obj, p->px, pw, ph))
+					if (w_picture(w, obj, p->px, pw, ph, c->o->photos == CV_PHOTOS_JPEG))
 						obj = -1;
 					else {
 						pic_remember(c, src, pw, flip, obj);
