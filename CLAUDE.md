@@ -258,7 +258,12 @@ at first. This section is kept up to date: the build, the tests, what a release 
   econv.py, econv_speed.py (`make econv-speed-test`), tests/convtext.py in `make test`. Erez asked
   (3 Nov) when the exact layout comes: answered 1.1's View > Pages via EConvert, and stage 2 (the
   page drawn by EPDF on a Falcon/TT, EConvert's renderer) as his decision after 1.1; his answer is
-  pending. Later: JPX (OpenJPEG) and JBIG2, gateway mode with AERA-Gateway.
+  pending. The hub cleared 78bb278d1 (acc_all, speed.py, econv.py, econv_speed.py: start 145, the
+  job's turns 40, Stop 45; prepared.py; deflate.c's host warning silenced in the bump) and 1.1 went
+  out on 3 Nov (v1.1 on 78bb278d1). EConvert carries EPDF's icon in 1.1 (Erez, "For your questions,
+  yes"): `make icons` draws icons/ECONV* and src/econv/icon*.h from common/icons/ECONVERT.txt once
+  the hub has drawn the one Erez picks (its three sketches), for 1.2. Its fonts sit in `fonts`
+  beside econvert.prg. Later: JPX (OpenJPEG) and JBIG2, gateway mode with AERA-Gateway.
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
   checks: `tools/nofpu.sh`); decode streams with `inflate_open`/`inflate_read` so a page needn't fit
   in memory; reuse `common/atari/dspjpeg.c` with `PIC_LIBJPEG` for JPEG on the Falcon; a progressive
