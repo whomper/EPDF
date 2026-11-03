@@ -6,7 +6,8 @@
 #   make help       binary/EPDF.HYP and .REF from docs/GUIDE.md (HCP=path to hcp:
 #                   common/tools/build-hcp.sh DIR builds it)
 #   make dist       a release's files in dist/, named in lowercase: each file, and epdf-x.y.zip
-#   make icons      icons/ and src/gem/icon*.h from common/icons/EPDF.txt, EPDFDOC.txt
+#   make icons      icons/, src/gem/icon*.h and src/econv/icon*.h from common/icons/EPDF.txt, EPDFDOC.txt
+#                   (and ECONVERT.txt when AERA-Atari has it)
 #   make gui-test   EPDF.PRG driven in Hatari (tests/hatari/gui.py)
 #   make files-test each file's opens on a 1 MB ST against the budget (tests/hatari/files.py, 6.5)
 #   big documents on a 1 MB ST: python3 tests/hatari/big.py WORK [NAME...] (the corpus)
@@ -28,7 +29,7 @@ COMMON_SRC = common/src/inflate.c common/src/util.c common/src/futil.c
 BSSL_SRC = $(addprefix $(BSSL)/src/, hash/md5.c hash/sha2small.c hash/sha2big.c \
            symcipher/aes_big_cbcdec.c symcipher/aes_big_cbcenc.c symcipher/aes_big_dec.c symcipher/aes_big_enc.c symcipher/aes_common.c \
            codec/dec32be.c codec/enc32be.c codec/dec32le.c codec/enc32le.c codec/dec64be.c codec/enc64be.c)
-HDRS     = $(wildcard src/*.h src/gem/*.h src/view/*.h common/src/*.h common/ui/*.h common/atari/*.h common/atari/include/*.h)
+HDRS     = $(wildcard src/*.h src/gem/*.h src/view/*.h src/econv/*.h common/src/*.h common/ui/*.h common/atari/*.h common/atari/include/*.h)
 
 .PHONY: all test measure dist help clean atari measure-atari fttest imgbench gui-test files-test viewtest
 all: build/pdfmeasure build/pdftext build/pdfmem build/glyphjob build/imgdump binary/EPDF.PRG
@@ -392,7 +393,12 @@ icons: common/icons/EPDF.txt common/icons/EPDFDOC.txt common/tools/appicon.py
 	python3 common/tools/appicon.py EPDF --rsc icons/EPDF.RSC --rscnv icons/EPDFNV.RSC \
 		--icn icons/EPDF.ICN --mask icons/EPDFMK.ICN --headers src/gem --docs docs
 	python3 common/tools/appicon.py EPDFDOC --rsc icons/EPDFDOC.RSC --rscnv icons/EPDFDNV.RSC --label PDF
+	python3 common/tools/appicon.py $(EC_ICON) --rsc icons/ECONVERT.RSC --rscnv icons/ECONVNV.RSC \
+		--icn icons/ECONVERT.ICN --mask icons/ECONVMK.ICN --headers src/econv --label ECONVERT
 .PHONY: icons
+# EConvert's own icon files (icons/ECONV*, src/econv/icon*.h): drawn from
+# common/icons/ECONVERT.txt once it is in AERA-Atari, EPDF's drawing until then
+EC_ICON := $(if $(wildcard common/icons/ECONVERT.txt),ECONVERT,EPDF)
 
 # ---------------------------------------------------------------- the guide and the release
 # EPDF.HYP from docs/GUIDE.md with the family's front page (docs/front.json,
@@ -411,7 +417,8 @@ binary/EPDF.HYP: docs/GUIDE.md tools/mkhelp.py VERSION docs/front.json docs/help
 # Every file a release carries, and every folder in its zip, is named in
 # lowercase (guidelines 6.6: on MiNT's ext2 EPDF.INF and epdf.inf are two files)
 DIST  := binary/EPDF.PRG binary/EPDF.HYP binary/EPDF.REF NOTICES.TXT
-ICONS := icons/EPDF.RSC icons/EPDFNV.RSC icons/EPDF.ICN icons/EPDFMK.ICN icons/EPDFDOC.RSC icons/EPDFDNV.RSC
+ICONS := icons/EPDF.RSC icons/EPDFNV.RSC icons/EPDF.ICN icons/EPDFMK.ICN icons/EPDFDOC.RSC icons/EPDFDNV.RSC \
+         icons/ECONVERT.RSC icons/ECONVNV.RSC icons/ECONVERT.ICN icons/ECONVMK.ICN
 lc = $(shell echo '$(notdir $(1))' | tr A-Z a-z)
 # EConvert (a 68030's): its program and the standard fonts it draws with
 # (third_party/liberation, the OFL's text beside them), in the zip's econvert folder

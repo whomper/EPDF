@@ -11,7 +11,7 @@ joined and wrapped to the window, or each line as it is on the page.
 | `EPDF.PRG` | the program, for every ST, STE, TT and Falcon |
 | `EPDF.HYP`, `EPDF.REF` | this guide, for EHypView or ST-Guide |
 | `NOTICES.TXT` | the licences of the parts EPDF is made with |
-| `icons/` | the desktop icons: `EPDF.RSC` for the program, `EPDFDOC.RSC` for PDF files (`EPDFNV.RSC` and `EPDFDNV.RSC` under NVDI with its own palette) |
+| `icons/` | the desktop icons: `EPDF.RSC` for the program, `EPDFDOC.RSC` for PDF files, `ECONVERT.RSC` for EConvert (`EPDFNV.RSC`, `EPDFDNV.RSC` and `ECONVNV.RSC` under NVDI with its own palette) |
 | `econvert/` | EConvert, which prepares PDFs for EPDF on a Falcon or a TT: `ECONVERT.PRG` and the fonts it draws with (`fonts/`); see [EConvert](#econvert) |
 
 - **Install:** copy `EPDF.PRG` into a folder of its own, such as `C:\EPDF\`. It keeps its

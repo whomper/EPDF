@@ -31,6 +31,8 @@ holds:
 | `icons/EPDF.RSC`, `EPDF.ICN`, `EPDFMK.ICN` | the program's desktop icon |
 | `icons/EPDFDOC.RSC` | the icon for PDF files on the desktop |
 | `icons/EPDFNV.RSC`, `EPDFDNV.RSC` | the same two for NVDI without TOS's palette loaded |
+| `icons/ECONVERT.RSC`, `ECONVERT.ICN`, `ECONVMK.ICN` | EConvert's desktop icon (`ECONVNV.RSC` for NVDI with its own palette) |
+| `econvert/` | EConvert, which prepares PDFs for EPDF on a Falcon or a TT: `ECONVERT.PRG` and the fonts it draws with (`fonts/`) |
 
 1. Copy `EPDF.PRG` into a folder of its own, such as `C:\EPDF\`. It keeps `EPDF.INF` (its settings),
    `EPDF.TXC` (the text of the document open, while it is) and any `CRASH.LOG` beside itself.
@@ -64,7 +66,7 @@ make            # binary/EPDF.PRG; host tools in build/
 make test       # unit tests on this computer
 make dist       # dist/EPDF-x.y.zip, as on the Releases page
 make help HCP=/path/to/hcp   # EPDF.HYP from docs/GUIDE.md (hcp: common/tools/build-hcp.sh)
-make icons      # icons/ and src/gem/icon*.h from common/icons/EPDF.txt, EPDFDOC.txt
+make icons      # icons/, src/gem/icon*.h and src/econv/icon*.h from common/icons/EPDF.txt, EPDFDOC.txt
 ```
 
 `binary/` and `dist/` are what make builds; they are never committed, and a build changes no tracked
