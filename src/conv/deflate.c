@@ -394,7 +394,7 @@ int zdeflate(const unsigned char *d, long n, SBUF *out)
 	if (!tabs_made)
 		make_tabs();
 	cv_phase = "deflate-init";
-	sy = malloc(BLOCK * sizeof *sy);	/* (not cleared: each is written before block() reads it) */
+	sy = malloc(BLOCK * sizeof *sy);
 	head = malloc(HSIZE * sizeof *head);
 	prev = malloc(WSIZE * sizeof *prev);
 	if (!sy || !head || !prev) {
@@ -403,6 +403,9 @@ int zdeflate(const unsigned char *d, long n, SBUF *out)
 		free(prev);
 		return -1;
 	}
+	/* each is written before block() reads it; the first cleared for
+	   GCC's -Wmaybe-uninitialized on the host */
+	memset(sy, 0, sizeof *sy);
 	for (i = 0; i < HSIZE; i++)
 		head[i] = -1;
 	if (cv_turn)
