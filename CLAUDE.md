@@ -143,7 +143,8 @@ at first. This section is kept up to date: the build, the tests, what a release 
   (Erez's EDOS_01.PDF from Calamus SL: the fonts' widths their ink; a gap is a space only from 0.8 em
   on such lines, a tight heading's spaces sorted before the next letter, the gutter found by every
   bin a gap covers or a strip few lines cross; `tests/glyphwise.py`). Resident 442,088. A release
-  that fixes is X.Y.Z (the hub's "0.4.1"; the workflow takes any VERSION its tag matches).
+  that fixed was X.Y.Z (0.4.1 to 0.5.4); from 0.6 the versions are X.Y only, as every other app's
+  (Erez, 3 Nov 2026: 0.5.5 was never released, its work went out in 0.6).
   0.5 ("start 0.5", 1 Nov) under way. 0.4.2 went out the same day (v0.4.2 on 5dc88c76, cleared on
   447635df): common's inflate fix (0.4 and 0.4.1 could read a damaged stream wrongly), the ST's next
   page, a page while reading and Select all within their times (TOS 1.04: 195, 110, 45), five-place
@@ -222,7 +223,21 @@ at first. This section is kept up to date: the build, the tests, what a release 
   job shot on a book of 400 pages, bar_shot, where the 30-page book was read first; Select all kept
   as it is, 40-45 of its 50: box_op, the window's rows inverted, 19 ms, is the 68000's floor) and,
   after EUpdate 1.28, 0.5.4 went out on 2 Nov (v0.5.4 on 1fec4feb). Resident 421,768. Next: the
-  bar's separator 0xFA, the middle dot (0xF9 draws high in TOS 1.04's font, the hub).
+  bar's separator 0xFA, the middle dot (0xF9 draws high in TOS 1.04's font, the hub). Then, for
+  Erez's "work on speed first" (3 Nov): a map's numbers read only when an operator wants them
+  (pdftext.c's num_val: OP.s/.n kept in the window, read before a refill moves it; nums_run, numbers
+  and white space in a loop of their own on register copies; run_of's 3-instruction scan to the
+  window's sentinel CSENT; ccls, the characters' classes; the stop hook every 8 operators; the window
+  at the parity of the bytes coming, pdf_stream_parity), and common's inflate window moved a long at
+  a time (this session's patch, AERA-Atari 6edf6c1): on ST map-europe 74.7 -> 40.7 s, map-timezones
+  218 -> 116, map-physical-world 418 -> 211, photo-nasa-sunda 93 -> 43, text pages about 5 %; the
+  maps' longest stretch between hooks 200 -> 120 ms; the corpus's text the same (4,228 pages, an ASan
+  run clean). Still on a map: inflate_fast 16 s of 41 (the hub has the hot addresses), the content
+  loop 14 s. And the family's progress bar (guideline 5.9, Erez 3 Nov: common's progbar, one bar
+  filling left to right, blues on 256 colours, pens 1-15 on 16, black elsewhere) as the status bar's
+  line: progbar_pens once after the workstation opens, progbar_fill from what was drawn to now in
+  PB_FULLths (bar_fill/bar_unfill); this session's progbar fix for EmuTOS's ST high (both pens read
+  white: AERA-Atari 3ed8fb6). Resident 425,608.
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
   checks: `tools/nofpu.sh`); decode streams with `inflate_open`/`inflate_read` so a page needn't fit
   in memory; reuse `common/atari/dspjpeg.c` with `PIC_LIBJPEG` for JPEG on the Falcon; a progressive

@@ -23,6 +23,7 @@
 #include "click.h"
 #include "pics.h"
 #include "epdf.h"
+#include "progbar.h"
 
 /* the speed build (make speed-test) times a scroll's parts */
 #ifdef EPDF_TIMES
@@ -741,7 +742,7 @@ void win_draw_owed_band(void)
  */
 #define BAR_CELLS 160
 static char bar_now[BAR_CELLS + 1], bar_want[BAR_CELLS + 1];	/* its words as drawn, as wanted, padded */
-static short bar_rib_now, bar_rib_want;	/* the line's pixels filled */
+static short bar_rib_now, bar_rib_want;	/* the bar's part filled, in PB_FULLths (progbar.h) */
 static int bar_due;			/* something to draw */
 static char bar_job[112];		/* the job's words, "" none */
 static long bar_p = -1;			/* the job's thousandths, -1 not known */
@@ -792,6 +793,26 @@ static void bar_ink(const GRECT *c, short x1, short x2, short y, short h)
 	vr_recfl(vdi_h, p);
 }
 
+/* the progress bar (common's progbar, the guidelines 5.9) along the
+   status bar's foot, from..to in PB_FULLths, in c (the VDI's clip, set by
+   the caller); its ground (white) from..to where it shrank */
+static short bar_x0(void) { return (short)(whole.x + 1); }
+static short bar_w(void) { return (short)(whole.w - 2); }
+static void bar_fill(const GRECT *c, short from, short to)
+{
+	(void)c;
+	progbar_fill(vdi_h, bar_x0(), (short)(bar_y() + bar_h - bar_rib()), bar_w(), bar_rib(), from, to);
+	fill_set = 0;
+}
+static void bar_unfill(const GRECT *c, short from, short to)
+{
+	short w = bar_w();
+
+	fill_set = 0;
+	blank(c, (short)(bar_x0() + (long)w * from / PB_FULL), (short)(bar_x0() + (long)w * to / PB_FULL),
+	      (short)(bar_y() + bar_h - bar_rib()), bar_rib());
+}
+
 /* its words and its line as they should be */
 static void bar_compose(void)
 {
@@ -806,7 +827,7 @@ static void bar_compose(void)
 	for (k = strlen(w); k < (size_t)nb; k++)
 		w[k] = ' ';
 	w[nb] = 0;
-	rib = job_on && bar_p > 0 ? (short)((long)(whole.w - 2) * bar_p / 1000) : 0;
+	rib = job_on && bar_p > 0 ? (short)(bar_p >= 1000 ? PB_FULL : bar_p * PB_FULL / 1000) : 0;
 	if (memcmp(w, bar_want, (size_t)nb + 1) || rib != bar_rib_want) {
 		memcpy(bar_want, w, (size_t)nb + 1);
 		bar_rib_want = rib;
@@ -841,14 +862,14 @@ static void draw_bar(const GRECT *c)
 	vst_color(vdi_h, 1);
 	text_plain(vdi_h, bar_tx(), (short)(y + 2), bar_now, bar_cells());
 	if (bar_rib_now > 0)
-		bar_ink(c, (short)(whole.x + 1), (short)(whole.x + 1 + bar_rib_now), (short)(y + bar_h - bar_rib()), bar_rib());
+		bar_fill(c, 0, bar_rib_now);
 	text_noclip(vdi_h);
 }
 
 /* from bar_now to bar_want in c: the letters that changed, the line's change */
 static void draw_bar_change(const GRECT *c)
 {
-	short y = bar_y(), nb = bar_cells(), clip[4], i, j, ry = (short)(y + bar_h - bar_rib()), x0 = (short)(whole.x + 1);
+	short y = bar_y(), nb = bar_cells(), clip[4], i, j;
 
 	clip[0] = c->x;
 	clip[1] = c->y;
@@ -866,11 +887,9 @@ static void draw_bar_change(const GRECT *c)
 		text_plain(vdi_h, (short)(bar_tx() + i * cw), (short)(y + 2), bar_want + i, j - i);
 	}
 	if (bar_rib_want > bar_rib_now)
-		bar_ink(c, (short)(x0 + bar_rib_now), (short)(x0 + bar_rib_want), ry, bar_rib());
-	else if (bar_rib_want < bar_rib_now) {
-		fill_set = 0;
-		blank(c, (short)(x0 + bar_rib_want), (short)(x0 + bar_rib_now), ry, bar_rib());
-	}
+		bar_fill(c, bar_rib_now, bar_rib_want);	/* only its new part (5.9, the Speed) */
+	else if (bar_rib_want < bar_rib_now)
+		bar_unfill(c, bar_rib_want, bar_rib_now);
 	text_noclip(vdi_h);
 }
 
