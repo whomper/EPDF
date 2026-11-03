@@ -1314,6 +1314,7 @@ typedef struct {
 	const unsigned char *s;
 	long n;
 } OP;
+static fx num_val(OP *o);	/* a number operand's value (read when wanted) */
 
 typedef struct {
 	PDOC *d;
@@ -1595,7 +1596,7 @@ static void show_text(IX *x, int from, int to)
 			tadv += show_run(x, o->s, o->n, &glyphs);
 		else if (o->k == K_NUM) {
 			/* thousandths of an em, subtracted; a wide one is a space between words */
-			int32_t n1000 = o->f >> 16;
+			int32_t n1000 = num_val(o) >> 16;
 			fx adj = -fxmul(w2fx((int)n1000), g->fs);
 
 			if (g->th != FX_ONE)
@@ -1782,10 +1783,46 @@ static int op_grow(IX *x)
 	return 1;
 }
 
+/*
+ * A number operand is kept as its bytes in the window (s, n) until an
+ * operator wants its value: a map's content is mostly path operators,
+ * whose numbers the text never needs (lexing each was 40 % of a map's
+ * page on an ST, 3 Nov 2026). Its value then, as lex_number_at gives it;
+ * s is NULL once it is read.
+ */
+static fx num_val(OP *o)
+{
+	if (o->s) {
+		const unsigned char *t = o->s;
+		fx f;
+		int32_t iv;
+		int real, ok;
+
+		lex_number_at(t, t + o->n, &f, &iv, &real, &ok);
+		if (!ok)
+			f = 0;
+		else if (!real && iv > 32767)
+			f = FX_INT(32767);
+		o->f = f;
+		o->s = NULL;
+	}
+	return o->f;
+}
+
+/* the numbers still in the window read, before it moves (refill) */
+static void nums_out(IX *x)
+{
+	long i;
+
+	for (i = 0; i < x->nops; i++)
+		if (x->ops[i].k == K_NUM)
+			num_val(&x->ops[i]);
+}
+
 /* operand access */
 static fx opnum(IX *x, int i)
 {
-	return i >= 0 && i < x->nops && x->ops[i].k == K_NUM ? x->ops[i].f : 0;
+	return i >= 0 && i < x->nops && x->ops[i].k == K_NUM ? num_val(&x->ops[i]) : 0;
 }
 
 static void set_font(IX *x, const char *name, fx size)
@@ -1860,6 +1897,7 @@ static int run_content(IX *x, const unsigned char *s, long n)
 #define CWIN 16384L
 #define CMARGIN 4096L
 #define REFILL_PIECE 2048L		/* the content unpacked between stop hooks */
+#define CSENT 'x'			/* after the window's bytes: no class (ccls), ends nums_run's runs */
 
 typedef struct CPIECES {
 	PDOC *d;
@@ -1959,23 +1997,44 @@ static long pieces_read(CPIECES *c, unsigned char *out, long n)
 }
 
 /* the window topped up: what is left of it from *pp moved to its start */
+/* the parity of where the content's next byte comes from, -1 not known */
+static int pieces_parity(const CPIECES *c)
+{
+	if (!c)
+		return -1;
+	if (c->s)
+		return pdf_stream_parity(c->s);
+	if (c->whole.s && c->wpos < c->whole.len)
+		return (int)((unsigned long)(c->whole.s + c->wpos) & 1);
+	return -1;
+}
+
 static void refill(IX *x, const unsigned char **pp, const unsigned char **pe)
 {
-	long keep = *pe - *pp, got;
+	long keep = *pe - *pp, got, cap;
+	unsigned char *w = x->win;
+	int par = pieces_parity(x->src);
 
-	if (keep > 0 && *pp != x->win)
-		memmove(x->win, *pp, (size_t)keep);
+	nums_out(x);
+	/* the window from its first or second byte, so the bytes to come land
+	   at the parity they come from: the unpacked content copied a long at
+	   a time, not a byte (1.2 MB of a map's page, 3 s on an ST) */
+	if (par >= 0 && ((par ^ (int)keep) & 1))
+		w++;
+	cap = x->wcap - (w - x->win);
+	if (keep > 0 && *pp != w)
+		memmove(w, *pp, (size_t)keep);
 	/* 2 KB at a time, the stop hook between: unpacking 12 KB at once was
 	   a stretch of 400 ms on an ST */
 	got = 0;
-	while (keep + got < x->wcap) {
-		long k = x->wcap - keep - got, r;
+	while (keep + got < cap) {
+		long k = cap - keep - got, r;
 
 		if (k > REFILL_PIECE)
 			k = REFILL_PIECE;
 		if (got)
 			pause_point(x->d);
-		r = pieces_read(x->src, x->win + keep + got, k);
+		r = pieces_read(x->src, w + keep + got, k);
 		pieces_prog(x->src);
 		if (r <= 0) {
 			if (!got)
@@ -1986,8 +2045,9 @@ static void refill(IX *x, const unsigned char **pp, const unsigned char **pe)
 		if (x->d->stopping)
 			break;
 	}
-	*pp = x->win;
-	*pe = x->win + keep + got;
+	*pp = w;
+	*pe = w + keep + got;
+	w[keep + got] = CSENT;		/* nums_run's sentinel (the window has a byte for it) */
 }
 
 static int run_content_pieces(IX *x, POBJ *cont, POBJ *ref)
@@ -2005,11 +2065,11 @@ static int run_content_pieces(IX *x, POBJ *cont, POBJ *ref)
 	c.n = cont->t == PO_ARR ? cont->a : 1;
 	/* the window and the scratch: 16 KB each, or 4 KB where memory is short */
 	for (w = CWIN; w >= CWIN / 4; w /= 4) {
-		x->win = pdf_malloc(d, w);
+		x->win = pdf_malloc(d, w + 1);	/* (+ 1: the sentinel after the bytes) */
 		x->sb = pdf_malloc(d, w + 64);
 		if (x->win && x->sb)
 			break;
-		pdf_free(d, x->win, w);
+		pdf_free(d, x->win, w + 1);
 		pdf_free(d, x->sb, w + 64);
 		x->win = x->sb = NULL;
 	}
@@ -2028,7 +2088,7 @@ static int run_content_pieces(IX *x, POBJ *cont, POBJ *ref)
 	if (c.s)
 		pdf_stream_close(c.s);
 	sb_free(&c.whole);
-	pdf_free(d, x->win, w);
+	pdf_free(d, x->win, w + 1);
 	pdf_free(d, x->sb, w + 64);
 	x->win = x->sb = NULL;
 	x->sbcap = x->sblen = 0;
@@ -2036,59 +2096,165 @@ static int run_content_pieces(IX *x, POBJ *cont, POBJ *ref)
 	return rc;
 }
 
+/* the content's characters by class, a byte each: one look-up where the
+   tests were up to a dozen compares a character (white space: is_white_c's
+   six; an operator's end: twelve) */
+#define CC_WHITE 1			/* is_white_c */
+#define CC_NUM 2			/* 0-9 . + -: a number's run */
+#define CC_OPEND 4			/* ends an operator: white, / [ ] ( < % */
+static unsigned char ccls[256];
+/* the same, one class a table (nonzero in it): what run_of looks up */
+static unsigned char cwhite[256], cnum[256];
+
+static void ccls_init(void)
+{
+	int c;
+
+	for (c = 0; c < 256; c++) {
+		unsigned char k = 0;
+
+		if (is_white_c(c))
+			k |= CC_WHITE | CC_OPEND;
+		if ((c >= '0' && c <= '9') || c == '.' || c == '+' || c == '-')
+			k |= CC_NUM;
+		if (c == '/' || c == '[' || c == ']' || c == '(' || c == '<' || c == '%')
+			k |= CC_OPEND;
+		ccls[c] = k;
+		cwhite[c] = (k & CC_WHITE) != 0;
+		cnum[c] = (k & CC_NUM) != 0;
+	}
+}
+
+/* past the run of bytes from q that tab has nonzero, which a byte of none
+   ends (the window's sentinel, CSENT, at the latest): 32 cycles a byte on
+   a 68000, where the C's loop with its bound test was some 48 */
+static inline const unsigned char *run_of(const unsigned char *q, const unsigned char *tab)
+{
+#if defined(__mc68000__) || defined(__m68k__)
+	__asm__("moveq #0,%%d0\n"
+		"1:\tmove.b (%0)+,%%d0\n\t"
+		"tst.b 0(%1,%%d0.w)\n\t"
+		"bne.s 1b\n\t"
+		"subq.l #1,%0"
+		: "+a"(q)
+		: "a"(tab)
+		: "d0", "cc", "memory");
+	return q;
+#else
+	while (tab[*q])
+		q++;
+	return q;
+#endif
+}
+
+/*
+ * Numbers and the white space between them, from p: a map's content is
+ * mostly that ("12.5 300.25 l"), and a turn of run_content_in's loop, with
+ * its refill, slice and stop tests, was some 200 cycles a token on a
+ * 68000. Up to 32 numbers, and not past lim (a token never straddles a
+ * refill); where it stopped, *cc the class of the last character looked at
+ * (white or a number's: it moved on; else a token of another kind is at
+ * the place returned). sent: a byte of no class at e (CSENT, the window's),
+ * so the runs need no bound test. Its own copies of p and the operands'
+ * count, in registers (run_content_in's p is in memory: refill takes its
+ * address).
+ */
+static inline __attribute__((always_inline)) const unsigned char *
+nums_run(IX *x, const unsigned char *p, const unsigned char *e, const unsigned char *lim, int sent, unsigned char *ccp)
+{
+	const unsigned char *cls = ccls;
+	long n = x->nops, cap = x->opcap;
+	OP *ops = x->ops;
+	int nums = 32;
+	unsigned char cc;
+
+	for (;;) {
+		cc = cls[*p];
+		if (cc & CC_WHITE) {
+			if (sent)
+				p = run_of(p + 1, cwhite);
+			else
+				do
+					p++;
+				while (p < e && (cls[*p] & CC_WHITE));
+		} else if (cc & CC_NUM) {
+			const unsigned char *q;
+
+			/* its run of 0-9 . + -, read only if an operator wants it */
+			if (sent)
+				q = run_of(p + 1, cnum);
+			else
+				for (q = p + 1; q < e && (cls[*q] & CC_NUM); q++)
+					;
+			if (n >= cap) {
+				x->nops = n;
+				if (op_grow(x)) {
+					ops = x->ops;
+					cap = x->opcap;
+				}
+			}
+			if (n < cap) {
+				OP *o = &ops[n++];
+
+				o->k = K_NUM;	/* (f: num_val sets it when it reads s) */
+				o->s = p;
+				o->n = q - p;
+			}
+			p = q;
+			if (--nums == 0)
+				break;
+		} else
+			break;
+		if (p >= lim)
+			break;
+	}
+	x->nops = n;
+	*ccp = cc;
+	return p;
+}
+
 static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigned char *p, const unsigned char *e, char *nm)
 {
 	PDOC *d = x->d;
-
+	int more = x->src && !x->src_end;	/* a window to top up (x->src_end changes only in refill) */
 	unsigned tick = 0;
 
 	(void)s0;
 	(void)n0;
+	if (!ccls[' '])
+		ccls_init();
 	for (;;) {
-		unsigned char c;
+		unsigned char c, cc;
+		const unsigned char *lim;
 
-		if (x->src && !x->src_end && e - p < CMARGIN)
+		if (more && e - p < CMARGIN) {
 			refill(x, &p, &e);
+			more = !x->src_end;
+		}
 		if (p >= e)
 			break;
-		c = *p;
 
+		/* the hook every 8 turns (a turn: an operator, or up to 32
+		   numbers): it reads the clock through a trap (Supexec, and
+		   every driver hooked on the XBIOS), which every 8 tokens was
+		   as much again as the tokens with their numbers left unread */
 		if ((++tick & 7) == 0)
 			pause_point(d);
 		if (d->stopping)
 			return -1;
 
-		if (is_white_c(c)) {
-			/* a run of white space in one go: a map's content is mostly
-			   numbers and the spaces between them, and each turn of
-			   this loop has its refill, slice and stop tests */
-			do
-				p++;
-			while (p < e && is_white_c(*p));
+		/* numbers and white space (nums_run), then the token after them */
+		lim = more ? e - CMARGIN : e;
+		p = x->src ? nums_run(x, p, e, lim, 1, &cc) : nums_run(x, p, e, lim, 0, &cc);
+		/* the last one read a number or white space (it moved on): the
+		   top (refill, the end, the hook); else it stopped at a token
+		   of another kind, read here whatever lim says */
+		if (cc & (CC_WHITE | CC_NUM))
 			continue;
-		}
+		c = *p;
 		if (c == '%') {
 			while (p < e && *p != '\n' && *p != '\r')
 				p++;
-			continue;
-		}
-		if ((c >= '0' && c <= '9') || c == '-' || c == '+' || c == '.') {
-			const unsigned char *q;
-			fx f;
-			int32_t iv;
-			int real, ok;
-
-			q = lex_number_at(p, e, &f, &iv, &real, &ok);	/* found and read in one pass */
-			if (!ok)
-				f = 0;
-			else if (!real && iv > 32767)
-				f = FX_INT(32767);
-			if (x->nops < x->opcap || op_grow(x)) {
-				x->ops[x->nops].k = K_NUM;
-				x->ops[x->nops].f = f;
-				x->nops++;
-			}
-			p = q;
 			continue;
 		}
 		if (c == '(') {
@@ -2243,7 +2409,7 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 			unsigned code;
 			int len;
 
-			while (q < e && !is_white_c(*q) && *q != '/' && *q != '[' && *q != ']' && *q != '(' && *q != '<' && *q != '%')
+			while (q < e && !(ccls[*q] & CC_OPEND))
 				q++;
 			len = (int)(q - p);
 			code = len == 1 ? OPK(0, p[0]) : len == 2 ? OPK(p[0], p[1]) : 0xFFFFFF;
@@ -2339,25 +2505,20 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 				if (x->nops >= 1 && x->ops[x->nops - 1].k == K_NAME)
 					do_xobject(x, (const char *)x->ops[x->nops - 1].s);
 				break;
+			/* counted only (the measurement's): a path, and its painting
+			   (in this switch, not a second test of every operator) */
+			case OPK(0, 'm'): case OPK(0, 'l'): case OPK(0, 'c'): case OPK(0, 'v'):
+			case OPK(0, 'y'): case OPK(0, 'h'): case OPK('r', 'e'):
+				d->st.ops_path++;
+				break;
+			case OPK(0, 'S'): case OPK(0, 's'): case OPK(0, 'f'): case OPK(0, 'F'):
+			case OPK(0, 'B'): case OPK(0, 'b'): case OPK(0, 'n'):
+			case OPK('f', '*'): case OPK('B', '*'): case OPK('b', '*'): case OPK('s', 'h'):
+				d->st.ops_paint++;
+				break;
 			default:
 				break;
 			}
-			/* counting */
-			if (len == 1) {
-				switch (p[-1]) {
-				case 'm': case 'l': case 'c': case 'v': case 'y': case 'h':
-					d->st.ops_path++;
-					break;
-				case 'S': case 's': case 'f': case 'F': case 'B': case 'b': case 'n':
-					d->st.ops_paint++;
-					break;
-				}
-			} else if (len == 2 && (p[-2] == 'f' || p[-2] == 'B' || p[-2] == 'b') && p[-1] == '*') {
-				d->st.ops_paint++;
-			} else if (len == 2 && p[-2] == 'r' && p[-1] == 'e') {
-				d->st.ops_path++;
-			} else if (len == 2 && p[-2] == 's' && p[-1] == 'h')
-				d->st.ops_paint++;
 			if (len == 2 && p[-2] == 'B' && p[-1] == 'I') {
 				/* inline image: skip to EI (read a piece at a time, the
 				   window topped up as the search runs out of it, the last
@@ -2384,6 +2545,7 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 						break;
 					p = q2;
 					refill(x, &p, &e);
+					more = !x->src_end;
 					q2 = p;
 					if (e - p < 4)
 						break;

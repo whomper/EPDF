@@ -266,7 +266,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   One window: ^U quits, ^W does nothing (3.2). Find next is ^G and Find previous Shift+^G (the Mac's
   keys, 3.2). The extractor's text is UTF-8; the view's is the Atari character set with the soft
   break as CR (`cs_to_atari` keeps only CR, LF, Tab). The page's text is read a page at a time on its
-  own stack; the reader's hook (`PDOC.stop`, every 8 tokens and 32 glyphs) hands the machine back when
+  own stack; the reader's hook (`PDOC.stop`, every 8 operators or 256 numbers, and 32 glyphs) hands the machine back when
   the slice is up; nothing on that stack may call the AES. A picture is decoded on a second stack
   (`pic_poll` hands back the same way); it may use the document's objects only before its first
   hand-back. A page that is read ends its slice, and its rows are drawn in the next turn. A picture

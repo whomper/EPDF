@@ -861,6 +861,11 @@ long pdf_stream_read(PCSRC *s, unsigned char *out, long n)
 	return k;
 }
 
+int pdf_stream_parity(const PCSRC *s)
+{
+	return s && s->z && s->pn > 0 ? (int)((unsigned long)s->pp & 1) : -1;
+}
+
 void pdf_stream_close(PCSRC *s)
 {
 	if (!s)

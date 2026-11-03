@@ -141,7 +141,7 @@ typedef struct pdoc {
 	int32_t *pageidx;		/* object number of each page, built once */
 	void *fc;			/* the fonts kept from page to page (pdftext.c) */
 	int skip_kids;			/* while a page's inherited attributes are read: leave /Kids arrays unparsed */
-	/* asked every 8 tokens and 32 glyphs while a page's text is read: it may
+	/* asked every 8 operators (or 256 numbers) and 32 glyphs while a page's text is read: it may
 	   take its time (hand the machine back); 1 stops the page (the page then
 	   has stopped set; read it again later) */
 	int (*stop)(void *ctx);
@@ -188,6 +188,10 @@ long pdf_stream_len(PDOC *d, POBJ *o);
 typedef struct PCSRC PCSRC;
 PCSRC *pdf_stream_open(PDOC *d, POBJ *o, long onum);
 long pdf_stream_read(PCSRC *s, unsigned char *out, long n);
+/* the parity of the address the next byte read comes from (0 even, 1 odd),
+   -1 not known yet: a copy to an address of the same parity moves longs on
+   a 68000, else a byte at a time */
+int pdf_stream_parity(const PCSRC *s);
 void pdf_stream_close(PCSRC *s);
 long pdf_stream_left(const PCSRC *s);	/* its stored bytes not read yet */
 /* the same for a scan or a JPEG (CCITTFaxDecode, DCTDecode; alone or
