@@ -12,6 +12,7 @@ joined and wrapped to the window, or each line as it is on the page.
 | `EPDF.HYP`, `EPDF.REF` | this guide, for EHypView or ST-Guide |
 | `NOTICES.TXT` | the licences of the parts EPDF is made with |
 | `icons/` | the desktop icons: `EPDF.RSC` for the program, `EPDFDOC.RSC` for PDF files (`EPDFNV.RSC` and `EPDFDNV.RSC` under NVDI with its own palette) |
+| `econvert/` | EConvert, which prepares PDFs for EPDF on a Falcon or a TT: `ECONVERT.PRG` and the fonts it draws with (`fonts/`); see [EConvert](#econvert) |
 
 - **Install:** copy `EPDF.PRG` into a folder of its own, such as `C:\EPDF\`. It keeps its
   settings (`EPDF.INF`), the text of the document open (`EPDF.TXC`, removed when you close it)
@@ -53,7 +54,7 @@ gives way to you at once.
 - **View:** Font... (⇧^F): the system font in its two sizes, or a fixed-width GDOS font, kept in
   `EPDF.INF`. **The page's lines**: ticked, each line is as it is on the page; not ticked (as EPDF
   starts), the lines of a paragraph are joined and wrapped to the window, so the text reads at any
-  window width.
+  window width. **Pages**: a converted PDF's pages whole (see below); greyed for any other file.
 - **Page:** the previous and the next page (^Left, ^Right), the first and the last (^Clr/Home,
   ⇧^Clr/Home).
 - **Help:** this guide.
@@ -74,6 +75,13 @@ double-click takes a word; a click alone lets the selection go. The right mouse 
 opens a menu of what you can do there.
 
 Two columns side by side are read one after the other, the left one first.
+
+**Converted PDFs** are PDFs EConvert prepared for the Atari (EConvert comes with EPDF; it runs on
+a Falcon or a TT, and the files it makes read on every Atari). EPDF reads them at once, with no
+fonts to read and no JPEG to decode on a 68000, and each page's line says **Optimised** at its
+right. Their charts and maps are pictures, with their labels in them. When EConvert was asked
+for the pages whole, **View > Pages** shows each page as a picture, in 16 colours on a screen with
+them, else in black and white; choose it again for the text.
 
 The window can be moved, sized, sent to the back and iconified (where the AES can iconify); the
 icon shows the page you are on.
@@ -108,6 +116,31 @@ Each setting has a note above it in the file:
 - `LINES=` 1 when **View > The page's lines** is ticked.
 
 A line EPDF doesn't know is kept as it is.
+
+## EConvert
+
+EConvert prepares PDFs for EPDF: each page's text already read, its pictures at the size EPDF
+shows them, its charts and maps drawn as pictures, and, if you want them, its pages whole as
+pictures (**View > Pages** in EPDF). The files it writes are still PDFs that any viewer opens, and
+EPDF reads them quickly on every Atari. EConvert itself needs a Falcon or a TT (a 68030).
+
+- **Install:** copy the `econvert` folder (`ECONVERT.PRG` and its `fonts` folder) anywhere. It
+  keeps its settings in `ECONVERT.INF` beside itself.
+- **The batch:** **Add files...** (^O) adds a PDF; **Add folder...** adds every PDF in the folder
+  you pick a file in; **Clear** empties the list. You can also drop PDFs on its window or on
+  `ECONVERT.PRG`.
+- **Write to...** chooses the folder the converted PDFs go to, with their own names: a folder of
+  their own, not the PDFs' own.
+- **Whole pages:** None, Mono (black and white, for every Atari), or Mono and colour (16 colours
+  as well, for a Falcon or a TT; a page with little colour gets the black and white one only).
+- **Photos:** 256 colours (fast on every Atari) or JPEG (smaller files, but slow to show on an
+  8 MHz ST). Charts and pictures of few colours are kept exact either way.
+- **Convert** (Return, ^R) works through the batch. Two bars show the file and the whole batch,
+  each with how far it has got and about how long is left. **Stop** (Esc) stops at once; the file
+  under way is left out, the ones done stay.
+
+A page takes some seconds on a Falcon, more with many pictures or a map. You can go on using the
+Atari meanwhile: EConvert works in turns.
 
 ## Troubleshooting
 

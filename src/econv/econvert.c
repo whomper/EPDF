@@ -675,7 +675,7 @@ static const MBAR_ITEM file_items[] = {
 	{ "-", NULL, CMD_NONE },
 	{ "Quit", "^Q", CMD_QUIT },
 	{ NULL, NULL, CMD_NONE } };
-static const MBAR_ITEM help_items[] = { { "EConvert guide", NULL, CMD_GUIDE }, { NULL, NULL, CMD_NONE } };
+static const MBAR_ITEM help_items[] = { { "EConvert in the EPDF guide", NULL, CMD_GUIDE }, { NULL, NULL, CMD_NONE } };
 static const MBAR_TITLE titles[] = { { " EConvert ", desk_items }, { " File ", file_items }, { " Help ", help_items },
 				     { NULL, NULL } };
 
@@ -714,8 +714,18 @@ static void command(int c)
 		quit_now = 1;
 		break;
 	case CMD_GUIDE:
-		if (help_key(start_dir, "econvert.hyp", NULL, "About"))
-			about_box();
+		/* (one guide for both: EPDF's, its page on EConvert; in the
+		   EPDF folder above econvert\ or in C:\GUIDES) */
+		{
+			char up[160], p[180];
+
+			strcpy(up, start_dir);
+			path_join(p, sizeof p, start_dir, "epdf.hyp");
+			if (Fattrib(p, 0, 0) < 0 && strrchr(up, '\\') && strrchr(up, '\\') > up + 2)
+				*strrchr(up, '\\') = '\0';	/* (the folder above: EPDF's) */
+			if (help_key(up, "epdf.hyp", "EConvert", "About"))
+				about_box();
+		}
 		break;
 	}
 }
