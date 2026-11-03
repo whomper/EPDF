@@ -175,6 +175,16 @@ typedef struct {
 	int full;			/* the band waits for pics_band */
 	int nomem;
 	unsigned short *mir;		/* a mirrored picture's row, right to left */
+	/* a palette's colours each with a pen near it (pdf_image_palette):
+	   each colour (5-6-5) and its pen, no dither */
+	int direct, dn, bpc;
+	long sw, sh, ny, *xs;		/* the raw rows': the source's size, the next shown row, its columns */
+	/* 1 bit a pixel shown narrower: each source byte's mask of the bits
+	   kept (mid: which of the few), and for each mask and byte the bits
+	   kept (cv) and how many (cn) */
+	unsigned char *mid, *cv, cn[16];
+	unsigned short dc[16];
+	unsigned char dp[16];
 } SINK;
 
 static SINK *sink;			/* the one being made */
@@ -182,12 +192,12 @@ void (*pics_wait)(void);
 
 static void *bm_alloc(long bytes, int *heap);
 
-static void sink_row(void *u, long y, const unsigned short *px)
+static void put_pens(SINK *k, long y);
+
+/* the bitmap at the first row (a JPEG made whole gives none); 0 none */
+static int bm_first(SINK *k)
 {
-	SINK *k = u;
 	PICE *e = k->e;
-	long x;
-	int p;
 
 	if (!e->bm.fd_addr && !k->nomem) {
 		/* the bitmap at the first row (a JPEG made whole gives none) */
@@ -207,7 +217,90 @@ static void sink_row(void *u, long y, const unsigned short *px)
 			e->bm.fd_stand = 0;
 		}
 	}
-	if (k->nomem)
+	return !k->nomem;
+}
+
+/* a row of the picture's own samples (pdf_image_raw_rows: shown at its
+   size, each colour its pen): a mono page's rows are the bitmap's as
+   they are (or inverted), the rest each pixel's pen */
+static void sink_raw(void *u, long sy, const unsigned char *r)
+{
+	SINK *k = u;
+	PICE *e = k->e;
+	long x, y;
+
+	if (!bm_first(k))
+		return;
+	/* the shown rows that are this source row's (fewer, or as many) */
+	if (k->ny >= e->h || k->ny * k->sh / e->h != sy)
+		return;
+	y = k->ny++;
+	if (k->w == k->sw && k->nplanes == 1 && k->bpc == 1 && k->dn == 2 && k->dp[0] != k->dp[1]) {
+		unsigned char *o = (unsigned char *)e->bm.fd_addr + y * k->row;
+		long n = (k->w + 7) / 8;
+
+		if (k->dp[0] == 1)
+			for (x = 0; x < n; x++)
+				o[x] = (unsigned char)~r[x];
+		else
+			memcpy(o, r, (size_t)n);
+		if (k->w & 7)
+			o[n - 1] &= (unsigned char)(0xFF00 >> (k->w & 7));
+		e->made = y + 1;
+		e->ready = y + 1;
+		return;
+	}
+	if (k->nplanes == 1 && k->bpc == 1 && k->dn == 2 && k->dp[0] != k->dp[1] && k->cv) {
+		/* a mono page shown narrower: each source byte's kept bits (a
+		   table for each of the few masks), one after another (a pixel
+		   at a time it was 17 s of an ST's 20 for a page) */
+		unsigned char *o = (unsigned char *)e->bm.fd_addr + y * k->row, *oe = o + (k->w + 7) / 8;
+		unsigned char inv = k->dp[0] == 1 ? 0xFF : 0;
+		const unsigned char *mid = k->mid, *cv = k->cv, *cn = k->cn;
+		long i, sb = (k->sw + 7) / 8;
+		unsigned acc = 0;
+		int nb = 0;
+
+		for (i = 0; i < sb && o < oe; i++) {
+			int m = mid[i], c = cn[m];
+
+			acc = (acc << c) | cv[(m << 8) | r[i]];
+			nb += c;
+			if (nb >= 8) {
+				nb -= 8;
+				*o++ = (unsigned char)((acc >> nb) ^ inv);
+			}
+		}
+		if (nb > 0 && o < oe)
+			*o++ = (unsigned char)((acc << (8 - nb)) ^ inv);
+		o = (unsigned char *)e->bm.fd_addr + y * k->row;
+		if (k->w & 7)
+			o[(k->w + 7) / 8 - 1] &= (unsigned char)(0xFF00 >> (k->w & 7));
+		e->made = y + 1;
+		e->ready = y + 1;
+		if (k->ny < e->h && k->ny * k->sh / e->h == sy)
+			sink_raw(u, sy, r);
+		return;
+	}
+	for (x = 0; x < k->w; x++) {
+		long c = k->xs ? k->xs[x] : x;
+		int i = k->bpc == 8 ? r[c] : k->bpc == 4 ? (r[c >> 1] >> (c & 1 ? 0 : 4)) & 15 :
+			k->bpc == 2 ? (r[c >> 2] >> (6 - 2 * (c & 3))) & 3 : (r[c >> 3] >> (7 - (c & 7))) & 1;
+
+		k->pens[x] = i < k->dn ? k->dp[i] : 0;
+	}
+	put_pens(k, y);
+	if (k->ny < e->h && k->ny * k->sh / e->h == sy)
+		sink_raw(u, sy, r);	/* (a row shown twice: a picture made bigger) */
+}
+
+static void sink_row(void *u, long y, const unsigned short *px)
+{
+	SINK *k = u;
+	PICE *e = k->e;
+	long x;
+
+	if (!bm_first(k))
 		return;
 	if (k->mir) {
 		for (x = 0; x < k->w; x++)
@@ -221,7 +314,34 @@ static void sink_row(void *u, long y, const unsigned short *px)
 			e->ready = y + 1;
 		return;
 	}
-	pic_dither_row(k->dt, px, NULL, k->pens);
+	if (k->direct) {
+		/* a palette's colours each with a pen near it: the pen, no dither */
+		unsigned short last = px[0] ^ 1;
+		unsigned char q = 0;
+
+		for (x = 0; x < k->w; x++) {
+			if (px[x] != last) {
+				int i;
+
+				last = px[x];
+				for (i = 0; i < k->dn && k->dc[i] != last; i++)
+					;
+				q = i < k->dn ? k->dp[i] : 0;
+			}
+			k->pens[x] = q;
+		}
+	} else
+		pic_dither_row(k->dt, px, NULL, k->pens);
+	put_pens(k, y);
+}
+
+/* the row's pens into the bitmap (one plane) or the band (the rest) */
+static void put_pens(SINK *k, long y)
+{
+	PICE *e = k->e;
+	long x;
+	int p;
+
 	if (k->nplanes == 1) {
 		unsigned char *o = (unsigned char *)e->bm.fd_addr + y * k->row;
 
@@ -283,6 +403,62 @@ int pics_band(void)
 	return 1;
 }
 
+/* the tables a mono page shown narrower is made with (sink_raw): the
+   source columns kept (xs), by bytes; none (k->cv NULL) when there are
+   more than 16 masks */
+static void mono_masks(SINK *k)
+{
+	long sb = (k->sw + 7) / 8, x, i;
+	unsigned char *keep = calloc((size_t)sb, 1), masks[16];
+	int nm = 0, m, v;
+
+	k->mid = malloc((size_t)sb);
+	if (!keep || !k->mid) {
+		free(keep);
+		free(k->mid);
+		k->mid = NULL;
+		return;
+	}
+	for (x = 0; x < k->w; x++)
+		keep[k->xs[x] >> 3] |= (unsigned char)(0x80 >> (k->xs[x] & 7));
+	for (i = 0; i < sb; i++) {
+		for (m = 0; m < nm && masks[m] != keep[i]; m++)
+			;
+		if (m == nm) {
+			if (nm == 16) {
+				free(keep);
+				free(k->mid);
+				k->mid = NULL;
+				return;
+			}
+			masks[nm++] = keep[i];
+		}
+		k->mid[i] = (unsigned char)m;
+	}
+	free(keep);
+	k->cv = malloc((size_t)nm * 256);
+	if (!k->cv) {
+		free(k->mid);
+		k->mid = NULL;
+		return;
+	}
+	for (m = 0; m < nm; m++) {
+		int c = 0, b;
+
+		for (b = 0; b < 8; b++)
+			c += (masks[m] >> b) & 1;
+		k->cn[m] = (unsigned char)c;
+		for (v = 0; v < 256; v++) {
+			int o = 0;
+
+			for (b = 7; b >= 0; b--)
+				if (masks[m] & (1 << b))
+					o = o << 1 | ((v >> b) & 1);
+			k->cv[(m << 8) | v] = (unsigned char)o;
+		}
+	}
+}
+
 int pics_rows(PDOC *d, PICE *e, int nplanes, PIC_PAL *pl, int *why)
 {
 	SINK k;
@@ -313,8 +489,55 @@ int pics_rows(PDOC *d, PICE *e, int nplanes, PIC_PAL *pl, int *why)
 		*why = PIC_MEMORY;
 		return 0;
 	}
+	if (nplanes != 16) {
+		/* already dithered to colours the screen has (EConvert's whole
+		   pages: TOS's 16, or black and white): each colour its pen
+		   (a page of 640 x 828 in 16 colours, dithered again, took
+		   23 s on a Falcon) */
+		unsigned char ip[256 * 3];
+		int n = 0, i, ok;
+
+		ok = pdf_image_palette(d, e->obj, ip, &n) && n <= 16;
+		for (i = 0; ok && i < n; i++) {
+			int q = pic_pal_nearest(pl, ip[3 * i], ip[3 * i + 1], ip[3 * i + 2]), c;
+
+			for (c = 0; c < 3; c++) {
+				int dv = ip[3 * i + c] - pl->rgb[q][c];
+
+				if (dv > 48 || dv < -48)
+					ok = 0;
+			}
+			k.dc[i] = (unsigned short)(((ip[3 * i] & 0xF8) << 8) | ((ip[3 * i + 1] & 0xFC) << 3) | (ip[3 * i + 2] >> 3));
+			k.dp[i] = (unsigned char)q;
+		}
+		k.dn = n;
+		k.direct = ok;
+	}
 	sink = &k;
-	how = pdf_image_rows(d, e->obj, e->w, e->h, sink_row, &k, 2L << 20, why);
+	{
+		POBJ *o = k.direct && !e->flip ? pdf_get(d, e->obj) : NULL;
+
+		k.bpc = o ? (int)pd_int(d, o, "BitsPerComponent", 8) : 0;
+		k.sw = o ? pd_int(d, o, "Width", 0) : 0;
+		k.sh = o ? pd_int(d, o, "Height", 0) : 0;
+		if (o && k.sw > 0 && k.sh > 0 && k.sw != e->w && (k.xs = malloc((size_t)e->w * sizeof *k.xs)) != NULL) {
+			long x;
+
+			for (x = 0; x < e->w; x++)
+				k.xs[x] = x * k.sw / e->w;
+			if (k.bpc == 1 && k.sw > e->w)
+				mono_masks(&k);
+		}
+		if (o && k.sw > 0 && k.sh > 0 && (k.sw == e->w || k.xs))
+			/* its samples as they are, each colour its pen, a column
+			   and a row taken where it is shown smaller */
+			how = pdf_image_raw_rows(d, e->obj, sink_raw, &k, 2L << 20, why);
+		else
+			how = pdf_image_rows(d, e->obj, e->w, e->h, sink_row, &k, 2L << 20, why);
+		free(k.xs);
+		free(k.mid);
+		free(k.cv);
+	}
 	sink = NULL;
 	free(k.mir);
 	free(k.pens);

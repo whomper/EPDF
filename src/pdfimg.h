@@ -18,4 +18,14 @@ PIC *pdf_image(PDOC *d, long obj, int w, int h, long max_bytes, int *why);
 typedef void (*PIMG_ROW)(void *u, long y, const unsigned short *px);
 int pdf_image_rows(PDOC *d, long obj, int w, int h, PIMG_ROW row, void *u, long max_bytes, int *why);
 
+/* a picture of a palette's colours (Indexed, or 1 bit of grey; Flate or
+   stored): 1, its colours (r g b) in pal (256 x 3) and their number in *n;
+   0 any other (pics.c: one whose colours all have a pen near them is
+   shown without its dither, EConvert's whole pages) */
+int pdf_image_palette(PDOC *d, long obj, unsigned char *pal, int *n);
+/* its rows of samples as they are stored (packed, its own size), top to
+   bottom: 1 done, 0 not (why) */
+int pdf_image_raw_rows(PDOC *d, long obj, void (*row)(void *u, long y, const unsigned char *r), void *u,
+		       long max_bytes, int *why);
+
 #endif

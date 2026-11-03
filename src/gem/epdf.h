@@ -51,6 +51,10 @@ const char *doc_page_text(long n, long *len);	/* NULL when not read yet */
 long doc_page_len(long n);		/* -1 when not read yet; nothing read */
 #include "docview.h"
 DOCVIEW *doc_view(void);		/* NULL without a document */
+int doc_prepared(void);			/* a converted PDF (EConvert's) */
+int doc_has_pages(void);		/* ... with its pages whole (View > Pages) */
+int doc_pages_mode(void);		/* the view shows them */
+void doc_set_pages(int on);
 
 /* textwin.c: the window */
 int win_open(short x, short y, short w, short h);

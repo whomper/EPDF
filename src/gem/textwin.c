@@ -238,25 +238,56 @@ void win_layout(void)
 	win_info();
 }
 
-/* a page's head: a line across, "Page n" on it */
+static int fill_set;
+
+/* a page's head: a line across, "Page n" on it; a converted PDF's
+   (EConvert's) with the badge "Optimised" at its right end, green on a
+   screen with colours, black in mono (Erez, 31 Oct 2026) */
 static void draw_head(short x, short y, short w, long page)
 {
+	static const char badge[] = "Optimised";
 	char s[32];
-	short n, my = (short)(y + ch / 2), tx;
+	short n, my = (short)(y + ch / 2), tx, end = (short)(x + w - MARGIN - 1), bx = 0, bw = 0;
 
 	n = (short)snprintf(s, sizeof s, " Page %ld ", page + 1);
 	tx = (short)(x + MARGIN + 2 * cw);
+	if (doc_prepared()) {
+		bw = (short)((sizeof badge - 1 + 2) * cw);
+		bx = (short)(end + 1 - bw);
+		if (bx > tx + (n + 2) * cw)
+			end = (short)(bx - cw - 1);
+		else
+			bw = 0;			/* (no room beside "Page n") */
+	}
 	line_col(x + MARGIN, my, tx - 1, my, 1);
-	line_col(tx + n * cw, my, x + w - MARGIN - 1, my, 1);
+	line_col(tx + n * cw, my, end, my, 1);
 	vswr_mode(vdi_h, MD_TRANS);
 	vst_color(vdi_h, 1);
 	text_n(vdi_h, tx, y, s, n);
+	if (bw) {
+		short p[4];
+
+		p[0] = bx;
+		p[1] = y;
+		p[2] = (short)(bx + bw - 1);
+		p[3] = (short)(y + ch - 1);
+		vswr_mode(vdi_h, MD_REPLACE);
+		vsf_interior(vdi_h, FIS_SOLID);
+		vsf_color(vdi_h, planes >= 2 ? 3 : 1);	/* the VDI's green (pen 3), black in mono */
+		vsf_perimeter(vdi_h, 0);
+		v_rfbox(vdi_h, p);
+		fill_set = 0;
+		vswr_mode(vdi_h, MD_TRANS);
+		vst_color(vdi_h, 0);
+		text_n(vdi_h, (short)(bx + cw), y, badge, (short)(sizeof badge - 1));
+		vst_color(vdi_h, 1);
+	}
 }
 
 /* the fill's attributes are white, solid, MD_REPLACE: set once a draw,
    not five VDI calls a blank (draw_rows clears it, and so does whatever
-   may change them between: a picture's frame, an inversion) */
-static int fill_set;
+   may change them between: a picture's frame, an inversion; fill_set is
+   above) */
 static int band_blank;			/* draw_rows: the area cleared, nothing drawn (win_draw_all) */
 
 /* white over x1..x2-1 (screen x) of the row at y, cut to the clip c */

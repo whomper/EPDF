@@ -63,6 +63,64 @@ static int opening, open_ok, ocols, olines;
 static long onpages;
 static unsigned long slice_end;		/* tos_ms() when the slice is up */
 static PTEXT *rt;			/* the page read (taken with the document) */
+static PPREP rprep;			/* a converted PDF's page read: its whole pictures */
+/* a converted PDF's pages whole (View > Pages): each page a picture's line,
+   its own picture (16 colours where the screen has them, else mono) */
+static TSTORE pstore;
+static int pstore_open, pages_mode, pages_have;
+
+static void pages_note(long n, const PPREP *pp)
+{
+	char b[48];
+	long obj = pp->colour >= 0 && planes >= 4 ? pp->colour : pp->mono;
+	int k = 0;
+
+	if (!pstore_open)
+		return;
+	if (obj >= 0) {
+		/* (its size the picture's, 640 wide: shown as it is made where
+		   the window has room, not a point a pixel) */
+		k = snprintf(b, sizeof b, "\x7F%ld %dx%ld\n", obj, 640, pp->w > 0 ? 640L * pp->h / pp->w : 828L);
+		pages_have = 1;
+	}
+	ts_put(&pstore, n, b, k);		/* (none: the page's head alone) */
+}
+
+int doc_has_pages(void)
+{
+	return doc && doc->prepared && pages_have;
+}
+
+int doc_pages_mode(void)
+{
+	return doc && pages_mode;
+}
+
+int doc_prepared(void)
+{
+	return doc && doc->prepared;
+}
+
+/* the view on the pages' text or on their pictures: laid out again from
+   the page at the top (the caller lays the window out and draws it) */
+void doc_set_pages(int on)
+{
+	long top;
+	int cols, lm;
+
+	if (!doc || !pstore_open || !on == !pages_mode)
+		return;
+	top = dv_page_at_top(&view);
+	cols = view.cols;
+	lm = view.lines_mode;
+	dv_free(&view);
+	pages_mode = on;
+	if (dv_init(&view, on ? &pstore : &store, npages, cols, lm) != 0) {
+		pages_mode = 0;
+		dv_init(&view, &store, npages, cols, lm);
+	}
+	dv_goto_page(&view, top);
+}
 static long rpage_oom;			/* the reader's refused allocations before it */
 static PICE *rpic;			/* the picture being decoded, NULL none */
 static int pdone;			/* the decoder has finished rpic */
@@ -133,7 +191,12 @@ static void reader(void)
 		ptext_init(rt);
 		rt->soft = 1;
 		rt->pics = 1;
-		pdf_page_text(doc, rpage, rt);
+		if (doc->prepared) {
+			/* a converted PDF: the page's text as the store keeps it */
+			if (pdf_prepared_page(doc, rpage, &rt->text, &rprep) != 0)
+				rt->failed = 1;
+		} else
+			pdf_page_text(doc, rpage, rt);
 		rdone = 1;
 		coro_switch(&read_co, &main_co);
 	}
@@ -402,6 +465,9 @@ void doc_close(void)
 #endif
 	dv_free(&view);
 	ts_close(&store);
+	if (pstore_open)
+		ts_close(&pstore);
+	pstore_open = pages_mode = pages_have = 0;
 	pdf_close(doc);
 	free(doc);
 	doc = NULL;
@@ -487,6 +553,7 @@ static long open_done(void)
 	doc = odoc;
 	odoc = NULL;
 	npages = onpages;
+	pstore_open = doc->prepared && ts_open(&pstore, onpages, 32L * 1024, "") == 0;
 	cache_kb = budget / 1024;
 	retried_page = retried_obj = -1;
 	next = done = 0;
@@ -554,11 +621,22 @@ long doc_slice(unsigned long ms)
 	}
 	rpage = -1;
 	rt_failed = rt->failed;
-	/* the soft break as CR in the store: the conversion keeps CR, LF and Tab only */
-	for (i = 0; i < rt->text.len; i++)
-		if (rt->text.s[i] == '\v')
-			rt->text.s[i] = '\r';
-	a = rt->text.s && rt->text.len > 0 ? cs_to_atari(rt->text.s, rt->text.len, CS_UTF8, &len) : NULL;
+	if (doc->prepared) {
+		/* (in the Atari's set already, soft breaks as CR) */
+		len = rt->text.len;
+		a = len > 0 ? malloc((size_t)len) : NULL;
+		if (a)
+			memcpy(a, rt->text.s, (size_t)len);
+		else
+			len = 0;
+		pages_note(n, &rprep);
+	} else {
+		/* the soft break as CR in the store: the conversion keeps CR, LF and Tab only */
+		for (i = 0; i < rt->text.len; i++)
+			if (rt->text.s[i] == '\v')
+				rt->text.s[i] = '\r';
+		a = rt->text.s && rt->text.len > 0 ? cs_to_atari(rt->text.s, rt->text.len, CS_UTF8, &len) : NULL;
+	}
 	if (ts_put(&store, n, a ? a : "", a ? len : 0) != 0) {
 		/* no room for it: shown as empty, not read again */
 		ts_put(&store, n, "", 0);

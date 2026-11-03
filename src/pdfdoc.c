@@ -106,7 +106,55 @@ ok:
 		set_err(d, "encrypted: needs a password or an unsupported handler");
 		return -2;
 	}
+	{
+		/* a converted PDF: the catalog's /AERA, a version this reads */
+		POBJ *a = d->root ? pd_get(d, d->root, "AERA") : NULL;
+
+		if (a && a->t == PO_DICT && pdf_is_name(pd_get(d, a, "Type"), "AERAPrepared") &&
+		    pd_int(d, a, "Version", 0) == 1)
+			d->prepared = 1;
+	}
 	d->cur = &d->a;
+	return 0;
+}
+
+static long ref_num(POBJ *o)
+{
+	return o && o->t == PO_REF ? o->a : -1;
+}
+
+int pdf_prepared_page(PDOC *d, long n, SBUF *text, PPREP *pp)
+{
+	POBJ *res, *box, *pg, *a, *t;
+	long rot;
+	const char *term = NULL;
+
+	pp->mono = pp->colour = -1;
+	pp->w = 612;
+	pp->h = 792;
+	if (!d->prepared || !(pg = pdf_page(d, n, &res, &box, &rot)))
+		return -1;
+	if (box && box->t == PO_ARR && box->a >= 4) {
+		POBJ *x0 = pa_at(box, 0), *y0 = pa_at(box, 1), *x1 = pa_at(box, 2), *y1 = pa_at(box, 3);
+		long v[4];
+		int k;
+		POBJ *e[4] = { x0, y0, x1, y1 };
+
+		for (k = 0; k < 4; k++)
+			v[k] = e[k]->t == PO_INT ? e[k]->a : e[k]->t == PO_REAL ? e[k]->a >> 16 : 0;
+		pp->w = v[2] - v[0];
+		pp->h = v[3] - v[1];
+	}
+	a = pd_get(d, pg, "AERA");
+	if (!a || a->t != PO_DICT)
+		return -1;
+	pp->mono = ref_num(pd_getraw(a, "Mono"));
+	pp->colour = ref_num(pd_getraw(a, "Colour"));
+	t = pd_get(d, a, "Text");
+	if (!t || t->t != PO_DICT)
+		return -1;
+	if (pdf_stream(d, t, ref_num(pd_getraw(a, "Text")), text, &term, 4L << 20) != 0 || term)
+		return -1;
 	return 0;
 }
 

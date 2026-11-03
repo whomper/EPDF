@@ -143,6 +143,18 @@ static void conv_row(const unsigned char *r, const long *xs, int w, int bpc, int
 				v = (v ^ invert) ? 255 : 0;
 				r8 = g8 = b8 = v;
 			}
+		} else if (bpc != 8) {
+			/* 2 or 4 bits a sample, one component (grey, Indexed:
+			   EConvert's whole pages are 16 colours, 4 bits) */
+			long bit = sx * bpc;
+
+			v = (r[bit >> 3] >> (8 - bpc - (bit & 7))) & ((1 << bpc) - 1);
+			if (nc < 0) {
+				r8 = pal[v * 3], g8 = pal[v * 3 + 1], b8 = pal[v * 3 + 2];
+			} else {
+				v = v * 255 / ((1 << bpc) - 1);
+				r8 = g8 = b8 = invert ? 255 - v : v;
+			}
 		} else if (nc < 0) {
 			v = r[sx];
 			r8 = pal[v * 3], g8 = pal[v * 3 + 1], b8 = pal[v * 3 + 2];
@@ -173,7 +185,7 @@ static PIC *from_samples(const unsigned char *s, long n, long sw, long sh, int b
 	long *xs;
 
 	row_bytes = (sw * comps * bpc + 7) / 8;
-	if ((bpc != 1 && bpc != 8) || (nc == 4 && bpc != 8) || sw <= 0 || sh <= 0) {
+	if (!(bpc == 1 || bpc == 8 || ((bpc == 2 || bpc == 4) && comps == 1)) || (nc == 4 && bpc != 8) || sw <= 0 || sh <= 0) {
 		*why = PIC_UNSUPPORTED;
 		return NULL;
 	}
@@ -405,7 +417,7 @@ static int rows_samples(PDOC *d, POBJ *o, long obj, long sw, long sh, int bpc, i
 	SMK m;
 	int ok = 1;
 
-	if ((bpc != 1 && bpc != 8) || (nc == 4 && bpc != 8) || sw <= 0 || sh <= 0) {
+	if (!(bpc == 1 || bpc == 8 || ((bpc == 2 || bpc == 4) && comps == 1)) || (nc == 4 && bpc != 8) || sw <= 0 || sh <= 0) {
 		*why = PIC_UNSUPPORTED;
 		return 0;
 	}
@@ -605,6 +617,100 @@ static int rows_jpeg(PDOC *d, POBJ *o, long obj, int w, int h, PIMG_ROW row, voi
 	if (r > 0)
 		*why = PIC_OK;
 	return r;
+}
+
+int pdf_image_palette(PDOC *d, long obj, unsigned char *pal, int *n)
+{
+	POBJ *o = pdf_get(d, obj), *fl;
+	int hival = 0, nc;
+
+	if (!o || o->t != PO_DICT)
+		return 0;
+	fl = pd_get(d, o, "Filter");
+	if (fl && fl->t == PO_ARR && fl->a)
+		fl = pdf_res(d, pa_at(fl, fl->a - 1));
+	if (fl && fl->t == PO_NAME && strcmp(fl->u.p, "FlateDecode") && strcmp(fl->u.p, "Fl"))
+		return 0;			/* (a JPEG, a scan: not samples of a palette) */
+	if (pd_get(d, o, "ImageMask") || pd_get(d, o, "Decode"))
+		return 0;
+	nc = colours(d, pd_get(d, o, "ColorSpace"), pal, &hival);
+	if (nc < 0) {
+		*n = hival + 1;
+		return 1;
+	}
+	if (nc == 1 && pd_int(d, o, "BitsPerComponent", 8) == 1) {
+		pal[0] = pal[1] = pal[2] = 0;
+		pal[3] = pal[4] = pal[5] = 255;
+		*n = 2;
+		return 1;
+	}
+	return 0;
+}
+
+int pdf_image_raw_rows(PDOC *d, long obj, void (*row)(void *u, long y, const unsigned char *r), void *u,
+		       long max_bytes, int *why)
+{
+	POBJ *o = pdf_get(d, obj);
+	long sw, sh, rbytes, y;
+	int bpc, nc, hival = 0, ok = 1;
+	unsigned char pal[256 * 3], *rb;
+	PCSRC *src;
+	SBUF whole;
+
+	*why = PIC_DAMAGED;
+	if (!o || o->t != PO_DICT)
+		return 0;
+	sw = pd_int(d, o, "Width", 0);
+	sh = pd_int(d, o, "Height", 0);
+	bpc = (int)pd_int(d, o, "BitsPerComponent", 8);
+	nc = colours(d, pd_get(d, o, "ColorSpace"), pal, &hival);
+	if (sw <= 0 || sh <= 0 || nc == 0)
+		return 0;
+	rbytes = (sw * (nc < 0 ? 1 : nc) * bpc + 7) / 8;
+	sb_init(&whole);
+	src = pdf_stream_open(d, o, obj);
+	if (!src) {
+		const char *term = NULL;
+		long oom = d->st.oom;
+
+		if (pdf_stream(d, o, obj, &whole, &term, max_bytes) != 0 || term || rbytes * sh > whole.len) {
+			*why = term ? PIC_UNSUPPORTED : stream_why(d, &whole, max_bytes, oom);
+			sb_free(&whole);
+			return 0;
+		}
+	}
+	rb = src ? malloc((size_t)rbytes) : NULL;
+	if (src && !rb) {
+		*why = PIC_MEMORY;
+		pdf_stream_close(src);
+		return 0;
+	}
+	for (y = 0; y < sh; y++) {
+		if (src) {
+			long got = 0, k;
+
+			while (got < rbytes && (k = pdf_stream_read(src, rb + got, rbytes - got)) > 0)
+				got += k;
+			if (got < rbytes) {
+				ok = 0;
+				break;
+			}
+			row(u, y, rb);
+		} else
+			row(u, y, (const unsigned char *)whole.s + y * rbytes);
+		if ((y & 15) == 15 && !poll_ok()) {
+			*why = PIC_STOPPED;
+			ok = 0;
+			break;
+		}
+	}
+	free(rb);
+	if (src)
+		pdf_stream_close(src);
+	sb_free(&whole);
+	if (ok)
+		*why = PIC_OK;
+	return ok;
 }
 
 int pdf_image_rows(PDOC *d, long obj, int w, int h, PIMG_ROW row, void *u, long max_bytes, int *why)

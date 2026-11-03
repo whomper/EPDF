@@ -594,9 +594,14 @@ static int convert_page(CV *c, long n)
 			free(d);
 		}
 		if (c->o->pages == CV_PAGES_COLOUR) {
-			unsigned char pal[16][3];
+			/* TOS's 16 colours, in their registers' order: EPDF shows
+			   the page with each colour's pen, no dither of its own */
+			static const unsigned char pal[16][3] = {
+				{ 255, 255, 255 }, { 255, 0, 0 }, { 0, 255, 0 }, { 255, 255, 0 }, { 0, 0, 255 },
+				{ 255, 0, 255 }, { 0, 255, 255 }, { 187, 187, 187 }, { 136, 136, 136 }, { 170, 0, 0 },
+				{ 0, 170, 0 }, { 170, 170, 0 }, { 0, 0, 170 }, { 170, 0, 170 }, { 0, 170, 170 }, { 0, 0, 0 } };
 			long rb4 = (r->c.w + 1) / 2;
-			int nc = quant(r->c.px, (long)r->c.w * r->c.h, 16, pal, NULL);
+			int nc = 16;
 
 			d = nc ? malloc((size_t)rb4 * r->c.h) : NULL;
 			if (d) {

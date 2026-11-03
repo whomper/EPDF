@@ -23,6 +23,7 @@ line names it. GEMPROF_DEBUG adds debugger commands at each break.
 """
 import importlib.util
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -49,6 +50,7 @@ ACTIONS = {
     "copy": ("Copy", lambda r: r.key("ctrl+c")),      # (after selall: the selection copied)
     "lines": ("View > The page's lines", lambda r: r.menu(184, 60)),
     "about": ("About box", lambda r: r.menu(36, 28)),
+    "pages": ("View > Pages", lambda r: r.menu(184, 76)),     # (a converted PDF: GEMPROF_PDF)
 }
 
 
@@ -72,7 +74,10 @@ def main(argv):
         subprocess.run([sys.executable, os.path.join(TOP, "tools", "prgsyms.py"), elf, os.path.join(TOP, "build", "aprof", "EPDF.PRG"),
                         os.path.join(r.hd, "EPDF", "EPDF.PRG")], check=True, stdout=subprocess.DEVNULL)
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
-        make_pdf(os.path.join(r.hd, "BOOK.PDF"), book(30))
+        if os.environ.get("GEMPROF_PDF"):         # another document (a converted PDF for "pages")
+            shutil.copy(os.environ["GEMPROF_PDF"], os.path.join(r.hd, "BOOK.PDF"))
+        else:
+            make_pdf(os.path.join(r.hd, "BOOK.PDF"), book(30))
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\BOOK.PDF\n")
         r.start("C:\\LAUNCH.PRG")
         time.sleep(120 if machine.startswith("ST") else 60)      # the reading done

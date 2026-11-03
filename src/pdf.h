@@ -151,6 +151,7 @@ typedef struct pdoc {
 	/* the page being read: how far through its content streams, in
 	   thousandths (their stored bytes read; a progress bar's) */
 	int page_prog;
+	int prepared;			/* a converted PDF (EConvert's, docs/CONVERTED-PDF.md): its version, 0 none */
 	char err[96];
 } PDOC;
 
@@ -206,6 +207,16 @@ long pdf_pages(PDOC *d);			/* page count; -1 if the tree is broken */
 /* page n (0-based): its dict with Resources, MediaBox, Rotate inherited
    into *res, *box (4 numbers as an array) and *rot; NULL if none */
 POBJ *pdf_page(PDOC *d, long n, POBJ **res, POBJ **box, long *rot);
+
+/* ------------------------------------------------------------------ converted PDFs */
+/* a converted page's prepared parts (PDOC.prepared): its text as EPDF's
+   store keeps it (the Atari character set, soft breaks as CR) into text,
+   and its whole pictures' objects (-1 none) and size in points */
+typedef struct {
+	long mono, colour;
+	long w, h;
+} PPREP;
+int pdf_prepared_page(PDOC *d, long n, SBUF *text, PPREP *pp);
 
 /* ------------------------------------------------------------------ text */
 typedef struct {

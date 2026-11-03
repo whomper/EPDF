@@ -36,6 +36,7 @@ static const MBAR_ITEM view_items[] = {
 	{ "Font...", "\x01^F", CMD_FONT },
 	{ "-", NULL, CMD_NONE },
 	{ "The page's lines", NULL, CMD_LINES },
+	{ "Pages", NULL, CMD_PAGES },
 	{ NULL, NULL, CMD_NONE }
 };
 

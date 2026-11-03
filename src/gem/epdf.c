@@ -210,10 +210,11 @@ static long find_left;			/* pages it may still look at */
    every step of a selection dragged) */
 static void menu_states(void)
 {
-	static const short cmd[5] = { CMD_COPY, CMD_SELALL, CMD_FIND, CMD_FINDNEXT, CMD_FINDPREV };
-	static signed char was[5] = { -1, -1, -1, -1, -1 };
+	static const short cmd[6] = { CMD_COPY, CMD_SELALL, CMD_FIND, CMD_FINDNEXT, CMD_FINDPREV, CMD_PAGES };
+	static signed char was[6] = { -1, -1, -1, -1, -1, -1 };
+	static signed char tick = -1;
 	DOCVIEW *v = doc_view();
-	signed char now[5];
+	signed char now[6];
 	int i;
 
 	menus_due = 0;
@@ -222,11 +223,16 @@ static void menu_states(void)
 	now[0] = v && v->sel_p0 >= 0;
 	now[1] = now[2] = v != NULL;
 	now[3] = now[4] = v && find_text[0];
-	for (i = 0; i < 5; i++)
+	now[5] = doc_has_pages() != 0;		/* (greyed for a file without its pages whole) */
+	for (i = 0; i < 6; i++)
 		if (now[i] != was[i]) {
 			menu_ienable(menu.tree, mbar_object(&menu, cmd[i]), now[i]);
 			was[i] = now[i];
 		}
+	if (doc_pages_mode() != tick) {
+		tick = (signed char)doc_pages_mode();
+		menu_icheck(menu.tree, mbar_object(&menu, CMD_PAGES), tick);
+	}
 }
 
 static void select_span(long p0, long o0, long p1, long o1)
@@ -687,6 +693,17 @@ static void command(int c)
 			win_draw_all();
 		}
 		break;
+	case CMD_PAGES:
+		/* a converted PDF's pages whole, or their text (a tick: the pages) */
+		if (!doc_has_pages())
+			break;
+		doc_set_pages(!doc_pages_mode());
+		if (has_menu)
+			menu_icheck(menu.tree, mbar_object(&menu, CMD_PAGES), doc_pages_mode());
+		log_event("pages", doc_pages_mode() ? "1" : "0", NULL);
+		win_layout();
+		win_draw_all();
+		break;
 	case CMD_LINES:
 		lines_mode = !lines_mode;
 		if (has_menu)
@@ -886,6 +903,8 @@ static int read_on(void)
 	if (n < 0)
 		return 0;
 	arrived = n;
+	if (doc_prepared())
+		menus_due = 1;		/* (View > Pages greyed until a page whole has come; no AES call unless it changes) */
 	return 1;
 }
 
