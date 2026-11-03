@@ -236,6 +236,27 @@ typedef struct {
 #define PIMG_V 1
 #define PIMG_H 2
 
+/* a renderer's hooks (EConvert's page pictures): with PTEXT.draw set, the
+   interpreter reads every operator's operands and hands over what the
+   page draws. Coordinates are page points (16.16, y up) after the CTM */
+typedef struct {
+	void *u;
+	/* every operator but the text's (BT ET T* Tj TJ ' " Tf Tc Tw Tz TL Tr Ts
+	   Td TD Tm) and Do: its name (NUL-terminated), its number operands in
+	   order (arrays' numbers included, 16.16), its last name operand or
+	   NULL, the CTM and the resources in force; q and Q come too (and
+	   around a form XObject) */
+	void (*op)(void *u, const char *op, const fx *num, int n, const char *name, const fx *ctm, POBJ *res);
+	/* a glyph shown: its font (the program's object and kind as PGLYPH's,
+	   the font's name), its code and its character (0 none), the matrix
+	   from its 1000-unit em square... as 16.16 for one unit: a, b, c, d
+	   (the font size, Tz and Tm by the CTM) and its origin e, f; mode: Tr */
+	void (*glyph)(void *u, long prog, int kind, const char *base, int comp, uint32_t code, uint32_t uni,
+		      const fx *m, int mode);
+	/* an image XObject drawn with the CTM (the unit square) */
+	void (*image)(void *u, long obj, const fx *ctm);
+} PDRAW;
+
 typedef struct {
 	SBUF text;			/* the page's text, UTF-8 */
 	PIMG img[64];			/* with rec set: the pictures drawn */
@@ -255,6 +276,7 @@ typedef struct {
 	int pics;			/* set by the caller: each picture drawn (an image XObject)
 					   gets a line of its own where it stands among the lines,
 					   "\x7F<object> <width>x<height>" (its size in points) */
+	const PDRAW *draw;		/* set by the caller: a renderer's hooks, or NULL */
 	int soft;			/* set by the caller: a line that goes on in the next ends
 					   in '\v' (a paragraph's soft break), else in '\n' */
 } PTEXT;

@@ -1327,6 +1327,9 @@ typedef struct {
 	SBUF txt;
 	OP *ops;			/* the operands of the operator being read: a TJ array can have thousands */
 	long nops, opcap;
+	int all_ops;			/* every operator's operands made (a renderer's); else only
+					   those the text reads (run_content_in) */
+	int in_bt;			/* in a text object (BT ... ET) */
 	unsigned char *sb;
 	long sbcap, sblen;
 	/* the page's content a piece at a time (run_content_pieces): the
@@ -1341,6 +1344,7 @@ typedef struct {
 	long forms_run;
 	fx rm[4];			/* the chunk being shown: origin x, y and the advance direction */
 	fx rfs;
+	fx gm[4];			/* with a renderer: a glyph's em unit to the page (PDRAW.glyph) */
 	fx page_area;			/* the page's width x height / 65536 (points squared, 16.16) */
 	int glyphwise;			/* the page set a glyph at a time with its spaces as characters (emit_line) */
 } IX;
@@ -1505,6 +1509,18 @@ static fx show_run(IX *x, const unsigned char *s, long n, long *glyphs)
 			}
 		}
 		(*glyphs)++;
+		if (x->t->draw && x->t->draw->glyph) {
+			fx gmx[6];
+
+			gmx[0] = x->gm[0];
+			gmx[1] = x->gm[1];
+			gmx[2] = x->gm[2];
+			gmx[3] = x->gm[3];
+			gmx[4] = x->rm[0] + fxmul(adv, x->rm[2]);
+			gmx[5] = x->rm[1] + fxmul(adv, x->rm[3]);
+			x->t->draw->glyph(x->t->draw->u, f ? f->prog : -1, f ? f->pkind : 4, f ? f->base : NULL,
+					  f ? f->composite : 0, code, m ? u[0] : 0, gmx, g->mode);
+		}
 		if (x->t->rec && m && f) {
 			PTEXT *pt = x->t;
 
@@ -1589,6 +1605,14 @@ static void show_text(IX *x, int from, int to)
 	x->rm[2] = m[0];
 	x->rm[3] = m[1];
 	x->rfs = fsz;
+	if (x->t->draw) {
+		fx h = fxmul(g->fs, g->th);
+
+		x->gm[0] = fxmul(h, m[0]);
+		x->gm[1] = fxmul(h, m[1]);
+		x->gm[2] = fxmul(g->fs, m[2]);
+		x->gm[3] = fxmul(g->fs, m[3]);
+	}
 	for (i = from; i < to; i++) {
 		OP *o = &x->ops[i];
 
@@ -1723,6 +1747,8 @@ static void do_xobject(IX *x, const char *name)
 				strncpy(im->filter, fn ? fn : "", sizeof im->filter - 1);
 				im->filter[sizeof im->filter - 1] = 0;
 			}
+			if (x->t->draw && x->t->draw->image)
+				x->t->draw->image(x->t->draw->u, onum, x->gs.ctm);
 			d->st.images++;
 			d->st.image_px += w * h;
 			d->st.image_raw += len > 0 ? len : 0;
@@ -1758,7 +1784,11 @@ static void do_xobject(IX *x, const char *name)
 				x->res = fres;
 			if (pdf_stream(d, o, onum, &b, &term, 16L << 20) == 0 && !term) {
 				x->depth++;
+				if (x->t->draw)
+					x->t->draw->op(x->t->draw->u, "q", NULL, 0, NULL, x->gs.ctm, x->res);
 				run_content(x, (const unsigned char *)b.s, b.len);
+				if (x->t->draw)
+					x->t->draw->op(x->t->draw->u, "Q", NULL, 0, NULL, x->gs.ctm, save_res);
 				x->depth--;
 			}
 			sb_free(&b);
@@ -1897,7 +1927,7 @@ static int run_content(IX *x, const unsigned char *s, long n)
 #define CWIN 16384L
 #define CMARGIN 4096L
 #define REFILL_PIECE 2048L		/* the content unpacked between stop hooks */
-#define CSENT 'x'			/* after the window's bytes: no class (ccls), ends nums_run's runs */
+#define CSENT 'x'			/* after the window's bytes: no class (ccls), ends run_of's runs */
 
 typedef struct CPIECES {
 	PDOC *d;
@@ -2047,7 +2077,7 @@ static void refill(IX *x, const unsigned char **pp, const unsigned char **pe)
 	}
 	*pp = w;
 	*pe = w + keep + got;
-	w[keep + got] = CSENT;		/* nums_run's sentinel (the window has a byte for it) */
+	w[keep + got] = CSENT;		/* run_of's sentinel (the window has a byte for it) */
 }
 
 static int run_content_pieces(IX *x, POBJ *cont, POBJ *ref)
@@ -2102,9 +2132,11 @@ static int run_content_pieces(IX *x, POBJ *cont, POBJ *ref)
 #define CC_WHITE 1			/* is_white_c */
 #define CC_NUM 2			/* 0-9 . + -: a number's run */
 #define CC_OPEND 4			/* ends an operator: white, / [ ] ( < % */
+#define CC_PATH 8			/* a path operator of one letter: m l c v y h */
+#define CC_PAINT 16			/* a painting one: S s f F B b n */
 static unsigned char ccls[256];
 /* the same, one class a table (nonzero in it): what run_of looks up */
-static unsigned char cwhite[256], cnum[256];
+static unsigned char cwhite[256], cnum[256], cwn[256];
 
 static void ccls_init(void)
 {
@@ -2119,9 +2151,14 @@ static void ccls_init(void)
 			k |= CC_NUM;
 		if (c == '/' || c == '[' || c == ']' || c == '(' || c == '<' || c == '%')
 			k |= CC_OPEND;
+		if (c && strchr("mlcvyh", c))
+			k |= CC_PATH;
+		if (c && strchr("SsfFBbn", c))
+			k |= CC_PAINT;
 		ccls[c] = k;
 		cwhite[c] = (k & CC_WHITE) != 0;
 		cnum[c] = (k & CC_NUM) != 0;
+		cwn[c] = (k & (CC_WHITE | CC_NUM)) != 0;
 	}
 }
 
@@ -2148,8 +2185,74 @@ static inline const unsigned char *run_of(const unsigned char *q, const unsigned
 }
 
 /*
- * Numbers and the white space between them, from p: a map's content is
- * mostly that ("12.5 300.25 l"), and a turn of run_content_in's loop, with
+ * The numbers in [a, b) (with white space between: b is at the token after
+ * them) made operands, kept as their bytes (num_val reads one when wanted).
+ * run_content_in passes over a run of numbers and white space in one scan
+ * (run_of) and makes its operands only when what follows reads them: a
+ * map's content is mostly path operators ("12.5 300.25 l"), whose numbers
+ * the text never needs; an operand made for each number was a third of a
+ * map's page on an ST (3 Nov 2026).
+ */
+/* an operator handed to the renderer (PDRAW.op), but the text's own */
+static void draw_op(IX *x, const unsigned char *op, int len, unsigned code)
+{
+	fx num[64];
+	const char *name = NULL;
+	char nm[4];
+	int n = 0;
+	long i;
+
+	switch (code) {
+	case OPK('B', 'T'): case OPK('E', 'T'): case OPK('T', '*'): case OPK('T', 'j'): case OPK('T', 'J'):
+	case OPK(0, '\''): case OPK(0, '"'): case OPK('T', 'f'): case OPK('T', 'c'): case OPK('T', 'w'):
+	case OPK('T', 'z'): case OPK('T', 'L'): case OPK('T', 'r'): case OPK('T', 's'): case OPK('T', 'd'):
+	case OPK('T', 'D'): case OPK('T', 'm'): case OPK('D', 'o'):
+		return;
+	default:
+		break;
+	}
+	for (i = 0; i < x->nops; i++) {
+		OP *o = &x->ops[i];
+
+		if (o->k == K_NUM && n < 64)
+			num[n++] = num_val(o);
+		else if (o->k == K_NAME)
+			name = (const char *)o->s;
+	}
+	memcpy(nm, op, (size_t)len);
+	nm[len] = 0;
+	x->t->draw->op(x->t->draw->u, nm, num, n, name, x->gs.ctm, x->res);
+}
+
+static void nums_push(IX *x, const unsigned char *a, const unsigned char *b)
+{
+	const unsigned char *cls = ccls;
+
+	while (a < b) {
+		const unsigned char *q;
+
+		if (cls[*a] & CC_WHITE) {
+			a++;
+			continue;
+		}
+		for (q = a + 1; q < b && (cls[*q] & CC_NUM); q++)
+			;
+		if (x->nops < x->opcap || op_grow(x)) {
+			OP *o = &x->ops[x->nops++];
+
+			o->k = K_NUM;	/* (f: num_val sets it when it reads s) */
+			o->s = a;
+			o->n = q - a;
+		}
+		a = q;
+	}
+}
+
+/*
+ * Numbers and the white space between them, from p, made operands as they
+ * are passed over: in a text object (BT ... ET), where most numbers are
+ * read (Td, Tm, TJ's), one scan, not run_of's and then nums_push's (that
+ * was 3 % of a text page on an ST). A turn of run_content_in's loop, with
  * its refill, slice and stop tests, was some 200 cycles a token on a
  * 68000. Up to 32 numbers, and not past lim (a token never straddles a
  * refill); where it stopped, *cc the class of the last character looked at
@@ -2224,8 +2327,8 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 	if (!ccls[' '])
 		ccls_init();
 	for (;;) {
-		unsigned char c, cc;
-		const unsigned char *lim;
+		unsigned char c;
+		const unsigned char *run;
 
 		if (more && e - p < CMARGIN) {
 			refill(x, &p, &e);
@@ -2243,15 +2346,67 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 		if (d->stopping)
 			return -1;
 
-		/* numbers and white space (nums_run), then the token after them */
-		lim = more ? e - CMARGIN : e;
-		p = x->src ? nums_run(x, p, e, lim, 1, &cc) : nums_run(x, p, e, lim, 0, &cc);
-		/* the last one read a number or white space (it moved on): the
-		   top (refill, the end, the hook); else it stopped at a token
-		   of another kind, read here whatever lim says */
-		if (cc & (CC_WHITE | CC_NUM))
-			continue;
+		/* a run of numbers and white space, passed over; then the token
+		   after it. Its numbers are made operands (nums_push) only before
+		   a token that isn't an operator, or an operator that reads them */
+		if (x->in_bt || x->all_ops) {
+			unsigned char cc;
+			const unsigned char *lim = more ? e - CMARGIN : e;
+
+			p = x->src ? nums_run(x, p, e, lim, 1, &cc) : nums_run(x, p, e, lim, 0, &cc);
+			if (cc & (CC_WHITE | CC_NUM))
+				continue;	/* (the top: refill, the end, the hook) */
+			run = p;
+		} else {
+			run = p;
+			if (x->src)
+				p = run_of(p, cwn);	/* (stops at the window's sentinel at e) */
+			else
+				while (p < e && cwn[*p])
+					p++;
+			if (p >= e) {
+				if (!more) {
+					if (x->all_ops)
+						nums_push(x, run, e);
+					break;
+				}
+				/* the window's end in the run: its last token may go on
+				   in the bytes to come; the rest made operands, then the
+				   window topped up from that token */
+				while (p > run && !cwhite[p[-1]])
+					p--;
+				if (p == run && e - run > CMARGIN)
+					p = e;		/* (a number longer than the margin: cut) */
+				nums_push(x, run, p);
+				refill(x, &p, &e);
+				more = !x->src_end;
+				continue;
+			}
+		}
 		c = *p;
+		if (p > run) {
+			int reads = 1;
+
+			if (!x->all_ops && !(ccls[c] & CC_OPEND) && c != ')' && c != '>' && c != '{' && c != '}')
+				/* an operator: of those the text reads, only cm and
+				   the text operators (T., ") take numbers */
+				reads = c == 'T' || c == '"' || (c == 'c' && p[1] == 'm' && (ccls[p[2]] & CC_OPEND));
+			if (reads)
+				nums_push(x, run, p);
+		}
+		/* a path's operator of one letter, the most of a map's: no
+		   operands to read, nothing for the text (the switch below
+		   tests its codes one after another) */
+		if ((ccls[c] & (CC_PATH | CC_PAINT)) && !x->all_ops && p + 1 < e && (ccls[p[1]] & CC_OPEND)) {
+			if (ccls[c] & CC_PATH)
+				d->st.ops_path++;
+			else
+				d->st.ops_paint++;
+			p++;
+			x->nops = 0;
+			x->sblen = 0;
+			continue;
+		}
 		if (c == '%') {
 			while (p < e && *p != '\n' && *p != '\r')
 				p++;
@@ -2440,8 +2595,10 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 			case OPK('B', 'T'):
 				mat_copy(x->tm, IDENT);
 				mat_copy(x->tlm, IDENT);
+				x->in_bt = 1;
 				break;
 			case OPK('E', 'T'):
+				x->in_bt = 0;
 				break;
 			case OPK('T', 'c'): x->gs.tc = opnum(x, x->nops - 1); break;
 			case OPK('T', 'w'): x->gs.tw = opnum(x, x->nops - 1); break;
@@ -2519,6 +2676,8 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 			default:
 				break;
 			}
+			if (x->t->draw && len > 0 && len < 4)
+				draw_op(x, p - len, len, code);
 			if (len == 2 && p[-2] == 'B' && p[-1] == 'I') {
 				/* inline image: skip to EI (read a piece at a time, the
 				   window topped up as the search runs out of it, the last
@@ -3422,6 +3581,7 @@ int pdf_page_text(PDOC *d, long n, PTEXT *t)
 	long rot;
 
 	memset(&x, 0, sizeof x);
+	x.all_ops = t->draw != NULL;
 	x.d = d;
 	x.t = t;
 	d->stopping = 0;
