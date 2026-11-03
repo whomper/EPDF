@@ -1515,6 +1515,7 @@ static fx show_run(IX *x, const unsigned char *s, long n, long *glyphs)
 			}
 		}
 		(*glyphs)++;
+#ifdef PDF_DRAW
 		if (x->t->draw && x->t->draw->glyph) {
 			fx gmx[6];
 
@@ -1527,6 +1528,7 @@ static fx show_run(IX *x, const unsigned char *s, long n, long *glyphs)
 			x->t->draw->glyph(x->t->draw->u, f ? f->prog : -1, f ? f->pkind : 4, f ? f->base : NULL,
 					  f ? f->composite : 0, code, m ? u[0] : 0, gmx, g->mode);
 		}
+#endif
 		if (x->t->rec && m && f) {
 			PTEXT *pt = x->t;
 
@@ -1611,6 +1613,7 @@ static void show_text(IX *x, int from, int to)
 	x->rm[2] = m[0];
 	x->rm[3] = m[1];
 	x->rfs = fsz;
+#ifdef PDF_DRAW
 	if (x->t->draw) {
 		fx h = fxmul(g->fs, g->th);
 
@@ -1619,6 +1622,7 @@ static void show_text(IX *x, int from, int to)
 		x->gm[2] = fxmul(g->fs, m[2]);
 		x->gm[3] = fxmul(g->fs, m[3]);
 	}
+#endif
 	for (i = from; i < to; i++) {
 		OP *o = &x->ops[i];
 
@@ -1765,8 +1769,10 @@ static void do_xobject(IX *x, const char *name)
 				strncpy(im->filter, fn ? fn : "", sizeof im->filter - 1);
 				im->filter[sizeof im->filter - 1] = 0;
 			}
+#ifdef PDF_DRAW
 			if (x->t->draw && x->t->draw->image)
 				x->t->draw->image(x->t->draw->u, onum, x->gs.ctm);
+#endif
 			d->st.images++;
 			d->st.image_px += w * h;
 			d->st.image_raw += len > 0 ? len : 0;
@@ -1802,11 +1808,15 @@ static void do_xobject(IX *x, const char *name)
 				x->res = fres;
 			if (pdf_stream(d, o, onum, &b, &term, 16L << 20) == 0 && !term) {
 				x->depth++;
+#ifdef PDF_DRAW
 				if (x->t->draw)
 					x->t->draw->op(x->t->draw->u, "q", NULL, 0, NULL, x->gs.ctm, x->res);
+#endif
 				run_content(x, (const unsigned char *)b.s, b.len);
+#ifdef PDF_DRAW
 				if (x->t->draw)
 					x->t->draw->op(x->t->draw->u, "Q", NULL, 0, NULL, x->gs.ctm, save_res);
+#endif
 				x->depth--;
 			}
 			sb_free(&b);
@@ -2211,6 +2221,7 @@ static inline const unsigned char *run_of(const unsigned char *q, const unsigned
  * the text never needs; an operand made for each number was a third of a
  * map's page on an ST (3 Nov 2026).
  */
+#ifdef PDF_DRAW
 /* an operator handed to the renderer (PDRAW.op), but the text's own */
 static void draw_op(IX *x, const unsigned char *op, int len, unsigned code)
 {
@@ -2241,6 +2252,7 @@ static void draw_op(IX *x, const unsigned char *op, int len, unsigned code)
 	nm[len] = 0;
 	x->t->draw->op(x->t->draw->u, nm, num, n, name, x->gs.ctm, x->res);
 }
+#endif
 
 static void nums_push(IX *x, const unsigned char *a, const unsigned char *b)
 {
@@ -2694,8 +2706,10 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 			default:
 				break;
 			}
+#ifdef PDF_DRAW
 			if (x->t->draw && len > 0 && len < 4)
 				draw_op(x, p - len, len, code);
+#endif
 			if (len == 2 && p[-2] == 'B' && p[-1] == 'I') {
 				/* inline image: skip to EI (read a piece at a time, the
 				   window topped up as the search runs out of it, the last
@@ -3648,7 +3662,9 @@ int pdf_page_text(PDOC *d, long n, PTEXT *t)
 	long rot;
 
 	memset(&x, 0, sizeof x);
+#ifdef PDF_DRAW
 	x.all_ops = t->draw != NULL;
+#endif
 	x.d = d;
 	x.t = t;
 	d->stopping = 0;

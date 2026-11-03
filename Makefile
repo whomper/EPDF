@@ -205,7 +205,7 @@ build/host-lj/%.o: $(LJ)/src/%.c
 CPIC_SRC = src/pdfimg.c src/ccitt.c src/rscale.c common/src/pic.c common/src/png.c common/src/pic_lj8.c \
            common/third_party/nsgif/src/gif.c common/third_party/nsgif/src/lzw.c
 build/econvert: tools/econvert.c $(CONV_SRC) src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(CPIC_SRC) $(HFT_OBJS) $(HLJ_OBJS) $(HDRS) src/conv/*.h | build
-	$(CC) $(HCFLAGS) -Isrc/conv -I$(FT)/include '-DFT_CONFIG_OPTIONS_H="epdf/ftoption.h"' '-DFT_CONFIG_MODULES_H="epdf/ftmodule.h"' -I$(FT) \
+	$(CC) $(HCFLAGS) -DPDF_DRAW -Isrc/conv -I$(FT)/include '-DFT_CONFIG_OPTIONS_H="epdf/ftoption.h"' '-DFT_CONFIG_MODULES_H="epdf/ftmodule.h"' -I$(FT) \
 	  $(LJ_DEFS) -Icommon/third_party/nsgif/include -Icommon/third_party/nsgif/src \
 	  -o $@ tools/econvert.c $(CONV_SRC) src/conv/cvio_host.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(CPIC_SRC) $(HFT_OBJS) $(HLJ_OBJS)
 

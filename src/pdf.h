@@ -240,7 +240,8 @@ typedef struct {
 
 /* a renderer's hooks (EConvert's page pictures): with PTEXT.draw set, the
    interpreter reads every operator's operands and hands over what the
-   page draws. Coordinates are page points (16.16, y up) after the CTM */
+   page draws. Coordinates are page points (16.16, y up) after the CTM.
+   Only in a build with -DPDF_DRAW (EConvert's: EPDF has no use for them) */
 typedef struct {
 	void *u;
 	/* every operator but the text's (BT ET T* Tj TJ ' " Tf Tc Tw Tz TL Tr Ts
