@@ -242,6 +242,23 @@ at first. This section is kept up to date: the build, the tests, what a release 
   About 185 of its 200) and 0.6 went out on 3 Nov (v0.6 on cae2ef5f). Known: 0xFA reads low in TOS
   1.04's and NVDI's fonts, near a full stop (a centred one, if those fonts have it, later). Next: the
   maps' remaining cost (inflate_fast with the hub; the content loop), ST:med's page third band.
+  1.0 went out on 3 Nov (v1.0 on 6033667ab; resident 427,332): the content loop's numbers on
+  register copies inside BT…ET (nums_run), CC_PATH/CC_PAINT's fast path, ST:med's band; on ST
+  map-europe 40.7 -> 36.0 s, map-timezones 116 -> 102, map-physical-world 210 -> 181.
+  1.1 ("Complete work to bring it to 1.1 with converter", 3 Nov) under way: EPDF reads a converted
+  PDF (`docs/CONVERTED-PDF.md`; pdf_prepared_page, PDOC.prepared) with the Optimised badge
+  (v_rfbox, pen 3, black in mono) and View > Pages (a menu toggle, Erez's choice; CMD_PAGES,
+  doc_set_pages: the page's picture lines in the store); pics.c's direct pen path, raw rows and
+  mono_masks (a page's picture on ST 39 -> 7.5 s). EConvert (`src/conv/`, `src/econv/`,
+  ECONVERT.PRG, 68030 soft-float): the renderer (raster.c's coverage fills, render.c's FreeType
+  glyphs with a cache, Liberation 2.1.5 in `third_party/liberation/`), deflate, quant (Bayer),
+  jpegenc (photos 256 colours by default or JPEG, a per-batch setting: Erez), the window with two
+  progbars, Help at epdf.hyp's "EConvert"; the job on its own stack, turns within 50 (9b370af3a:
+  the job's turns 155 -> 40, Stop 210 -> 50 on Falcon-4). Rigs: tests/hatari/prepared.py,
+  econv.py, econv_speed.py (`make econv-speed-test`), tests/convtext.py in `make test`. Erez asked
+  (3 Nov) when the exact layout comes: answered 1.1's View > Pages via EConvert, and stage 2 (the
+  page drawn by EPDF on a Falcon/TT, EConvert's renderer) as his decision after 1.1; his answer is
+  pending. Later: JPX (OpenJPEG) and JBIG2, gateway mode with AERA-Gateway.
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
   checks: `tools/nofpu.sh`); decode streams with `inflate_open`/`inflate_read` so a page needn't fit
   in memory; reuse `common/atari/dspjpeg.c` with `PIC_LIBJPEG` for JPEG on the Falcon; a progressive

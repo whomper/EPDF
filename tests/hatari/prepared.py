@@ -35,6 +35,14 @@ def differ(a, b):
     return sum(1 for p in d.getdata() if p != (0, 0, 0))
 
 
+def park(r):
+    """the pointer to the same place before a shot that is compared (the
+    menu's click left it where the first shot hadn't it)"""
+    g = dict(l.split("=") for l in r.xdo("getwindowgeometry", "--shell", r.win()).split())
+    r.xdo("mousemove", str(int(g["X"]) + 630), str(int(g["Y"]) + 390))
+    time.sleep(0.5)
+
+
 def run(work, machine):
     r = speed.Rig(os.path.join(work, machine.replace(":", "_")), machine, display=os.environ.get("XDISPLAY", ":91"))
     bad = []
@@ -59,6 +67,7 @@ def run(work, machine):
             bad.append("not every page read: %d" % con.count("EPDF page "))
         if " failed" in "".join(l for l in con.splitlines() if "EPDF page " in l):
             bad.append("a page failed")
+        park(r)
         r.still()
         text = r.shot("text")
         # View: the menu bar's " View " title at 160-207; its items 16 pixels
@@ -73,6 +82,7 @@ def run(work, machine):
             bad.append("View > Pages: the window didn't change")
         r.menu(184, 76)
         time.sleep(3)
+        park(r)
         r.still()
         again = r.shot("text-again")
         if differ(text, again) > 0:
