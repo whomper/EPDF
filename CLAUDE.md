@@ -237,7 +237,11 @@ at first. This section is kept up to date: the build, the tests, what a release 
   filling left to right, blues on 256 colours, pens 1-15 on 16, black elsewhere) as the status bar's
   line: progbar_pens once after the workstation opens, progbar_fill from what was drawn to now in
   PB_FULLths (bar_fill/bar_unfill); this session's progbar fix for EmuTOS's ST high (both pens read
-  white: AERA-Atari 3ed8fb6). Resident 425,608.
+  white: AERA-Atari 3ed8fb6). Resident 425,608. The hub cleared b697b3314 (acc_all on ST:mono,
+  Falcon-4:16 plain and NVDI, twice booted; speed.py all within, ST:mono next page 180, About 140; ST:med
+  About 185 of its 200) and 0.6 went out on 3 Nov (v0.6 on cae2ef5f). Known: 0xFA reads low in TOS
+  1.04's and NVDI's fonts, near a full stop (a centred one, if those fonts have it, later). Next: the
+  maps' remaining cost (inflate_fast with the hub; the content loop), ST:med's page third band.
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
   checks: `tools/nofpu.sh`); decode streams with `inflate_open`/`inflate_read` so a page needn't fit
   in memory; reuse `common/atari/dspjpeg.c` with `PIC_LIBJPEG` for JPEG on the Falcon; a progressive
