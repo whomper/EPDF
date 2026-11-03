@@ -180,6 +180,35 @@ endef
 $(eval $(call FT_BUILD,m68000))
 $(eval $(call FT_BUILD,m68030))
 FT_OBJS = $(patsubst $(FT)/src/%.c,ft/%.o,$(filter $(FT)/src/%,$(FT_SRC))) ft/epdf/ftsystem.o ft/setjmp.o
+
+# EConvert's converter on this computer (src/conv/, FreeType built for the host in build/host-ft)
+CONV_SRC = src/conv/conv.c src/conv/render.c src/conv/raster.c src/conv/cvjpeg.c src/conv/deflate.c src/conv/quant.c common/src/charset.c
+HFT_OBJS = $(patsubst $(FT)/src/%.c,build/host-ft/%.o,$(filter $(FT)/src/%,$(FT_SRC))) build/host-ft/epdf/ftsystem.o
+build/host-ft/%.o: $(FT)/src/%.c
+	@mkdir -p $(dir $@)
+	@$(CC) -O2 -DFT2_BUILD_LIBRARY '-DFT_CONFIG_OPTIONS_H="epdf/ftoption.h"' '-DFT_CONFIG_MODULES_H="epdf/ftmodule.h"' \
+	  -I$(FT)/include -I$(FT) -I$(dir $<) -w -c -o $@ $<
+build/host-ft/epdf/%.o: $(FT)/epdf/%.c
+	@mkdir -p $(dir $@)
+	@$(CC) -O2 -DFT2_BUILD_LIBRARY '-DFT_CONFIG_OPTIONS_H="epdf/ftoption.h"' '-DFT_CONFIG_MODULES_H="epdf/ftmodule.h"' \
+	  -I$(FT)/include -I$(FT) -w -c -o $@ $<
+# its pictures through libjpeg-turbo (CMYK and progressive JPEGs too: pic.c's PIC_LIBJPEG, EWeb's)
+LJ       := common/third_party/libjpeg-turbo
+LJ_C     := jaricom jcomapi jdapimin jdapistd jdarith jdcoefct jdcolor jddctmgr jdhuff jdinput jdmainct jdmarker \
+            jdmaster jdmerge jdphuff jdpostct jdsample jdtrans jidctfst jidctint jidctred jmemmgr jmemnobs \
+            jquant1 jquant2 jutils
+LJ_DEFS  := -DPIC_LIBJPEG -DNO_GETENV -DNO_PUTENV -DAERA_NO_FLOAT -I$(LJ)/src -I$(LJ)/config
+HLJ_OBJS = $(addprefix build/host-lj/,$(addsuffix .o,$(LJ_C)))
+build/host-lj/%.o: $(LJ)/src/%.c
+	@mkdir -p $(dir $@)
+	@$(CC) -O2 -w $(LJ_DEFS) -c -o $@ $<
+CPIC_SRC = src/pdfimg.c src/ccitt.c src/rscale.c common/src/pic.c common/src/png.c common/src/pic_lj8.c \
+           common/third_party/nsgif/src/gif.c common/third_party/nsgif/src/lzw.c
+build/econvert: tools/econvert.c $(CONV_SRC) src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(CPIC_SRC) $(HFT_OBJS) $(HLJ_OBJS) $(HDRS) src/conv/*.h | build
+	$(CC) $(HCFLAGS) -Isrc/conv -I$(FT)/include '-DFT_CONFIG_OPTIONS_H="epdf/ftoption.h"' '-DFT_CONFIG_MODULES_H="epdf/ftmodule.h"' -I$(FT) \
+	  $(LJ_DEFS) -Icommon/third_party/nsgif/include -Icommon/third_party/nsgif/src \
+	  -o $@ tools/econvert.c $(CONV_SRC) src/conv/cvio_host.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(CPIC_SRC) $(HFT_OBJS) $(HLJ_OBJS)
+
 FTTEST_SRC = atari/fttest.c src/pdfio_tos.c $(COMMON_SRC) $(RT_C)
 build/m68000/atari/fttest.o build/m68030/atari/fttest.o: XFLAGS += $(FT_DEFS) $(FT_INC)
 

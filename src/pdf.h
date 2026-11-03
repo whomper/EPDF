@@ -228,6 +228,8 @@ typedef struct {
 	long w, h;			/* pixels */
 	fx dw, dh;			/* the size it is drawn at, page points */
 	fx top;				/* its top edge on the page (page points, y up) */
+	fx left;			/* its left edge */
+	char cut;			/* a box of PTEXT.cut's, not an image */
 	char filter[16];
 	char flip;			/* PIMG_V: drawn upside down (its first row at the bottom),
 					   PIMG_H: mirrored, by its placing (Calamus SL's) */
@@ -277,6 +279,12 @@ typedef struct {
 					   gets a line of its own where it stands among the lines,
 					   "\x7F<object> <width>x<height>" (its size in points) */
 	const PDRAW *draw;		/* set by the caller: a renderer's hooks, or NULL */
+	/* set by the caller: boxes on the page (x0 y0 x1 y1 each, page points,
+	   y up) whose text and pictures are left out, each given a picture's
+	   line with its object number cut_obj[i] instead (EConvert's drawings) */
+	const fx *cut;
+	const long *cut_obj;
+	int ncut;
 	int soft;			/* set by the caller: a line that goes on in the next ends
 					   in '\v' (a paragraph's soft break), else in '\n' */
 } PTEXT;
@@ -284,6 +292,8 @@ void ptext_init(PTEXT *t);
 void ptext_free(PTEXT *t);
 /* run page n's content and set its text in reading order */
 int pdf_page_text(PDOC *d, long n, PTEXT *t);
+/* Helvetica's width of a WinAnsi code, in thousandths of an em (0 none) */
+int pdf_helv_width(int code);
 
 /* ------------------------------------------------------------------ fixed point */
 #if defined(__mc68000__) && !defined(__mc68020__)

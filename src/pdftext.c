@@ -1277,6 +1277,11 @@ static PFONT *font_get(PDOC *d, POBJ *fref, PTEXT *t)
 	return f;
 }
 
+int pdf_helv_width(int code)
+{
+	return code >= 32 && code < 256 ? stdw_helv[code - 32] : 0;
+}
+
 void pdf_text_cleanup(PDOC *d)
 {
 	FCACHE *fc = d->fc;
@@ -1345,6 +1350,7 @@ typedef struct {
 	fx rm[4];			/* the chunk being shown: origin x, y and the advance direction */
 	fx rfs;
 	fx gm[4];			/* with a renderer: a glyph's em unit to the page (PDRAW.glyph) */
+	fx run0;			/* the advance before the string being shown (a TJ's earlier items) */
 	fx page_area;			/* the page's width x height / 65536 (points squared, 16.16) */
 	int glyphwise;			/* the page set a glyph at a time with its spaces as characters (emit_line) */
 } IX;
@@ -1516,8 +1522,8 @@ static fx show_run(IX *x, const unsigned char *s, long n, long *glyphs)
 			gmx[1] = x->gm[1];
 			gmx[2] = x->gm[2];
 			gmx[3] = x->gm[3];
-			gmx[4] = x->rm[0] + fxmul(adv, x->rm[2]);
-			gmx[5] = x->rm[1] + fxmul(adv, x->rm[3]);
+			gmx[4] = x->rm[0] + fxmul(x->run0 + adv, x->rm[2]);
+			gmx[5] = x->rm[1] + fxmul(x->run0 + adv, x->rm[3]);
 			x->t->draw->glyph(x->t->draw->u, f ? f->prog : -1, f ? f->pkind : 4, f ? f->base : NULL,
 					  f ? f->composite : 0, code, m ? u[0] : 0, gmx, g->mode);
 		}
@@ -1536,8 +1542,8 @@ static fx show_run(IX *x, const unsigned char *s, long n, long *glyphs)
 			if (pt->ngl < pt->capgl) {
 				PGLYPH *gp = &pt->gl[pt->ngl++];
 
-				gp->x = x->rm[0] + fxmul(adv, x->rm[2]);
-				gp->y = x->rm[1] + fxmul(adv, x->rm[3]);
+				gp->x = x->rm[0] + fxmul(x->run0 + adv, x->rm[2]);
+				gp->y = x->rm[1] + fxmul(x->run0 + adv, x->rm[3]);
 				gp->size = x->rfs;
 				gp->uni = f->composite ? code : u[0];
 				gp->comp = f->composite;
@@ -1616,8 +1622,10 @@ static void show_text(IX *x, int from, int to)
 	for (i = from; i < to; i++) {
 		OP *o = &x->ops[i];
 
-		if (o->k == K_STR)
+		if (o->k == K_STR) {
+			x->run0 = tadv;
 			tadv += show_run(x, o->s, o->n, &glyphs);
+		}
 		else if (o->k == K_NUM) {
 			/* thousandths of an em, subtracted; a wide one is a space between words */
 			int32_t n1000 = num_val(o) >> 16;
@@ -1738,6 +1746,16 @@ static void do_xobject(IX *x, const char *name)
 					if (c[0] < 0)
 						im->flip |= PIMG_H;
 				}
+				{
+					fx x0 = c[4], x1 = c[4] + c[0], x2 = c[4] + c[2], x3 = c[4] + c[0] + c[2];
+
+					im->left = x0 < x1 ? x0 : x1;
+					if (x2 < im->left)
+						im->left = x2;
+					if (x3 < im->left)
+						im->left = x3;
+				}
+				im->cut = 0;
 				/* the unit square's highest corner */
 				im->top = y0 > y1 ? y0 : y1;
 				if (y2 > im->top)
@@ -3120,6 +3138,53 @@ static void pic_line(PTEXT *t, const PIMG *im)
 	sb_adds(o, b);
 }
 
+/* within one of the caller's boxes (PTEXT.cut) */
+static int in_cut(const PTEXT *t, fx px, fx py)
+{
+	int i;
+
+	for (i = 0; i < t->ncut; i++) {
+		const fx *b = t->cut + 4 * i;
+
+		if (px >= b[0] && px <= b[2] && py >= b[1] && py <= b[3])
+			return 1;
+	}
+	return 0;
+}
+
+/* the text and pictures in the caller's boxes left out, a picture's line
+   for each box in their place (EConvert: a drawing made a picture, its
+   labels in it) */
+static void cut_out(IX *x, PTEXT *t)
+{
+	long i, j = 0;
+	int k, m = 0;
+
+	for (i = 0; i < x->nch; i++)
+		if (!in_cut(t, x->ch[i].x, x->ch[i].y))
+			x->ch[j++] = x->ch[i];
+	x->nch = j;
+	for (k = 0; k < t->nimg; k++) {
+		const PIMG *im = &t->img[k];
+
+		if (!in_cut(t, im->left + im->dw / 2, im->top - im->dh / 2))	/* (by its middle) */
+			t->img[m++] = *im;
+	}
+	t->nimg = m;
+	for (k = 0; k < t->ncut && t->nimg < 64; k++) {
+		PIMG *im = &t->img[t->nimg++];
+		const fx *b = t->cut + 4 * k;
+
+		memset(im, 0, sizeof *im);
+		im->obj = t->cut_obj[k];
+		im->dw = b[2] - b[0];
+		im->dh = b[3] - b[1];
+		im->top = b[3];
+		im->left = b[0];
+		im->cut = 1;
+	}
+}
+
 /* a line of the page: chunks [a, b), its baseline, size and extent */
 typedef struct {
 	long a, b;
@@ -3399,6 +3464,8 @@ static void assemble(IX *x, PTEXT *t)
 	LN *ln;
 	int pstart = 1;		/* the line before began a paragraph */
 
+	if (t->ncut > 0)
+		cut_out(x, t);
 	if (x->nch == 0) {
 		/* a page of pictures alone (a scan): their lines only */
 		if (t->pics) {
@@ -3414,7 +3481,7 @@ static void assemble(IX *x, PTEXT *t)
 		int i, j = 0;
 
 		for (i = 0; i < t->nimg; i++)
-			if ((fxmul(t->img[i].dw, t->img[i].dh >> 8) >> 8) * 5 < x->page_area * 3)
+			if (t->img[i].cut || (fxmul(t->img[i].dw, t->img[i].dh >> 8) >> 8) * 5 < x->page_area * 3)
 				t->img[j++] = t->img[i];
 		t->nimg = j;
 	}
