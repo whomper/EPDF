@@ -76,8 +76,9 @@ build/test_tstore build/test_docview: build/test_%: tests/test_%.c $(VIEW_TEST_S
 build/test_xe: tests/test_xe.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HDRS) | build
 	$(CC) $(HCFLAGS) -fsanitize=address,undefined -o $@ tests/test_xe.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC)
 
-test: build/test_xe build/test_ccitt build/test_textview build/test_inf build/test_tstore build/test_docview build/test_search build/pdftext
+test: build/test_xe build/test_ccitt build/test_textview build/test_inf build/test_tstore build/test_docview build/test_search build/pdftext build/econvert
 	build/test_xe
+	python3 tests/convtext.py
 	python3 tests/ccitt.py
 	python3 tests/glyphwise.py
 	python3 tests/crypt.py
@@ -88,6 +89,7 @@ test: build/test_xe build/test_ccitt build/test_textview build/test_inf build/te
 	build/test_search
 	@if [ -f build/m68000/epdf.elf ]; then python3 common/tools/oddaccess.py build/m68000/epdf.elf; fi
 	tools/nofpu.sh build/m68000/epdf.elf build/m68030/measure.elf build/m68030/fttest.elf
+	@if [ -f build/m68030/econvert.elf ]; then tools/nofpu.sh build/m68030/econvert.elf; fi
 measure: build/pdfmeasure
 	@echo "see tools/measure.py"
 clean:
@@ -411,11 +413,17 @@ binary/EPDF.HYP: docs/GUIDE.md tools/mkhelp.py VERSION docs/front.json docs/help
 DIST  := binary/EPDF.PRG binary/EPDF.HYP binary/EPDF.REF NOTICES.TXT
 ICONS := icons/EPDF.RSC icons/EPDFNV.RSC icons/EPDF.ICN icons/EPDFMK.ICN icons/EPDFDOC.RSC icons/EPDFDNV.RSC
 lc = $(shell echo '$(notdir $(1))' | tr A-Z a-z)
-dist: binary/EPDF.PRG help
+# EConvert (a 68030's): its program and the standard fonts it draws with
+# (third_party/liberation, the OFL's text beside them), in the zip's econvert folder
+EC_DIST    := binary/ECONVERT.PRG
+EC_FONTS   := $(wildcard third_party/liberation/fonts/*.ttf) third_party/liberation/OFL.txt
+dist: binary/EPDF.PRG binary/ECONVERT.PRG help
 	rm -rf dist
-	mkdir -p dist/zip/icons
+	mkdir -p dist/zip/icons dist/zip/econvert/fonts
 	$(foreach f,$(DIST),cp $(f) dist/$(call lc,$(f)) && cp $(f) dist/zip/$(call lc,$(f)) &&) true
 	$(foreach f,$(ICONS),cp $(f) dist/$(call lc,$(f)) && cp $(f) dist/zip/icons/$(call lc,$(f)) &&) true
+	$(foreach f,$(EC_DIST),cp $(f) dist/$(call lc,$(f)) && cp $(f) dist/zip/econvert/$(call lc,$(f)) &&) true
+	$(foreach f,$(EC_FONTS),cp $(f) dist/$(call lc,$(f)) && cp $(f) dist/zip/econvert/fonts/$(call lc,$(f)) &&) true
 	cd dist/zip && zip -q -9 -r ../epdf-$(VERSION_STR).zip .
 	rm -rf dist/zip
 	@up=$$(find dist -name '*[A-Z]*'; unzip -Z1 dist/epdf-$(VERSION_STR).zip | grep '[A-Z]'); \

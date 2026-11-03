@@ -805,6 +805,22 @@ static FT_Face face_for(RPAGE *r, long prog, const char *base)
 				 fam[file[1] == 'a' ? 0 : file[1] == 'e' ? 1 : 2], st);
 			f->e[v].buf = read_file(path, &f->e[v].len);
 		}
+		if (!f->e[v].buf) {
+			/* an italic face the release doesn't carry: the upright one
+			   (sansi.ttf -> sans.ttf, sansz.ttf -> sansb.ttf) */
+			char up[48], *d;
+
+			snprintf(up, sizeof up, "%s", file);
+			d = strchr(up, '.');
+			if (d && (d[-1] == 'i' || d[-1] == 'z')) {
+				if (d[-1] == 'z')
+					d[-1] = 'b';
+				else
+					memmove(d - 1, d, strlen(d) + 1);
+				snprintf(path, sizeof path, "%s%c%s", r->fontdir, sep, up);
+				f->e[v].buf = read_file(path, &f->e[v].len);
+			}
+		}
 	}
 	if (!f->e[v].buf || FT_New_Memory_Face(f->lib, f->e[v].buf, f->e[v].len, 0, &f->e[v].face)) {
 		f->e[v].face = NULL;

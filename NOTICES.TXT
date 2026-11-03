@@ -133,6 +133,68 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 
+EConvert
+--------
+
+ECONVERT.PRG, the AERA PDF converter, is part of EPDF and under the same
+licence (GPL-2.0-or-later). Besides 1. to 5. it carries the following.
+
+
+6. FreeType (the fonts' glyphs), version 2.13.3
+-----------------------------------------------
+
+Portions of this software are copyright (C) 2024 The FreeType Project
+(www.freetype.org). All rights reserved. FreeType is distributed under the
+FreeType Licence or the GNU General Public License, version 2; EConvert
+takes it under the GPL, version 2.
+
+
+7. libjpeg-turbo (JPEG pictures read), version 3.1.4
+----------------------------------------------------
+
+This software is based in part on the work of the Independent JPEG Group.
+Copyright (C) 1991-2020, Thomas G. Lane, Guido Vollbeding.
+Copyright (C) 2009-2026 D. R. Commander. All Rights Reserved.
+Copyright (C) 2015 Viktor Szathmary. All Rights Reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+- Redistributions of source code must retain the above copyright notice,
+  this list of conditions and the following disclaimer.
+- Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+- Neither the name of the libjpeg-turbo Project nor the names of its
+  contributors may be used to endorse or promote products derived from this
+  software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS",
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+
+The IJG licence's text is in the source, common/third_party/libjpeg-turbo/
+README.ijg.
+
+
+8. The Liberation fonts (fonts\ beside ECONVERT.PRG), version 2.1.5
+-------------------------------------------------------------------
+
+Digitized data copyright (c) 2010 Google Corporation with Reserved Font
+Arimo, Tinos and Cousine. Copyright (c) 2012 Red Hat, Inc. with Reserved
+Font Name Liberation. Licensed under the SIL Open Font License, Version
+1.1, whose text is fonts\ofl.txt. They are the unchanged faces, named
+sans.ttf, sansb.ttf, serif.ttf, serifb.ttf, mono.ttf and monob.ttf.
+
+
 Trademarks
 ----------
 

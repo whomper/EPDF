@@ -18,6 +18,7 @@
 #include "render.h"
 #include "conv.h"
 #include "pic.h"
+#include "charset.h"
 
 static int ppm(const RCANVAS *c, const char *path)
 {
@@ -69,6 +70,36 @@ int main(int argc, char **argv)
 		}
 	}
 	o.fontdir = fonts;
+	if (argc == 4 && !strcmp(argv[1], "--store")) {
+		/* a page's text as EPDF's store keeps it: a converted file's as it
+		   is, another's read and made so (the tests: the two the same) */
+		PDOC d;
+		PTEXT t;
+		PPREP pp;
+		long n = atol(argv[3]) - 1, len = 0, i;
+		char *a = NULL;
+
+		if (pdf_open(&d, argv[2]))
+			return 1;
+		ptext_init(&t);
+		t.soft = 1;
+		t.pics = 1;
+		if (d.prepared) {
+			if (pdf_prepared_page(&d, n, &t.text, &pp))
+				return 1;
+			fwrite(t.text.s, 1, (size_t)t.text.len, stdout);
+		} else {
+			pdf_page_text(&d, n, &t);
+			for (i = 0; i < t.text.len; i++)
+				if (t.text.s[i] == '\v')
+					t.text.s[i] = '\r';
+			if (t.text.len)
+				a = cs_to_atari(t.text.s, t.text.len, CS_UTF8, &len);
+			if (a)
+				fwrite(a, 1, (size_t)len, stdout);
+		}
+		return 0;
+	}
 	if (getenv("ECONV_JPEG")) {	/* (a test: a JPEG file through pic_decode) */
 		long size = 0;
 		void *h = pdf_os_open(getenv("ECONV_JPEG"), &size);
