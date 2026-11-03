@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "deflate.h"
+#include "conv.h"
 
 #define WSIZE 32768
 #define WMASK (WSIZE - 1)
@@ -402,7 +403,9 @@ int zdeflate(const unsigned char *d, long n, SBUF *out)
 			sy[ns].len = (unsigned short)best;
 			sy[ns].dist = (unsigned short)bd;
 			ns++;
-			for (j = i + 1; j < i + best && j + MINM <= n; j++) {
+			/* a long match's bytes aren't looked up later (white runs
+			   of a page: each byte hashed was most of the time) */
+			for (j = i + 1; j < i + best && j < i + 32 && j + MINM <= n; j++) {
 				unsigned long h = HASH(d + j);
 
 				prev[j & WMASK] = head[h];
@@ -415,6 +418,8 @@ int zdeflate(const unsigned char *d, long n, SBUF *out)
 			ns++;
 			i++;
 		}
+		if ((ns & 4095) == 4095 && cv_turn)
+			cv_turn();
 		if (ns == BLOCK) {
 			block(&w, sy, ns, 0);
 			ns = 0;

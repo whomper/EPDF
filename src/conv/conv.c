@@ -29,6 +29,24 @@
 #define NDRAW 16			/* drawings a page at most */
 #define DRAW_ID 900000000L		/* a drawing's number in the text until it has its object */
 
+int (*cv_turn)(void);
+static const CVOPT *turn_o;
+static int stopped;
+
+/* the caller's turn (CVOPT.turn), for the loops and the reader's stop hook */
+static int turn_now(void)
+{
+	if (!stopped && turn_o && turn_o->turn && turn_o->turn(turn_o->u))
+		stopped = 1;
+	return stopped;
+}
+
+static int reader_turn(void *ctx)
+{
+	(void)ctx;
+	return turn_now();
+}
+
 void cv_defaults(CVOPT *o)
 {
 	memset(o, 0, sizeof *o);
@@ -483,11 +501,35 @@ static long layout(const char *t, long n, int fs, long wid, long top, const XPIC
 	return top - y;
 }
 
+/* a page with colour on it (a pixel in four, each row in four; a few
+   red words aren't): one without has no colour picture, EPDF shows its
+   mono one (a novel's 330 pages in 16 colours were 22 MB) */
+static int has_colour(const RCANVAS *cv)
+{
+	long y, x, n = 0;
+
+	for (y = 0; y < cv->h; y += 4)
+		for (x = 0; x < cv->w; x += 4) {
+			uint16_t p = cv->px[y * cv->w + x];
+			int r = R8(p), g = G8(p), b = B8(p), mx = r > g ? r : g, mn = r < g ? r : g;
+
+			mx = b > mx ? b : mx;
+			mn = b < mn ? b : mn;
+			if (mx - mn > 48 && ++n >= 200)
+				return 1;
+		}
+	return 0;
+}
+
 static int stop_asked(CV *c, long page, long sub)
 {
+	if (stopped || turn_now())
+		return 1;
 	if (!c->o->progress)
 		return 0;
-	return c->o->progress(c->o->u, page * 1000 + sub, c->npages * 1000);
+	if (c->o->progress(c->o->u, page * 1000 + sub, c->npages * 1000))
+		stopped = 1;
+	return stopped;
 }
 
 static int convert_page(CV *c, long n)
@@ -638,7 +680,7 @@ static int convert_page(CV *c, long n)
 			w_stream(w, mono, dict, d, rb * r->c.h);
 			free(d);
 		}
-		if (c->o->pages == CV_PAGES_COLOUR) {
+		if (c->o->pages == CV_PAGES_COLOUR && has_colour(&r->c)) {
 			/* TOS's 16 colours, in their registers' order: EPDF shows
 			   the page with each colour's pen, no dither of its own */
 			static const unsigned char pal[16][3] = {
@@ -746,6 +788,11 @@ int cv_convert(const char *in, const char *out, const CVOPT *o, CVSTAT *st, char
 	}
 	st->pages = c->npages;
 	st->in_bytes = c->d.size;
+	stopped = 0;
+	turn_o = o;
+	cv_turn = turn_now;
+	c->d.stop = reader_turn;	/* (every few operators while a page is read or drawn) */
+	c->d.stop_ctx = c;
 	if (render_init(&c->r, &c->d, o->fontdir)) {
 		snprintf(err, (size_t)errlen, "not enough memory");
 		pdf_close(&c->d);
@@ -772,6 +819,8 @@ int cv_convert(const char *in, const char *out, const CVOPT *o, CVSTAT *st, char
 			break;
 		}
 		rc = convert_page(c, n);
+		if (!rc && stopped)
+			rc = -2;
 	}
 	if (rc)
 		goto done;
@@ -817,6 +866,8 @@ done:
 		snprintf(err, (size_t)errlen, "stopped");
 	render_done(&c->r);
 	pdf_close(&c->d);
+	cv_turn = NULL;
+	turn_o = NULL;
 	free(c->pages);
 	free(c->w.off);
 	free(c->pm);

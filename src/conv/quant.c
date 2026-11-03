@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "quant.h"
+#include "conv.h"
 
 #define R8(c) ((((c) >> 11) << 3) | ((c) >> 13))
 #define G8(c) (((((c) >> 5) & 63) << 2) | (((c) >> 9) & 3))
@@ -153,105 +154,113 @@ static int clamp8(int v)
 	return v < 0 ? 0 : v > 255 ? 255 : v;
 }
 
+/*
+ * The whole pages: an ordered dither (Bayer's 8 x 8), white and black
+ * passed at once (a page is mostly white). Floyd-Steinberg was some 900
+ * cycles a pixel on a Falcon (a page of 640 x 828 in 16 colours, 30 s);
+ * this packs smaller too, its patterns repeating.
+ */
+static const unsigned char bayer[64] = {
+	0, 32, 8, 40, 2, 34, 10, 42, 48, 16, 56, 24, 50, 18, 58, 26, 12, 44, 4, 36, 14, 46, 6, 38, 60, 28, 52, 20,
+	62, 30, 54, 22, 3, 35, 11, 43, 1, 33, 9, 41, 51, 19, 59, 27, 49, 17, 57, 25, 15, 47, 7, 39, 13, 45, 5, 37,
+	63, 31, 55, 23, 61, 29, 53, 21 };
+
 void dither_mono(const uint16_t *px, int w, int h, unsigned char *out)
 {
-	int *e0 = calloc((size_t)w + 2, sizeof *e0), *e1 = calloc((size_t)w + 2, sizeof *e1);
-	int x, y, rb = (w + 7) / 8;
+	unsigned char thr[64];
+	int x, y, rb = (w + 7) / 8, i;
 
+	for (i = 0; i < 64; i++)
+		thr[i] = (unsigned char)(bayer[i] * 4 + 2);
 	memset(out, 0, (size_t)rb * h);
 	for (y = 0; y < h; y++) {
 		const uint16_t *s = px + (long)y * w;
 		unsigned char *o = out + (long)y * rb;
+		const unsigned char *t = thr + (y & 7) * 8;
+
+		if ((y & 31) == 31 && cv_turn)
+			cv_turn();
 
 		for (x = 0; x < w; x++) {
-			int c = s[x], l = (R8(c) * 77 + G8(c) * 150 + B8(c) * 29) >> 8, v, err;
+			int c = s[x];
 
-			v = l + (e0 ? e0[x + 1] / 16 : 0);
-			if (v >= 128) {
-				o[x >> 3] |= (unsigned char)(0x80 >> (x & 7));	/* 1 white */
-				err = v - 255;
-			} else
-				err = v;
-			if (e0) {
-				e0[x + 2] += err * 7;
-				e1[x] += err * 3;
-				e1[x + 1] += err * 5;
-				e1[x + 2] += err;
+			if ((x & 7) == 0 && x + 8 <= w && c == 0xFFFF && s[x + 1] == 0xFFFF && s[x + 2] == 0xFFFF &&
+			    s[x + 3] == 0xFFFF && s[x + 4] == 0xFFFF && s[x + 5] == 0xFFFF && s[x + 6] == 0xFFFF &&
+			    s[x + 7] == 0xFFFF) {
+				o[x >> 3] = 0xFF;	/* eight white pixels: a byte at once */
+				x += 7;
+				continue;
+			}
+			if (c == 0xFFFF)
+				o[x >> 3] |= (unsigned char)(0x80 >> (x & 7));		/* 1 white */
+			else if (c) {
+				int v = (R8(c) * 77 + G8(c) * 150 + B8(c) * 29) >> 8;
+
+				if (v > t[x & 7])
+					o[x >> 3] |= (unsigned char)(0x80 >> (x & 7));
 			}
 		}
-		if (e0) {
-			int *t = e0;
+	}
+}
 
-			e0 = e1;
-			e1 = t;
-			memset(e1, 0, ((size_t)w + 2) * sizeof *e1);
+/* the nearest of pal's n colours (red counting 3, green 4, blue 2) */
+static int nearest(const unsigned char (*pal)[3], int n, int r, int g, int b)
+{
+	int k, best = 0;
+	long bd = -1;
+
+	for (k = 0; k < n; k++) {
+		int dr = r - pal[k][0], dg = g - pal[k][1], db = b - pal[k][2];
+		long d = (long)dr * dr * 3 + (long)dg * dg * 4 + (long)db * db * 2;
+
+		if (bd < 0 || d < bd) {
+			bd = d;
+			best = k;
 		}
 	}
-	free(e0);
-	free(e1);
+	return best;
 }
 
 void dither_pal(const uint16_t *px, int w, int h, const unsigned char (*pal)[3], int n, unsigned char *out)
 {
-	int *e0 = calloc(((size_t)w + 2) * 3, sizeof *e0), *e1 = calloc(((size_t)w + 2) * 3, sizeof *e1);
-	short *inv = malloc(32768 * sizeof *inv);
-	int x, y, rb = (w + 1) / 2;
+	signed char *inv = malloc(32768);
+	int x, y, rb = (w + 1) / 2, white = nearest(pal, n, 255, 255, 255), black = nearest(pal, n, 0, 0, 0);
+	short off[64];
 
+	for (x = 0; x < 64; x++)
+		off[x] = (short)((bayer[x] - 32) * 3);	/* about -96 .. 93: the 16 colours' steps */
 	if (inv)
-		for (x = 0; x < 32768; x++)
-			inv[x] = -1;
+		memset(inv, -1, 32768);
 	memset(out, 0, (size_t)rb * h);
 	for (y = 0; y < h; y++) {
 		const uint16_t *s = px + (long)y * w;
 		unsigned char *o = out + (long)y * rb;
+		const short *t = off + (y & 7) * 8;
+
+		if ((y & 31) == 31 && cv_turn)
+			cv_turn();
 
 		for (x = 0; x < w; x++) {
-			int c = s[x], v[3], k, best = 0, key;
+			int c = s[x], best;
 
-			v[0] = R8(c);
-			v[1] = G8(c);
-			v[2] = B8(c);
-			if (e0)
-				for (k = 0; k < 3; k++)
-					v[k] = clamp8(v[k] + e0[(x + 1) * 3 + k] / 16);
-			key = (v[0] >> 3) << 10 | (v[1] >> 3) << 5 | (v[2] >> 3);
-			if (inv && inv[key] >= 0)
-				best = inv[key];
+			if (c == 0xFFFF)
+				best = white;
+			else if (!c)
+				best = black;
 			else {
-				long bd = -1;
+				int d = t[x & 7], r = clamp8(R8(c) + d), g = clamp8(G8(c) + d), b = clamp8(B8(c) + d);
+				int key = (r >> 3) << 10 | (g >> 3) << 5 | (b >> 3);
 
-				for (k = 0; k < n; k++) {
-					long dr = v[0] - pal[k][0], dg = v[1] - pal[k][1], db = v[2] - pal[k][2];
-					long d = dr * dr * 3 + dg * dg * 4 + db * db * 2;
-
-					if (bd < 0 || d < bd) {
-						bd = d;
-						best = k;
-					}
+				if (inv && inv[key] >= 0)
+					best = inv[key];
+				else {
+					best = nearest(pal, n, r, g, b);
+					if (inv)
+						inv[key] = (signed char)best;
 				}
-				if (inv)
-					inv[key] = (short)best;
 			}
 			o[x >> 1] |= (unsigned char)(x & 1 ? best : best << 4);
-			if (e0)
-				for (k = 0; k < 3; k++) {
-					int err = v[k] - pal[best][k];
-
-					e0[(x + 2) * 3 + k] += err * 7;
-					e1[x * 3 + k] += err * 3;
-					e1[(x + 1) * 3 + k] += err * 5;
-					e1[(x + 2) * 3 + k] += err;
-				}
-		}
-		if (e0) {
-			int *t = e0;
-
-			e0 = e1;
-			e1 = t;
-			memset(e1, 0, ((size_t)w + 2) * 3 * sizeof *e1);
 		}
 	}
-	free(e0);
-	free(e1);
 	free(inv);
 }

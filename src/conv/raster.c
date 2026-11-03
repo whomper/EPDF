@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "raster.h"
+#include "conv.h"
 
 typedef struct REDGE {
 	int32_t y0, y1;			/* top and bottom, 16.16 */
@@ -53,6 +54,10 @@ void rc_clear(RCANVAS *c, uint16_t px)
 {
 	long i, n = (long)c->w * c->h;
 
+	if ((px >> 8) == (px & 255)) {
+		memset(c->px, px & 255, (size_t)n * 2);	/* (white: a long at a time) */
+		return;
+	}
 	for (i = 0; i < n; i++)
 		c->px[i] = px;
 }
@@ -357,6 +362,9 @@ void rc_fill(RCANVAS *c, const RPATH *p, int evenodd, uint16_t col, const RCLIP 
 		return;
 	for (y = k.y0; y < k.y1; y++) {
 		int sub, any = 0;
+
+		if ((y & 63) == 63 && cv_turn)
+			cv_turn();
 		int32_t lo = k.x0 << 16, hi = k.x1 << 16;
 
 		for (sub = 0; sub < SUB; sub++) {

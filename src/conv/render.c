@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include "render.h"
@@ -86,7 +87,26 @@ typedef struct {
 	fx phase;
 } RGS;
 
+/* a glyph's bitmap kept: its face, code and character, the matrix and
+   size it was made at (a page of a novel draws some 80 glyphs 2,000
+   times: FreeType a glyph at a time was 80 s of a page on a Falcon) */
+typedef struct GENT {
+	FT_Face face;
+	uint32_t code, uni;
+	int32_t k[5];
+	short left, top, w, h;
+	unsigned char *bm;		/* w x h, a byte a pixel */
+	struct GENT *next;
+} GENT;
+#define GC_HASH 1021
+#define GC_MAX 1200
+#define GC_BYTES (384L * 1024)
+
 struct RFONTS {
+	GENT *gh[GC_HASH];
+	GENT *pool;			/* GC_MAX of them, given out in turn */
+	int npool;
+	long gbytes;
 	FT_Library lib;
 	struct {
 		long prog;		/* the program's object, or -1 a standard font */
@@ -694,8 +714,10 @@ static const char *std_file(const char *base)
 		fam = "Mono";
 	bold = strstr(base, "Bold") != NULL || strstr(base, "Black") != NULL || strstr(base, "Heavy") != NULL;
 	ital = strstr(base, "Italic") != NULL || strstr(base, "Oblique") != NULL;
-	snprintf(f, sizeof f, "Liberation%s-%s.ttf", fam,
-		 bold && ital ? "BoldItalic" : bold ? "Bold" : ital ? "Italic" : "Regular");
+	/* the file's 8.3 name, as EConvert's release carries it in fonts\
+	   (sans.ttf, sansb.ttf, sansi.ttf, sansz.ttf: bold and italic) */
+	snprintf(f, sizeof f, "%s%s.ttf", fam[0] == 'S' && fam[1] == 'a' ? "sans" : fam[0] == 'S' ? "serif" : "mono",
+		 bold && ital ? "z" : bold ? "b" : ital ? "i" : "");
 	return f;
 }
 
@@ -718,6 +740,17 @@ static unsigned char *read_file(const char *path, long *len)
 	return b;
 }
 
+static void gc_flush(RFONTS *f)
+{
+	int i;
+
+	for (i = 0; i < f->npool; i++)
+		free(f->pool[i].bm);
+	f->npool = 0;
+	f->gbytes = 0;
+	memset(f->gh, 0, sizeof f->gh);
+}
+
 static FT_Face face_for(RPAGE *r, long prog, const char *base)
 {
 	RFONTS *f = r->fonts;
@@ -735,8 +768,10 @@ static FT_Face face_for(RPAGE *r, long prog, const char *base)
 	for (i = 1; i < 24; i++)
 		if (f->e[i].used < f->e[v].used)
 			v = i;
-	if (f->e[v].face)
+	if (f->e[v].face) {
+		gc_flush(f);		/* (its glyphs: a new face may get its address) */
 		FT_Done_Face(f->e[v].face);
+	}
 	free(f->e[v].buf);
 	memset(&f->e[v], 0, sizeof f->e[v]);
 	f->e[v].prog = prog;
@@ -754,9 +789,22 @@ static FT_Face face_for(RPAGE *r, long prog, const char *base)
 	} else {
 		char path[300];
 
+		/* (the folder's own separator: GEMDOS's \, a Unix /) */
+		char sep = strchr(r->fontdir, '\\') ? '\\' : '/';
+
 		snprintf(f->e[v].key, sizeof f->e[v].key, "%s", file);
-		snprintf(path, sizeof path, "%s/%s", r->fontdir, file);
+		snprintf(path, sizeof path, "%s%c%s", r->fontdir, sep, file);
 		f->e[v].buf = read_file(path, &f->e[v].len);
+		if (!f->e[v].buf) {
+			/* Liberation's own names (a Linux system's fonts) */
+			static const char *const fam[3] = { "Sans", "Serif", "Mono" };
+			const char *st = strchr(file, '.')[-1] == 'z' ? "BoldItalic" : strchr(file, '.')[-1] == 'b' ? "Bold" :
+					 strchr(file, '.')[-1] == 'i' ? "Italic" : "Regular";
+
+			snprintf(path, sizeof path, "%s%cLiberation%s-%s.ttf", r->fontdir, sep,
+				 fam[file[1] == 'a' ? 0 : file[1] == 'e' ? 1 : 2], st);
+			f->e[v].buf = read_file(path, &f->e[v].len);
+		}
 	}
 	if (!f->e[v].buf || FT_New_Memory_Face(f->lib, f->e[v].buf, f->e[v].len, 0, &f->e[v].face)) {
 		f->e[v].face = NULL;
@@ -815,11 +863,7 @@ static void glyph_hook(void *u, long prog, int kind, const char *base, int comp,
 		return;
 	}
 	face = face_for(r, prog >= 0 ? prog : -1, base);
-	if (!face || !(gid = glyph_index(face, comp, code, uni))) {
-		r->glyphs_missed++;
-		return;
-	}
-	if (FT_Set_Char_Size(face, 0, (FT_F26Dot6)(sz >> 10), 72, 72)) {
+	if (!face) {
 		r->glyphs_missed++;
 		return;
 	}
@@ -828,23 +872,70 @@ static void glyph_hook(void *u, long prog, int kind, const char *base, int comp,
 	t.xy = (FT_Fixed)((int64_t)m[2] * 65536 / sz);
 	t.yx = (FT_Fixed)(-(int64_t)m[1] * 65536 / sz);
 	t.yy = (FT_Fixed)(-(int64_t)m[3] * 65536 / sz);
-	ox = m[4];
-	oy = m[5];
-	dl.x = (ox & 0xFFFF) >> 10;
-	dl.y = -(FT_Pos)((oy & 0xFFFF) >> 10);
-	FT_Set_Transform(face, &t, &dl);
-	if (FT_Load_Glyph(face, gid, FT_LOAD_NO_BITMAP | FT_LOAD_NO_HINTING) ||
-	    FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL)) {
-		r->glyphs_missed++;
-		return;
-	}
+	/* the origin at a whole pixel (half a pixel off at most, on a page of
+	   640): one bitmap does for every place the glyph comes */
+	ox = (m[4] + 0x8000) >> 16;
+	oy = (m[5] + 0x8000) >> 16;
 	{
-		FT_Bitmap *bm = &face->glyph->bitmap;
+		RFONTS *f = r->fonts;
+		int32_t k[5];
+		unsigned long hv;
+		GENT *e;
 
+		k[0] = t.xx >> 6;
+		k[1] = t.xy >> 6;
+		k[2] = t.yx >> 6;
+		k[3] = t.yy >> 6;
+		k[4] = sz >> 10;
+		hv = ((unsigned long)(uintptr_t)face >> 4) ^ code * 31u ^ uni * 131u ^ (unsigned long)k[4] * 7u ^
+		     (unsigned long)k[0] * 3u;
+		for (e = f->gh[hv % GC_HASH]; e; e = e->next)
+			if (e->face == face && e->code == code && e->uni == uni && !memcmp(e->k, k, sizeof k))
+				break;
+		if (!e) {
+			FT_Bitmap *bm;
+			int y;
+
+			if (!(gid = glyph_index(face, comp, code, uni)) || FT_Set_Char_Size(face, 0, (FT_F26Dot6)(sz >> 10), 72, 72)) {
+				r->glyphs_missed++;
+				return;
+			}
+			dl.x = dl.y = 0;
+			FT_Set_Transform(face, &t, &dl);
+			if (FT_Load_Glyph(face, gid, FT_LOAD_NO_BITMAP | FT_LOAD_NO_HINTING) ||
+			    FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL)) {
+				r->glyphs_missed++;
+				return;
+			}
+			bm = &face->glyph->bitmap;
+			if (bm->pixel_mode != FT_PIXEL_MODE_GRAY)
+				return;
+			if (!f->pool && !(f->pool = malloc(GC_MAX * sizeof *f->pool)))
+				return;
+			if (f->npool == GC_MAX || f->gbytes > GC_BYTES)
+				gc_flush(f);
+			e = &f->pool[f->npool];
+			e->face = face;
+			e->code = code;
+			e->uni = uni;
+			memcpy(e->k, k, sizeof k);
+			e->left = (short)face->glyph->bitmap_left;
+			e->top = (short)face->glyph->bitmap_top;
+			e->w = (short)bm->width;
+			e->h = (short)bm->rows;
+			e->bm = e->w * e->h > 0 ? malloc((size_t)e->w * e->h) : NULL;
+			if (e->w * e->h > 0 && !e->bm)
+				return;
+			for (y = 0; y < e->h; y++)
+				memcpy(e->bm + (long)y * e->w, bm->buffer + (long)y * bm->pitch, (size_t)e->w);
+			f->gbytes += (long)e->w * e->h + (long)sizeof *e;
+			e->next = f->gh[hv % GC_HASH];
+			f->gh[hv % GC_HASH] = e;
+			f->npool++;
+		}
 		/* stroked only (Tr 1, a label's halo): in the stroke's colour */
-		if (bm->pixel_mode == FT_PIXEL_MODE_GRAY && bm->buffer)
-			rc_mask(&r->c, (ox >> 16) + face->glyph->bitmap_left, (oy >> 16) - face->glyph->bitmap_top,
-				bm->buffer, (int)bm->width, (int)bm->rows, bm->pitch,
+		if (e->bm)
+			rc_mask(&r->c, ox + e->left, oy - e->top, e->bm, e->w, e->h, e->w,
 				(mode & 3) == 1 ? g->stroke.col : g->fill.col, &g->clip);
 	}
 }
@@ -936,6 +1027,8 @@ void render_done(RPAGE *r)
 	int i;
 
 	if (r->fonts) {
+		gc_flush(r->fonts);
+		free(r->fonts->pool);
 		for (i = 0; i < 24; i++) {
 			if (r->fonts->e[i].face)
 				FT_Done_Face(r->fonts->e[i].face);

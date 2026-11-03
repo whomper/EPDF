@@ -19,7 +19,15 @@ typedef struct {
 	   thousandths of its pages; 1 stops the conversion */
 	int (*progress)(void *u, long done, long total);
 	void *u;
+	/* asked often while a page is worked (every few operators, rows,
+	   symbols): it may hand the machine back for a while (EConvert's
+	   window: the work on a stack of its own); 1 stops the conversion */
+	int (*turn)(void *u);
 } CVOPT;
+
+/* the turn the long loops (dithers, deflate, fills) ask for; set by
+   cv_convert while it runs (NULL none) */
+extern int (*cv_turn)(void);
 
 typedef struct {
 	long pages, in_bytes, out_bytes, ms;

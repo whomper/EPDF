@@ -131,6 +131,7 @@ endef
 build/m68000/%: XCPU = -m68000 -mstrict-align -fdisable-tree-bswap
 build/m68030/%: XCPU = -m68030 -msoft-float
 build/m68030lj/%: XCPU = -m68030 -msoft-float
+build/m68030cv/%: XCPU = -m68030 -msoft-float
 binary/LAUNCH.PRG: XCPU = -m68000 -mstrict-align -fdisable-tree-bswap
 # the GEM building blocks as the family builds them, for size (at -O2 GCC 13
 # once filled dd.c's char name[] with long moves at an odd stack offset:
@@ -138,6 +139,7 @@ binary/LAUNCH.PRG: XCPU = -m68000 -mstrict-align -fdisable-tree-bswap
 build/m68000/common/ui/%: XOPT = -Os
 $(eval $(call ATARI_BUILD,m68000))
 $(eval $(call ATARI_BUILD,m68030))
+$(eval $(call ATARI_BUILD,m68030cv))
 $(eval $(call ATARI_BUILD,m68030lj))
 
 OBJS = $(patsubst %.c,%.o,$(ATARI_SRC))
@@ -287,6 +289,49 @@ binary/FTTEST30F.PRG: build/m68030/fttest.elf | binary
 atari: binary/EPDF.PRG binary/LAUNCH.PRG
 measure-atari: binary/MEASURE.PRG binary/MEAS30.PRG binary/MEAS30F.PRG
 fttest: binary/FTTEST.PRG binary/FTTEST30.PRG
+
+# ---------------------------------------------------------------- EConvert's converter on a 68030
+# (CONVTEST.PRG, tests/hatari/convtest.py; ECONVERT.PRG's core): the reader with
+# its drawing hooks, the renderer, FreeType, libjpeg-turbo, all soft-float
+CV_ATARI_SRC = $(CONV_SRC) src/conv/cvio_tos.c src/pdfio_tos.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) \
+               src/pdfimg.c src/ccitt.c src/rscale.c common/src/pic.c common/src/png.c common/src/pic_lj8.c \
+               $(T)/nsgif/src/gif.c $(T)/nsgif/src/lzw.c $(LJ_SRC) $(RT_C)
+build/m68030cv/%.o: XFLAGS += -DPDF_DRAW -DPIC_LIBJPEG -DNO_GETENV -DNO_PUTENV -DAERA_NO_FLOAT -fwrapv -I$(LJ)/src -I$(LJ)/config \
+                              -I$(T)/nsgif/include -I$(T)/nsgif/src -Isrc/conv $(FT_INC) '-DFT_CONFIG_OPTIONS_H="epdf/ftoption.h"' \
+                              '-DFT_CONFIG_MODULES_H="epdf/ftmodule.h"'
+build/m68030cv/$(LJ)/%.o build/m68030cv/$(T)/%.o: XFLAGS += -w
+build/m68030cv/common/src/inflate.o build/m68030cv/src/pdffilt.o: XFLAGS += -DINFLATE_ASM
+CV_ATARI_OBJ = $(addprefix build/m68030cv/,$(patsubst %.c,%.o,$(CV_ATARI_SRC))) build/m68030/inflate_fast.o \
+               $(addprefix build/m68030/,$(FT_OBJS))
+binary/CONVTEST.PRG: XCPU = -m68030 -msoft-float
+binary/CONVTEST.PRG: $(CV_ATARI_OBJ) build/m68030cv/atari/convtest.o build/m68030/crt0.o build/m68030/nf.o common/atari/link.ld | binary
+	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
+	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68030/convtest.elf \
+	  build/m68030/crt0.o build/m68030/nf.o build/m68030cv/atari/convtest.o $(CV_ATARI_OBJ) -lgcc
+	PRGFLAGS=7 python3 common/tools/elf2tos.py build/m68030/convtest.elf $@
+
+# ---------------------------------------------------------------- ECONVERT.PRG (the converter's window)
+EC_GEM_SRC = src/econv/econvert.c src/gem/gemui.c src/view/inf.c common/atari/gem.c common/atari/crash.c \
+             common/ui/mbar.c common/ui/aboutbox.c common/ui/aboutline.c common/ui/alert.c common/ui/dialog.c \
+             common/ui/field.c common/ui/av.c common/ui/text.c common/ui/help.c common/ui/dd.c common/ui/progbar.c \
+             common/ui/click.c common/ui/clip.c common/ui/accmem.c common/src/bidi.c
+$(patsubst %.c,build/m68030cv/%.o,$(EC_GEM_SRC)): XFLAGS += -Isrc/gem -Isrc/view -Icommon/ui -Isrc/conv
+build/m68030cv/version.o: build/m68000/version.c | build/m68030cv
+	$(XCC) $(XFLAGS) -c -o $@ $<
+build/m68030cv/coro.o: src/gem/coro.S | build/m68030cv
+	$(XCC) -m68030 -c -o $@ $<
+build/m68030cv/crash_s.o: common/atari/crash.S | build/m68030cv
+	$(XCC) -m68030 -c -o $@ $<
+build/m68030cv/crt0_ec.o: common/atari/crt0.S | build/m68030cv
+	$(XCC) -m68030 -DSTACK_SIZE=16384 -c -o $@ $<
+EC_OBJS = $(patsubst %.c,build/m68030cv/%.o,$(EC_GEM_SRC) common/src/charset.c) $(filter-out build/m68030cv/common/src/charset.o,$(CV_ATARI_OBJ)) \
+          build/m68030cv/version.o
+binary/ECONVERT.PRG: XCPU = -m68030 -msoft-float
+binary/ECONVERT.PRG: $(EC_OBJS) build/m68030cv/crt0_ec.o build/m68030/nf.o build/m68030cv/crash_s.o build/m68030cv/coro.o common/atari/link.ld | binary
+	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
+	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68030/econvert.elf \
+	  build/m68030cv/crt0_ec.o build/m68030/nf.o build/m68030cv/crash_s.o build/m68030cv/coro.o $(EC_OBJS) -lgcc
+	PRGFLAGS=7 python3 common/tools/elf2tos.py build/m68030/econvert.elf $@
 
 # ---------------------------------------------------------------- EPDF.PRG (the GEM program)
 # one build for every machine (68000); the text view of the pages
