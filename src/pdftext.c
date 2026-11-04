@@ -1574,7 +1574,10 @@ static fx show_run(IX *x, const unsigned char *s, long n, long *glyphs)
 static int ch_room(IX *x)
 {
 	if (x->nch == x->capch) {
-		long cap = x->capch ? x->capch * 2 : 256;
+		/* by half again (doubling had the old and the new, three times
+		   what was in it, at the moment it grew: a page set a glyph at a
+		   time came to 344 KB there) */
+		long cap = x->capch ? x->capch + (x->capch >> 1) : 256;
 		CH *q = pdf_realloc(x->d, x->ch, x->capch * (long)sizeof(CH), cap * (long)sizeof(CH));
 
 		if (!q)
@@ -3474,7 +3477,7 @@ static long columns(IX *x, LN *ln, long nl)
  */
 static void assemble(IX *x, PTEXT *t)
 {
-	long i, j, nl = 0, k, turn = 0;
+	long i, j, nl = 0, k, turn = 0, nln;
 	LN *ln;
 	int pstart = 1;		/* the line before began a paragraph */
 
@@ -3570,7 +3573,23 @@ static void assemble(IX *x, PTEXT *t)
 		x->glyphwise = chars < 3 * x->nch && spaces * 20 >= x->nch;	/* a space a word or so */
 	}
 	ch_sort(x->d, x->ch, x->nch, ch_cmp_y);
-	ln = pdf_malloc(x->d, 2 * x->nch * (long)sizeof(LN));	/* lines split at a gutter: twice as many at most */
+	/* the lines counted first (the loop below's grouping), twice as many
+	   kept (split at a gutter: two at most): a page set a glyph at a time
+	   had twice its glyphs' room, 217 KB of EDOS_01.PDF's page 3 */
+	nln = 0;
+	for (i = 0; i < x->nch; i = j) {
+		fx y0 = x->ch[i].y, fsm = x->ch[i].fs;
+
+		j = i + 1;
+		while (j < x->nch && fxabs(x->ch[j].y - y0) < (fsm >> 1) + 1) {
+			if (x->ch[j].fs > fsm)
+				fsm = x->ch[j].fs;
+			j++;
+		}
+		nln++;
+	}
+	nln *= 2;
+	ln = pdf_malloc(x->d, nln * (long)sizeof(LN));
 	if (!ln)
 		return;
 	for (i = 0; i < x->nch; i = j) {
@@ -3652,7 +3671,7 @@ static void assemble(IX *x, PTEXT *t)
 	sb_addc(&t->text, '\n');
 	while (t->pics && t->pnext < t->nimg)
 		pic_line(t, &t->img[t->pnext++]);
-	pdf_free(x->d, ln, 2 * x->nch * (long)sizeof(LN));
+	pdf_free(x->d, ln, nln * (long)sizeof(LN));
 }
 
 int pdf_page_text(PDOC *d, long n, PTEXT *t)
