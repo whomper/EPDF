@@ -20,6 +20,7 @@ typedef struct {
 	long off;			/* in the pool when < pool_len and in_ram, else in the file */
 	long len;			/* -1: not extracted yet */
 	char in_ram;
+	char pics;			/* its text holds a picture's line (ts_set_pics) */
 } TSPAGE;
 
 typedef struct {
@@ -44,6 +45,12 @@ int ts_put(TSTORE *s, long n, const char *text, long len);
    valid until the next ts_get or ts_put */
 const char *ts_get(TSTORE *s, long n, long *len);
 int ts_have(const TSTORE *s, long n);
+/* page n's text where it is in memory (the pool or a slot), else NULL:
+   no file read, no slot taken (pictures ahead look only there) */
+const char *ts_peek(const TSTORE *s, long n, long *len);
+/* page n holds pictures (the reader counted their lines), and asked */
+void ts_set_pics(TSTORE *s, long n, int pics);
+int ts_pics(const TSTORE *s, long n);
 /* memory given back when the reader or a picture is refused it: the pool
    written to the cache file and cut to keep bytes, the slots freed (what
    ts_get gave is then gone). The bytes given back; 0 with no cache file */

@@ -21,6 +21,7 @@ int ts_open(TSTORE *s, long npages, long budget, const char *path)
 	for (i = 0; i < npages; i++) {
 		s->pg[i].len = -1;
 		s->pg[i].in_ram = 0;
+		s->pg[i].pics = 0;
 	}
 	s->npages = npages;
 	s->budget = budget;
@@ -155,6 +156,7 @@ int ts_put(TSTORE *s, long n, const char *text, long len)
 		s->pg[n].off = s->file_len;
 		s->pg[n].len = len;
 		s->pg[n].in_ram = 0;
+		s->pg[n].pics = 0;
 		s->file_len += len;
 		return 0;
 	}
@@ -162,8 +164,35 @@ int ts_put(TSTORE *s, long n, const char *text, long len)
 	s->pg[n].off = s->pool_len;
 	s->pg[n].len = len;
 	s->pg[n].in_ram = 1;
+	s->pg[n].pics = 0;
 	s->pool_len += len;
 	return 0;
+}
+
+void ts_set_pics(TSTORE *s, long n, int pics)
+{
+	if (n >= 0 && n < s->npages)
+		s->pg[n].pics = pics != 0;
+}
+
+int ts_pics(const TSTORE *s, long n)
+{
+	return n >= 0 && n < s->npages && s->pg[n].len > 0 && s->pg[n].pics;
+}
+
+const char *ts_peek(const TSTORE *s, long n, long *len)
+{
+	int i;
+
+	if (!ts_have(s, n))
+		return NULL;
+	*len = s->pg[n].len;
+	if (s->pg[n].in_ram)
+		return s->pool + s->pg[n].off;
+	for (i = 0; i < TS_SLOTS; i++)
+		if (s->slot[i].page == n)
+			return s->slot[i].s;
+	return NULL;
 }
 
 int ts_have(const TSTORE *s, long n)

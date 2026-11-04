@@ -287,6 +287,7 @@ typedef struct {
 	int failed;			/* the page could not be read */
 	int stopped;			/* d->stop said stop: the text is not whole */
 	int pnext;			/* the next picture to place (pdftext.c) */
+	int piclines;			/* the picture lines written in the text */
 	int pics;			/* set by the caller: each picture drawn (an image XObject)
 					   gets a line of its own where it stands among the lines,
 					   "\x7F<object> <width>x<height>" (its size in points) */

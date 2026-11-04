@@ -105,5 +105,10 @@ long dv_top_abs(const DOCVIEW *v);
 void dv_set_top_abs(DOCVIEW *v, long r, long window);
 /* the page the top row is in */
 long dv_page_at_top(const DOCVIEW *v);
+/* page n's next picture from *pos in its stored text (0 to start): its
+   object, flip and the size it shows at in *pic; 0 when none is left, the
+   page has none or its text isn't in memory. Nothing is laid out (the
+   pages laid out for the view stay), nothing read from the cache file */
+int dv_page_pic(DOCVIEW *v, long n, long *pos, DVPIC *pic);
 
 #endif

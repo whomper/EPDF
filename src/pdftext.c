@@ -3159,6 +3159,7 @@ static void pic_line(PTEXT *t, const PIMG *im)
 	snprintf(b, sizeof b, "\x7F%ld %ldx%ld%s%s\n", im->obj, (long)(im->dw >> 16), (long)(im->dh >> 16),
 		 im->flip & PIMG_V ? "v" : "", im->flip & PIMG_H ? "h" : "");
 	sb_adds(o, b);
+	t->piclines++;
 }
 
 /* within one of the caller's boxes (PTEXT.cut) */

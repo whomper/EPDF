@@ -495,3 +495,34 @@ long dv_page_at_top(const DOCVIEW *v)
 {
 	return v->top_page;
 }
+
+int dv_page_pic(DOCVIEW *v, long n, long *pos, DVPIC *pic)
+{
+	const char *s;
+	long len, p, e, obj, w, h;
+	int fl;
+
+	if (!ts_pics(v->ts, n) || !(s = ts_peek(v->ts, n, &len)))
+		return 0;
+	for (p = *pos; p < len; p += e + 1) {
+		long f = tv_find(s + p, len - p, 0x7F);
+
+		if (f < 0)
+			break;
+		p += f;
+		e = tv_find(s + p, len - p, '\n');
+		if (e < 0)
+			e = len - p;
+		if ((p == 0 || s[p - 1] == '\n') && pic_of(s + p, e, &obj, &w, &h, &fl)) {
+			*pos = p + e + 1;
+			pic->obj = obj;
+			pic->flip = fl;
+			pic->page = n;
+			pic->rows = pic_rows(v, w, h, &pic->w, &pic->h);
+			pic->row = 0;
+			return 1;
+		}
+	}
+	*pos = len;
+	return 0;
+}

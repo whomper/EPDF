@@ -41,6 +41,9 @@ int doc_pic_start(void);		/* a picture the window wants: its decoding begun */
 int doc_pic_slice(unsigned long ms, long *obj);	/* 1 when it is done: *obj */
 int doc_pic_rows(long *obj, long *from, long *to);	/* rows made since asked: from, to */
 int doc_pic_busy(void);
+int win_ahead_due(void);		/* pictures ahead of the view to look for */
+void win_ahead(void);			/* (a few rows a turn) */
+void doc_pic_drop_ahead(void);	/* a picture ahead stopped for one shown */
 /* the progress row's: the page being read (-1 none), *prog how far
    through it in thousandths; the picture being made, its page and
    rows made of all (*of 0: not made a row at a time) */

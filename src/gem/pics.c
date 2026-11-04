@@ -610,6 +610,7 @@ PICE *pics_get(long obj, int w, int h, int flip)
 		if (cache[i].state && cache[i].obj == obj && cache[i].w == w && cache[i].h == h &&
 		    cache[i].flip == flip) {
 			cache[i].used = tick;
+			cache[i].ahead = 0;		/* (shown now) */
 			return &cache[i];
 		}
 	for (i = 0; i < NPICS; i++) {
@@ -646,14 +647,71 @@ int pics_waiting(void)
 /* a picture waiting to be decoded (now marked so), or NULL */
 PICE *pics_next(void)
 {
+	int i, pass;
+
+	for (pass = 0; pass < 2; pass++)	/* one the window shows, then one ahead */
+		for (i = 0; i < NPICS; i++)
+			if (cache[i].state == PICS_WANTED && cache[i].ahead == pass) {
+				cache[i].state = PICS_DECODING;
+				return &cache[i];
+			}
+	return NULL;
+}
+
+int pics_shown_waiting(void)
+{
 	int i;
 
 	for (i = 0; i < NPICS; i++)
-		if (cache[i].state == PICS_WANTED) {
-			cache[i].state = PICS_DECODING;
-			return &cache[i];
-		}
-	return NULL;
+		if (cache[i].state == PICS_WANTED && !cache[i].ahead)
+			return 1;
+	return 0;
+}
+
+void pics_release(PICE *e)
+{
+	let_go(e);
+}
+
+/*
+ * A picture ahead of the view, decoded quietly in the turns nothing else
+ * wants (Erez, 4 Nov 2026): only into a free slot, at most AHEAD of them
+ * waiting or decoding, and only while the memory has room to spare (its
+ * bitmap twice and AHEAD_SPARE more: a 1 MB ST seldom has, and never goes
+ * short for it). One shown always comes first (pics_next), and stops one
+ * ahead that is being made (doc_pic_drop_ahead).
+ */
+#define AHEAD 2
+#define AHEAD_SPARE (384L * 1024)
+
+int pics_ahead(long obj, int w, int h, int flip, long page)
+{
+	int i, n = 0, slot = -1;
+	long bytes;
+
+	for (i = 0; i < NPICS; i++) {
+		if (cache[i].state && cache[i].obj == obj && cache[i].w == w && cache[i].h == h && cache[i].flip == flip)
+			return 0;
+		if (cache[i].ahead && (cache[i].state == PICS_WANTED || cache[i].state == PICS_DECODING))
+			n++;
+		if (!cache[i].state && slot < 0)
+			slot = i;
+	}
+	if (n >= AHEAD || slot < 0 || w <= 0 || h <= 0)
+		return -1;
+	bytes = (long)((w + 15) / 16) * 2 * (planes > 8 ? 16 : planes) * h;
+	if ((long)Malloc(-1L) < 2 * bytes + AHEAD_SPARE)
+		return -1;
+	memset(&cache[slot], 0, sizeof cache[slot]);
+	cache[slot].obj = obj;
+	cache[slot].w = w;
+	cache[slot].h = h;
+	cache[slot].flip = flip;
+	cache[slot].page = page;
+	cache[slot].state = PICS_WANTED;
+	cache[slot].ahead = 1;
+	cache[slot].used = 0;		/* (the first let go when a shown one needs the room) */
+	return 1;
 }
 
 static int in_st_ram(const void *p)
@@ -706,6 +764,11 @@ static void *bm_alloc(long bytes, int *heap)
 static void failed(PICE *e, int why, const char *how)
 {
 	char a[48];
+
+	if (e->ahead && (!why || why == PIC_MEMORY || why == PIC_STOPPED)) {
+		let_go(e);		/* (ahead: tried again when it is shown) */
+		return;
+	}
 
 	e->state = PICS_FAILED;
 	e->why = why ? why : PIC_MEMORY;
