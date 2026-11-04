@@ -1027,7 +1027,7 @@ int main(void)
 	while (!quit_now || working) {
 		short which, flags = MU_MESAG | MU_KEYBD | MU_BUTTON;
 
-		if (working || fresh == 5)
+		if (working)
 			flags |= MU_TIMER;
 		which = evnt_multi_(flags, 1, 1, 1, 0, msg, &ev);
 		if (which & MU_KEYBD)
@@ -1036,11 +1036,6 @@ int main(void)
 			click(ev.mx, ev.my);
 		if (which & MU_MESAG)
 			message(msg);
-		if (fresh == 5 && !working) {
-			fresh = 0;
-			finished();
-			continue;
-		}
 		if (working) {
 			/* a slice of the batch, then its bars where they moved (at
 			   most four times a second, each the part that grew) */
@@ -1051,14 +1046,14 @@ int main(void)
 				continue;
 			}
 			if (fresh == 3) {
-				fresh = 4;
+				/* the batch's end drawn in one piece: the button, the
+				   progress, the alert and the list (drawing is not sliced:
+				   Erez, 4 Nov 2026; to 1.1 three turns) */
+				fresh = 0;
 				finish_button();
-				continue;
-			}
-			if (fresh == 4) {
-				fresh = 5;
 				finish_progress();
 				last1 = last2 = -1;
+				finished();
 				continue;
 			}
 			if (tos_ms() - last_bar >= 250 || fresh) {

@@ -724,14 +724,6 @@ static int shift(short kstate)
 	return (kstate & (K_LSHIFT | K_RSHIFT)) != 0;
 }
 
-/* a key that only scrolls: Up, Down (Shift: a window), Space */
-static int scroll_key(short kstate, short k)
-{
-	short scan = KEY_SCAN(k);
-
-	return !key_ctrl(kstate, k) && (scan == 0x48 || scan == 0x50 || scan == 0x39);
-}
-
 static void key(short kstate, short k)
 {
 	short scan = KEY_SCAN(k), rows = (short)win_rows();
@@ -1051,10 +1043,10 @@ int main(void)
 
 		/* the sliders after a scroll, once no key waits; the reading
 		   on while nothing else does */
-		if (win_owed() || win_sliders_due() || menus_due || pending || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0 ||
+		if (win_sliders_due() || menus_due || pending || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0 ||
 		    win_progress_due())
 			flags |= MU_TIMER;
-		t = win_owed() || win_sliders_due() || menus_due || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0 ||
+		t = win_sliders_due() || menus_due || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0 ||
 		    win_progress_due() ? 0 : bg_timer(pending, 1000);
 		{
 			long pw = win_progress_wait();	/* the row to go once nothing has run for a while */
@@ -1070,12 +1062,6 @@ int main(void)
 		   double-click time); a double click timed by press_double */
 		which = evnt_multi_(flags, 0x101, 3, 0, t, msg, &ev);
 		bg_tick_at(ev.mx, ev.my, ev.mbutton, ev.kstate);	/* the event's mouse: no graf_mkstate (4.9 ms on TOS 1.04) */
-		/* a scroll's copy split in two (256 colours) finished before
-		   anything but another scroll: a click, a dialog, a window moved
-		   (win_redraw sees to a redraw itself) */
-		if ((which & MU_BUTTON) || ((which & MU_MESAG) && msg[0] != WM_REDRAW && msg[0] != WM_ARROWED) ||
-		    ((which & MU_KEYBD) && !scroll_key(ev.kstate, ev.kreturn)))
-			win_move_flush();
 		if (which & MU_KEYBD)
 			key(ev.kstate, ev.kreturn);
 		if ((which & MU_BUTTON) && !win_iconified() && wind_find(ev.mx, ev.my) == win_handle()) {
@@ -1087,9 +1073,7 @@ int main(void)
 		if (which & MU_MESAG)
 			message(msg);
 		if (which == MU_TIMER) {
-			if (win_owed()) {
-				win_draw_owed_band();	/* the rows a scroll moved in: their text, a band a turn */
-			} else if (arrived >= 0) {
+			if (arrived >= 0) {
 				win_page_ready(arrived);	/* the page read last turn */
 				win_info();
 				arrived = -1;

@@ -74,10 +74,6 @@ void win_scroll_to_abs(long r);
 void win_goto_page(long n);
 void win_page_ready(long n);
 int win_sliders_due(void);
-int win_owed(void);			/* a scroll's rows owed their text */
-void win_move_flush(void);		/* a scroll's copy owed done now (before anything else draws) */
-void win_draw_owed(void);
-void win_draw_owed_band(void);		/* the next band of them, about 60 ms */
 void win_sliders(void);
 void win_where(short *x, short *y, short *w, short *h);
 int win_message(const short *msg);

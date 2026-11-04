@@ -52,51 +52,6 @@ static char wname[96];
 static char bar_base[112];		/* the status bar's first words: the page, and the status after it */
 static void bar_compose(void);
 static void bar_laid(void);
-static void move_drop(void);
-
-/*
- * A copy too big for a turn (the window's rows in 256 colours, 250 KB:
- * 65 ms on Falcon-4, the limit 50; the CPU copies it no faster, the
- * memory's floor) goes in two turns: half its rows, then the rest and the
- * band it leaves cleared. A scroll that comes before the rest is done
- * waits for a turn of its own (mv_pend: the rows the screen still owes the
- * view, its copy not begun). Whatever else draws in the window finishes
- * them first (win_move_flush); a whole redraw drops them.
- */
-#define SPLIT_BYTES 160000L
-static int mv_half;			/* a copy's second half owed */
-static short mv_pxy[8], mv_clip[4], mv_tx;
-static GRECT mv_band, mv_work;		/* the band cleared after it; the work area it was for */
-static long mv_pend;
-/* Select all's box the same way (its XOR, 60 ms on Falcon-4 in 256
-   colours): in pieces of XOR_BYTES, one a turn, the first at once */
-#define XOR_BYTES 80000L
-static int mv_xor, xor_may_split;	/* (only win_sel_change's box: not a redraw's) */
-static short mv_xpxy[4], mv_xclip[4];
-static void move_now(long d, int split);
-static void move_second(void);
-static void xor_second(void);
-
-void win_move_flush(void)
-{
-	while (mv_xor)
-		xor_second();
-	if (mv_half)
-		move_second();
-	if (mv_pend) {
-		long d = mv_pend;
-
-		mv_pend = 0;
-		move_now(d, 0);
-	}
-}
-
-static void move_drop(void)
-{
-	mv_half = 0;
-	mv_pend = 0;
-	mv_xor = 0;
-}
 
 short win_handle(void)
 {
@@ -120,7 +75,6 @@ int win_cols(void)
 
 static void get_work(void)
 {
-	move_drop();			/* (a new layout is drawn whole) */
 	wind_get(win, WF_WORKXYWH, &whole.x, &whole.y, &whole.w, &whole.h);
 	bar_h = (short)(ch + (ch >= 16 ? 7 : 5));	/* (EWeb's: a line, the words, the progress line) */
 	if (whole.h < bar_h + 2 * ch)
@@ -334,7 +288,6 @@ static void draw_head(short x, short y, short w, long page)
    not five VDI calls a blank (draw_rows clears it, and so does whatever
    may change them between: a picture's frame, an inversion; fill_set is
    above) */
-static int band_blank;			/* draw_rows: the area cleared, nothing drawn (win_draw_all) */
 
 /* white over x1..x2-1 (screen x) of the row at y, cut to the clip c */
 static void blank(const GRECT *c, short x1, short x2, short y, short h)
@@ -581,23 +534,6 @@ static void rows_xor(const GRECT *c, short y0, short y1)
 	p[3] = y1;
 	fill_set = 0;
 	T_MARK("sel-shape");
-	if (xor_may_split && !mv_xor && c->x <= work.x && c->y <= work.y && c->x + c->w >= work.x + work.w && c->y + c->h >= work.y + work.h &&
-	    (long)(y1 - y0 + 1) * (x2 - x1) * planes / 8 > SPLIT_BYTES) {
-		/* a piece now, the rest a piece a turn (xor_second) */
-		short h1 = (short)(XOR_BYTES * 8 / ((long)(x2 - x1) * planes));
-
-		mv_xpxy[0] = x1;
-		mv_xpxy[1] = (short)(y0 + h1);
-		mv_xpxy[2] = (short)(x2 - 1);
-		mv_xpxy[3] = y1;
-		mv_xclip[0] = c->x;
-		mv_xclip[1] = c->y;
-		mv_xclip[2] = (short)(c->x + c->w - 1);
-		mv_xclip[3] = (short)(c->y + c->h - 1);
-		mv_xor = 1;
-		mv_work = work;
-		p[3] = (short)(y0 + h1 - 1);
-	}
 	scr_xor(vdi_h, p);
 	T_MARK("sel-xor");
 }
@@ -636,11 +572,6 @@ static void draw_rows(const GRECT *c, long r0, long r1)
 	clip[1] = c->y;
 	clip[2] = (short)(c->x + c->w - 1);
 	clip[3] = (short)(c->y + c->h - 1);
-	if (band_blank) {
-		fill_set = 0;
-		blank(c, c->x, (short)(c->x + c->w), c->y, c->h);	/* the text owed (win_draw_all) */
-		return;
-	}
 	text_clip(vdi_h, clip);
 	T_START();
 	fill_set = 0;				/* others may have changed the fill since */
@@ -747,94 +678,6 @@ static int overlap(const GRECT *a, const GRECT *b, GRECT *o)
 	return 1;
 }
 
-/*
- * A line scrolled in two turns (the hub's plan, EContact's card bands): the
- * key's turn moves the rows and clears the band that came in; the rows'
- * text is owed, drawn in the next turn (timer 0, before the sliders), so
- * the key's stretch is the copy's alone (TOS 1.04: about 53 ms of work
- * for a line, the limit 50). A key before that turn moves the owed rows
- * with the rest and adds its own; a redraw, a selection or a page coming
- * in draws what is owed first.
- */
-static long owe_r0 = -1, owe_r1 = -1;		/* screen rows [r0, r1) owed */
-
-
-void win_draw_rows(long r0, long r1);
-
-int win_owed(void)
-{
-	return win >= 0 && !iconified && (owe_r1 > owe_r0 || mv_half || mv_pend || mv_xor);
-}
-
-void win_draw_owed(void)
-{
-	long r0, r1;
-
-	win_move_flush();
-	r0 = owe_r0;
-	r1 = owe_r1;
-
-	owe_r0 = owe_r1 = -1;
-	if (win >= 0 && !iconified && r1 > r0)
-		win_draw_rows(r0, r1);
-}
-
-/*
- * The event loop's turn for what is owed: a band of rows from the top of
- * it, as many as fit in about OWE_MS by the last band's time a row, the
- * rest in the next turns. A page scrolled owes a whole window: on ST:med
- * its text was 113 ms in one turn (the hub's gemprof page@2, TOS 1.04).
- */
-#define OWE_MS 60L
-static long owe_us_row = 0;			/* the last band's time a row, in microseconds (0: none yet) */
-
-void win_draw_owed_band(void)
-{
-	long n = owe_us_row > 0 ? OWE_MS * 1000L / owe_us_row : 4, r0 = owe_r0, r1, rest;
-	unsigned long t0;
-
-	if (win >= 0 && !iconified && mv_xor) {
-		xor_second();			/* Select all's second half */
-		return;
-	}
-	if (win >= 0 && !iconified && mv_half) {
-		move_second();			/* a copy's second half: a turn of its own */
-		return;
-	}
-	if (win >= 0 && !iconified && mv_pend) {
-		long d = mv_pend;
-
-		mv_pend = 0;
-		move_now(d, 1);			/* the scroll that waited */
-		return;
-	}
-	move_drop();
-	if (win < 0 || iconified || owe_r1 <= owe_r0) {
-		owe_r0 = owe_r1 = -1;
-		return;
-	}
-	if (n < 1)
-		n = 1;
-	r1 = r0 + n < owe_r1 ? r0 + n : owe_r1;
-	rest = owe_r1;
-	owe_r0 = owe_r1 = -1;			/* (win_redraw would draw all that is owed) */
-	t0 = tos_ms();
-	win_draw_rows(r0, r1);
-	if (r1 < rest && owe_r1 <= owe_r0) {
-		owe_r0 = r1;			/* the rest in the next turns */
-		owe_r1 = rest;
-	}
-	{
-		/* the band's time a row; down by half a band at most (blank rows
-		   are cheap, the text after them not), at least 1 ms (the
-		   clock's 5 ms steps) */
-		long us = (long)(tos_ms() - t0) * 1000L / (r1 - r0);
-
-		owe_us_row = us < owe_us_row / 2 ? owe_us_row / 2 : us;
-		if (owe_us_row < 1000)
-			owe_us_row = 1000;
-	}
-}
 
 /*
  * The status bar (Erez, 2 Nov 2026: "Like EWeb, placed at the bottom,
@@ -1158,14 +1001,6 @@ void win_redraw(const GRECT *area)
 
 	if (win < 0)
 		return;
-	if (mv_half || mv_pend || mv_xor) {
-		if (a.x <= work.x && a.y <= work.y && a.x + a.w >= work.x + work.w && a.y + a.h >= work.y + work.h)
-			move_drop();		/* drawn whole now */
-		else
-			win_move_flush();	/* a part: the screen caught up first */
-	}
-	if (owe_r1 > owe_r0)
-		win_draw_owed();		/* (it comes back here with nothing owed) */
 	if (iconified) {
 		static char st[16];
 
@@ -1207,31 +1042,15 @@ void win_redraw(const GRECT *area)
 
 /*
  * The whole window drawn again (next page, View > The page's lines, a
- * new font). Where the text goes through the VDI (text_plain_state() < 0:
- * a GDOS font, NVDI) the rows' area is cleared now and their text owed
- * to the next turns, a band of about OWE_MS each, as a scroll's rows are:
- * the hub's gemprof on ST:mono under NVDI with Courier 10 Pitch 14 had
- * next page at 327 ms in one turn, two thirds of it NVDI's v_gtext
- * (each call clears a buffer, ORs the glyphs in and blits it).
+ * new font), in one piece: drawing is not sliced (Erez, 4 Nov 2026, the
+ * guidelines' "Drawing is not such a job"; from 0.5.1 to 1.1 a VDI font's
+ * text was owed to later turns in bands of about 60 ms, and a scroll's
+ * rows to the next turn).
  */
 void win_draw_all(void)
 {
-	move_drop();			/* (all of it drawn: no copy owed) */
 	if (win < 0)
 		return;
-#ifdef EPDF_BAND_ALWAYS
-	if (!iconified && doc_view()) {	/* (a test build: the bands on any font) */
-#else
-	if (!iconified && doc_view() && text_plain_state() < 0) {
-#endif
-		owe_r0 = owe_r1 = -1;
-		band_blank = 1;
-		win_redraw(&whole);	/* (the progress row drawn whole) */
-		band_blank = 0;
-		owe_r0 = 0;
-		owe_r1 = rows + 1;
-		return;
-	}
 	win_redraw(&whole);		/* the progress row too */
 }
 
@@ -1240,7 +1059,6 @@ void win_draw_rows(long r0, long r1)
 {
 	GRECT a;
 
-	win_move_flush();		/* (the rows where the view has them) */
 	if (win < 0 || iconified || r1 <= 0 || r0 >= rows + 1)
 		return;
 	if (r0 < 0)
@@ -1263,7 +1081,16 @@ void win_draw_rows(long r0, long r1)
  * view is copied on the screen when the whole work area shows, and only
  * the rows that come in are drawn; otherwise all of it.
  */
-static void move_now(long d, int split)
+/* after a scroll's rows, in the same turn: the sliders and the status
+   bar's page (no longer turns of their own: drawing is not sliced) */
+static void moved_rest(void)
+{
+	sliders();
+	if (win_progress_due())
+		win_progress_draw();
+}
+
+static void moved(long d)
 {
 	GRECT r;
 	short keep, cx, cwid;
@@ -1271,7 +1098,6 @@ static void move_now(long d, int split)
 	if (d == 0)
 		return;
 	T_START();
-	sliders_due = 1;
 	win_info();
 	T_MARK("info");
 	keep = (short)(rows - (d < 0 ? -d : d));
@@ -1290,30 +1116,16 @@ static void move_now(long d, int split)
 	wind_get(win, WF_FIRSTXYWH, &r.x, &r.y, &r.w, &r.h);
 	if (keep <= 0 || r.x > work.x || r.y > work.y || r.x + r.w < work.x + work.w || r.y + r.h < work.y + work.h ||
 	    work.x < desk_x || work.y < desk_y || work.x + work.w > desk_x + desk_w || work.y + work.h > desk_y + desk_h) {
-		owe_r0 = owe_r1 = -1;	/* all of it drawn now */
 		edges_clean = 1;	/* scrolled: the same layout */
 		win_draw_all();
 		edges_clean = 0;
+		moved_rest();
 		return;
-	}
-	if (owe_r1 > owe_r0) {
-		/* the rows owed move with the rest; drawn first when they and
-		   those coming in wouldn't make one run */
-		long a0 = owe_r0 - d, a1 = owe_r1 - d;
-		long n0 = d > 0 ? keep : 0, n1 = d > 0 ? rows + 1 : rows - keep;
-
-		if (a1 <= 0 || a0 >= rows + 1)
-			owe_r0 = owe_r1 = -1;		/* moved out of view */
-		else if (a0 > n1 || a1 < n0) {
-			win_draw_owed();		/* apart: drawn as they are */
-		} else {
-			owe_r0 = a0 < 0 ? 0 : a0;
-			owe_r1 = a1 > rows + 1 ? rows + 1 : a1;
-		}
 	}
 	{
 		short pxy[8], clip[4];
 		short ad = (short)((d < 0 ? -d : d) * ch);
+		long in0 = 0, in1 = 0;
 
 		pxy[0] = pxy[4] = cx;
 		pxy[2] = pxy[6] = (short)(cx + cwid - 1);
@@ -1331,30 +1143,6 @@ static void move_now(long d, int split)
 		clip[1] = work.y;
 		clip[2] = (short)(work.x + work.w - 1);
 		clip[3] = (short)(work.y + work.h - 1);
-		if (split && (long)(pxy[3] - pxy[1] + 1) * cwid * planes / 8 > SPLIT_BYTES) {
-			/* in two turns: now the half whose rows are written first
-			   (up the screen: the top; down it: the foot), the rest in the
-			   next turn (move_second) */
-			short h1 = (short)((pxy[3] - pxy[1] + 1) / 2), i;
-
-			for (i = 0; i < 8; i++)
-				mv_pxy[i] = pxy[i];
-			for (i = 0; i < 4; i++)
-				mv_clip[i] = clip[i];
-			if (d > 0) {
-				pxy[3] = (short)(pxy[1] + h1 - 1);
-				pxy[7] = (short)(pxy[5] + h1 - 1);
-				mv_pxy[1] = (short)(mv_pxy[1] + h1);
-				mv_pxy[5] = (short)(mv_pxy[5] + h1);
-			} else {
-				pxy[1] = (short)(pxy[1] + h1);
-				pxy[5] = (short)(pxy[5] + h1);
-				mv_pxy[3] = (short)(mv_pxy[1] + h1 - 1);
-				mv_pxy[7] = (short)(mv_pxy[5] + h1 - 1);
-			}
-			mv_half = 1;
-			mv_work = work;
-		}
 		wind_update(BEG_UPDATE);
 		graf_mouse(M_OFF, NULL);
 		text_clip(vdi_h, clip);		/* the VDI clips raster copies too */
@@ -1375,122 +1163,24 @@ static void move_now(long d, int split)
 			a.h = (short)((r1 - r0) * ch);
 			if (a.y + a.h > work.y + work.h)
 				a.h = (short)(work.y + work.h - a.y);
-			mv_band.h = 0;
 			if (a.h > 0) {
-				/* the band cleared now, its text owed to the next turn */
-				short tx = (short)(work.x + MARGIN);
-
-				if (mv_half) {
-					mv_band = a;	/* cleared after the second half (its rows are copied from there) */
-					mv_tx = tx;
-				} else {
-					text_clip(vdi_h, clip);
-					blank(&a, tx, (short)(tx + cols * cw), a.y, a.h);
-					text_noclip(vdi_h);
-				}
-				if (owe_r1 > owe_r0) {
-					if (r0 < owe_r0)
-						owe_r0 = r0;
-					if (r1 > owe_r1)
-						owe_r1 = r1;
-				} else {
-					owe_r0 = r0;
-					owe_r1 = r1;
-				}
+				in0 = r0;
+				in1 = r1;
 			}
 		}
 		graf_mouse(M_ON, NULL);
 		wind_update(END_UPDATE);
+		if (in1 > in0) {
+			/* the rows that came in, at once: drawing is not sliced (Erez,
+			   4 Nov 2026, the guidelines' "Drawing is not such a job") */
+			edges_clean = 1;	/* scrolled: the same layout */
+			win_draw_rows(in0, in1);
+			edges_clean = 0;
+		}
 		log_event("drawn", NULL, NULL);
 	}
 	T_MARK("rows");
-}
-
-/* the second half of a copy split in two, and the band it leaves */
-static void move_second(void)
-{
-	GRECT r;
-	int took;
-
-	mv_half = 0;
-	if (win < 0 || iconified)
-		return;
-	wind_get(win, WF_FIRSTXYWH, &r.x, &r.y, &r.w, &r.h);
-	if (mv_work.x != work.x || mv_work.y != work.y || mv_work.w != work.w || mv_work.h != work.h ||
-	    r.x > work.x || r.y > work.y || r.x + r.w < work.x + work.w || r.y + r.h < work.y + work.h) {
-		win_draw_all();		/* (moved, or covered since: all of it again) */
-		return;
-	}
-	took = press_update_begin();	/* (a button held: TOS would hold BEG_UPDATE back) */
-	graf_mouse(M_OFF, NULL);
-	text_clip(vdi_h, mv_clip);
-	scr_rows(vdi_h, mv_pxy);
-	if (mv_band.h > 0)
-		blank(&mv_band, mv_tx, (short)(mv_tx + cols * cw), mv_band.y, mv_band.h);
-	text_noclip(vdi_h);
-	graf_mouse(M_ON, NULL);
-	press_update_end(took);
-	log_event("drawn", "second-half", NULL);
-}
-
-/* the next piece of Select all's box */
-static void xor_second(void)
-{
-	GRECT r;
-	int took;
-
-	mv_xor = 0;
-	if (win < 0 || iconified)
-		return;
-	wind_get(win, WF_FIRSTXYWH, &r.x, &r.y, &r.w, &r.h);
-	if (mv_work.x != work.x || mv_work.y != work.y || mv_work.w != work.w || mv_work.h != work.h ||
-	    r.x > work.x || r.y > work.y || r.x + r.w < work.x + work.w || r.y + r.h < work.y + work.h) {
-		win_draw_all();		/* (moved, or covered since: all of it again) */
-		return;
-	}
-	took = press_update_begin();	/* (a button held: TOS would hold BEG_UPDATE back) */
-	graf_mouse(M_OFF, NULL);
-	text_clip(vdi_h, mv_xclip);
-	fill_set = 0;
-	{
-		short p[4], h1 = (short)(XOR_BYTES * 8 / ((long)(mv_xpxy[2] - mv_xpxy[0] + 1) * planes));
-
-		p[0] = mv_xpxy[0];
-		p[1] = mv_xpxy[1];
-		p[2] = mv_xpxy[2];
-		p[3] = mv_xpxy[3];
-		if (p[3] - p[1] + 1 > h1) {
-			p[3] = (short)(p[1] + h1 - 1);
-			mv_xpxy[1] = (short)(p[1] + h1);
-			mv_xor = 1;		/* (more in the next turn) */
-		}
-		scr_xor(vdi_h, p);
-	}
-	text_noclip(vdi_h);
-	graf_mouse(M_ON, NULL);
-	press_update_end(took);
-	log_event("drawn", mv_xor ? "xor-piece" : "xor-last", NULL);
-}
-
-/* the view moved d rows: the screen follows (a copy half done, or one
-   waiting, and this one waits a turn of its own too) */
-static void moved(long d)
-{
-	if (d == 0)
-		return;
-	if (mv_half || mv_xor) {
-		if (mv_xor)
-			xor_second();
-		else
-			move_second();
-		mv_pend += d;
-		return;
-	}
-	if (mv_pend) {
-		mv_pend += d;
-		return;
-	}
-	move_now(d, 1);
+	moved_rest();
 }
 
 void win_scroll(long d)
@@ -1529,11 +1219,11 @@ void win_goto_page(long n)
 	if (!v || win < 0)
 		return;
 	dv_goto_page(v, n);		/* its head at the top, even near the end */
-	sliders_due = 1;		/* when no key waits, as after a scroll */
 	win_info();
 	edges_clean = 1;		/* the same layout */
 	win_draw_all();
 	edges_clean = 0;
+	moved_rest();			/* the sliders and the bar's page, in the same turn */
 }
 
 /* picture obj is ready (or can't be shown): its rows drawn again where they show */
@@ -1705,10 +1395,6 @@ void win_sel_change(long q0, long r0, long q1, long r1, long p0, long o0, long p
 	const char *s;
 
 	T_START();
-	/* (what a scroll owes drawn first: the XOR goes over finished rows) */
-	win_move_flush();
-	if (owe_r1 > owe_r0)
-		win_draw_owed();
 
 	if (!v || win < 0 || iconified || (q0 < 0 && p0 < 0))
 		return;
@@ -1722,7 +1408,6 @@ void win_sel_change(long q0, long r0, long q1, long r1, long p0, long o0, long p
 	T_MARK("sel-begin");
 	wind_get(win, WF_FIRSTXYWH, &r.x, &r.y, &r.w, &r.h);
 	T_MARK("sel-first");
-	xor_may_split = 1;
 	while (r.w > 0 && r.h > 0) {
 		if (overlap(&r, &work, &c)) {
 			short clip[4], box = -1, y = work.y;	/* box: the first row of a run of whole rows, -1 none */
@@ -1768,7 +1453,6 @@ void win_sel_change(long q0, long r0, long q1, long r1, long p0, long o0, long p
 		wind_get(win, WF_NEXTXYWH, &r.x, &r.y, &r.w, &r.h);
 	}
 	T_MARK("sel-next");
-	xor_may_split = 0;
 	graf_mouse(M_ON, NULL);
 	press_update_end(took);
 	T_MARK("sel-end");
@@ -1786,11 +1470,11 @@ void win_show(long page, long off)
 	if (row <= 0)
 		return;
 	dv_show_row(v, page, row, rows / 3, rows);
-	sliders_due = 1;
 	win_info();
 	edges_clean = 1;		/* the same layout */
 	win_draw_all();
 	edges_clean = 0;
+	moved_rest();
 }
 
 int win_open(short x, short y, short w, short h)
@@ -1919,7 +1603,6 @@ int win_message(const short *msg)
 		if (!iconified) {
 			wind_set(win, WF_ICONIFY, msg[4], msg[5], msg[6], msg[7]);
 			iconified = 1;
-			owe_r0 = owe_r1 = -1;	/* drawn whole when it opens again */
 			log_event("iconified", NULL, NULL);
 		}
 		return 1;
