@@ -1081,11 +1081,13 @@ void win_draw_rows(long r0, long r1)
  * view is copied on the screen when the whole work area shows, and only
  * the rows that come in are drawn; otherwise all of it.
  */
-/* after a scroll's rows, in the same turn: the sliders and the status
-   bar's page (no longer turns of their own: drawing is not sliced) */
+/* after a scroll's rows, in the same turn: the status bar's page; the
+   sliders (the AES's own, 40 ms of an ST's page scrolled when one moves)
+   when no key waits, the window's text drawn just as soon and the next
+   key taken that much sooner */
 static void moved_rest(void)
 {
-	sliders();
+	sliders_due = 1;
 	if (win_progress_due())
 		win_progress_draw();
 }
@@ -1125,7 +1127,6 @@ static void moved(long d)
 	{
 		short pxy[8], clip[4];
 		short ad = (short)((d < 0 ? -d : d) * ch);
-		long in0 = 0, in1 = 0;
 
 		pxy[0] = pxy[4] = cx;
 		pxy[2] = pxy[6] = (short)(cx + cwid - 1);
@@ -1164,19 +1165,17 @@ static void moved(long d)
 			if (a.y + a.h > work.y + work.h)
 				a.h = (short)(work.y + work.h - a.y);
 			if (a.h > 0) {
-				in0 = r0;
-				in1 = r1;
+				/* drawn at once, in the copy's own hold of the screen and
+				   the mouse (the whole work area shows: one rectangle; a
+				   second walk of the AES's list was 10 ms of an ST's line) */
+				edges_clean = 1;	/* scrolled: the same layout */
+				draw_rows(&a, r0, r1);
+				edges_clean = 0;
+				text_noclip(vdi_h);
 			}
 		}
 		graf_mouse(M_ON, NULL);
 		wind_update(END_UPDATE);
-		if (in1 > in0) {
-			/* the rows that came in, at once: drawing is not sliced (Erez,
-			   4 Nov 2026, the guidelines' "Drawing is not such a job") */
-			edges_clean = 1;	/* scrolled: the same layout */
-			win_draw_rows(in0, in1);
-			edges_clean = 0;
-		}
 		log_event("drawn", NULL, NULL);
 	}
 	T_MARK("rows");
