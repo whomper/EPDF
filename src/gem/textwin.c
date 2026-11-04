@@ -24,6 +24,7 @@
 #include "pics.h"
 #include "epdf.h"
 #include "progbar.h"
+#include "badge.h"
 
 /* the speed build (make speed-test) times a scroll's parts */
 #ifdef EPDF_TIMES
@@ -242,7 +243,8 @@ static int fill_set;
 
 /* a page's head: a line across, "Page n" on it; a converted PDF's
    (EConvert's) with the badge "Optimised" at its right end, green on a
-   screen with colours, black in mono (Erez, 31 Oct 2026) */
+   screen with colours, black in mono (Erez, 31 Oct 2026); a dark green
+   shaded from the top down, the text white with a shadow (Erez, 4 Nov) */
 static void draw_head(short x, short y, short w, long page)
 {
 	static const char badge[] = "Optimised";
@@ -252,7 +254,10 @@ static void draw_head(short x, short y, short w, long page)
 	n = (short)snprintf(s, sizeof s, " Page %ld ", page + 1);
 	tx = (short)(x + MARGIN + 2 * cw);
 	if (doc_prepared()) {
-		bw = (short)((sizeof badge - 1 + 2) * cw);
+		/* the text centred, half a cell each side and its shadow's pixel
+		   (Erez, 4 Nov: "the text is centered and the bounding box
+		   isn't too wide") */
+		bw = (short)((sizeof badge - 1) * cw + 2 * (cw / 2) + 1);
 		bx = (short)(end + 1 - bw);
 		if (bx > tx + (n + 2) * cw)
 			end = (short)(bx - cw - 1);
@@ -265,21 +270,16 @@ static void draw_head(short x, short y, short w, long page)
 	vst_color(vdi_h, 1);
 	text_n(vdi_h, tx, y, s, n);
 	if (bw) {
-		short p[4];
+		short sh = badge_draw(bx, y, bw, ch);	/* (badge.c: shaded green, black in mono) */
 
-		p[0] = bx;
-		p[1] = y;
-		p[2] = (short)(bx + bw - 1);
-		p[3] = (short)(y + ch - 1);
-		vswr_mode(vdi_h, MD_REPLACE);
-		vsf_interior(vdi_h, FIS_SOLID);
-		vsf_color(vdi_h, planes >= 2 ? 3 : 1);	/* the VDI's green (pen 3), black in mono */
-		vsf_perimeter(vdi_h, 0);
-		v_rfbox(vdi_h, p);
 		fill_set = 0;
 		vswr_mode(vdi_h, MD_TRANS);
+		if (sh >= 0) {
+			vst_color(vdi_h, sh);
+			text_n(vdi_h, (short)(bx + cw / 2 + 1), (short)(y + 1), badge, (short)(sizeof badge - 1));
+		}
 		vst_color(vdi_h, 0);
-		text_n(vdi_h, (short)(bx + cw), y, badge, (short)(sizeof badge - 1));
+		text_n(vdi_h, (short)(bx + cw / 2), y, badge, (short)(sizeof badge - 1));
 		vst_color(vdi_h, 1);
 	}
 }

@@ -343,7 +343,7 @@ build/m68000/version.c: FORCE | build/m68000
 	@if cmp -s $@.new $@; then rm $@.new; else mv $@.new $@; fi
 FORCE:
 .PHONY: FORCE
-GEM_SRC = src/gem/epdf.c src/gem/doc.c src/gem/textwin.c src/gem/find.c src/gem/font.c src/gem/pics.c src/gem/gemui.c src/gem/menu.c src/gem/about.c \
+GEM_SRC = src/gem/epdf.c src/gem/doc.c src/gem/textwin.c src/gem/badge.c src/gem/find.c src/gem/font.c src/gem/pics.c src/gem/gemui.c src/gem/menu.c src/gem/about.c \
           src/view/textview.c src/view/docview.c src/view/tstore.c src/view/inf.c src/view/search.c common/ui/bgwork.c common/ui/twin.c \
           src/pdfimg.c src/ccitt.c src/rscale.c $(PIC_SRC) \
           common/atari/gem.c common/atari/crash.c common/ui/mbar.c common/ui/aboutbox.c common/ui/aboutline.c \

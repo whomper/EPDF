@@ -37,6 +37,7 @@
 #include "click.h"
 #include "epdf.h"
 #include "progbar.h"
+#include "badge.h"
 
 short ap_id;
 short pix_aspect = 16;
@@ -942,6 +943,7 @@ int main(void)
 	vq_extnd(vdi_h, 1, work_out);
 	planes = work_out[4];
 	progbar_pens(vdi_h, 0);		/* the status bar's progress bar on white (5.9); EPDF sets no pens */
+	badge_pens();			/* the Optimised badge's greens, the same way */
 	vst_alignment(vdi_h, 0, 5);
 	text_font(vdi_h, 1, cw, ch);	/* until the INF's font is set */
 	wind_get(0, WF_WORKXYWH, &desk_x, &desk_y, &desk_w, &desk_h);
