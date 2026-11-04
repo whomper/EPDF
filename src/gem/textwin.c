@@ -1092,6 +1092,34 @@ static void moved_rest(void)
 		win_progress_draw();
 }
 
+/*
+ * A scroll's copy on a 256-colour screen by the CPU, whole rows of
+ * 16-pixel groups at a time (common's scr_copy_rows): the VDI's copy of a
+ * window's rows was 65-70 ms of Falcon-4's line, the CPU's 60-65 (the
+ * memory's floor either way; scr_rows leaves a 68030's to the VDI, as fast
+ * in 16 colours). The box starts on a group and is whole groups wide (the
+ * caller's); 0 when it isn't for here.
+ */
+static int copy_wide(const short *p)
+{
+	long bpl, n;
+	short np, sw, sh, rows_n;
+	unsigned char *base;
+
+	if (planes != 8 || (p[0] & 15) || ((p[2] + 1) & 15) || p[4] != p[0] || p[6] != p[2] ||
+	    p[3] - p[1] != p[7] - p[5] || !(base = scr_at(&bpl, &np, &sw, &sh)) || np != 8 || p[2] >= sw ||
+	    p[1] < 0 || p[5] < 0 || p[3] >= sh || p[7] >= sh)
+		return 0;
+	n = (long)(p[2] + 1 - p[0]) / 16 * 2 * np;
+	rows_n = (short)(p[3] - p[1] + 1);
+	base += (long)p[0] / 16 * 2 * np;
+	if (p[5] <= p[1])	/* up the screen: from the top row on */
+		scr_copy_rows(base + (long)p[5] * bpl, bpl, base + (long)p[1] * bpl, bpl, rows_n, (short)n);
+	else			/* down it: from the last row back */
+		scr_copy_rows(base + (long)p[7] * bpl, -bpl, base + (long)p[3] * bpl, -bpl, rows_n, (short)n);
+	return 1;
+}
+
 static void moved(long d)
 {
 	GRECT r;
@@ -1147,7 +1175,8 @@ static void moved(long d)
 		wind_update(BEG_UPDATE);
 		graf_mouse(M_OFF, NULL);
 		text_clip(vdi_h, clip);		/* the VDI clips raster copies too */
-		scr_rows(vdi_h, pxy);		/* TOS's screen by the CPU, else vro_cpyfm */
+		if (!copy_wide(pxy))
+			scr_rows(vdi_h, pxy);	/* TOS's screen by the CPU, else vro_cpyfm */
 		text_noclip(vdi_h);
 		T_MARK("copy");
 		{
