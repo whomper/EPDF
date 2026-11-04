@@ -1577,6 +1577,15 @@ static int ch_room(IX *x)
 		long cap = x->capch ? x->capch * 2 : 256;
 		CH *q = pdf_realloc(x->d, x->ch, x->capch * (long)sizeof(CH), cap * (long)sizeof(CH));
 
+		/* refused: by half again (doubling holds the old and the new, three
+		   times what was in it, as it grows: a page set a glyph at a time
+		   came to 344 KB there on a 1 MB ST). Only then: growing by half
+		   copies the glyphs about twice as often */
+		if (!q && x->capch >= 256) {
+			cap = x->capch + (x->capch >> 1);
+			if ((q = pdf_realloc(x->d, x->ch, x->capch * (long)sizeof(CH), cap * (long)sizeof(CH))) != NULL)
+				x->d->st.oom--;	/* (taken in the end: no refusal for the page's log) */
+		}
 		if (!q)
 			return 0;
 		x->ch = q;
@@ -3474,7 +3483,8 @@ static long columns(IX *x, LN *ln, long nl)
  */
 static void assemble(IX *x, PTEXT *t)
 {
-	long i, j, nl = 0, k, turn = 0;
+	long i, j, nl = 0, k, turn = 0, nln;
+	LN *q;
 	LN *ln;
 	int pstart = 1;		/* the line before began a paragraph */
 
@@ -3570,7 +3580,12 @@ static void assemble(IX *x, PTEXT *t)
 		x->glyphwise = chars < 3 * x->nch && spaces * 20 >= x->nch;	/* a space a word or so */
 	}
 	ch_sort(x->d, x->ch, x->nch, ch_cmp_y);
-	ln = pdf_malloc(x->d, 2 * x->nch * (long)sizeof(LN));	/* lines split at a gutter: twice as many at most */
+	/* the lines' table grown as they are found, then to twice them (split
+	   at a gutter: two at most): twice the glyphs, as it was, was 217 KB of
+	   EDOS_01.PDF's page 3, a page set a glyph at a time; no pass of its
+	   own to count them (a line is tens of glyphs: few grow steps) */
+	nln = x->nch / 32 + 16;
+	ln = pdf_malloc(x->d, nln * (long)sizeof(LN));
 	if (!ln)
 		return;
 	for (i = 0; i < x->nch; i = j) {
@@ -3590,6 +3605,14 @@ static void assemble(IX *x, PTEXT *t)
 			pause_point(x->d);
 			turn = j;
 		}
+		if (nl == nln) {
+			if (!(q = pdf_realloc(x->d, ln, nln * (long)sizeof(LN), 2 * nln * (long)sizeof(LN)))) {
+				pdf_free(x->d, ln, nln * (long)sizeof(LN));
+				return;
+			}
+			ln = q;
+			nln *= 2;
+		}
 		ln[nl].a = i;
 		ln[nl].b = j;
 		ln[nl].y = y0;
@@ -3598,8 +3621,17 @@ static void assemble(IX *x, PTEXT *t)
 		ln[nl].x1 = x->ch[j - 1].x + x->ch[j - 1].dx;
 		nl++;
 	}
-	if (t->soft)
+	if (t->soft && nl > 0) {
+		if (nln < 2 * nl) {
+			if (!(q = pdf_realloc(x->d, ln, nln * (long)sizeof(LN), 2 * nl * (long)sizeof(LN)))) {
+				pdf_free(x->d, ln, nln * (long)sizeof(LN));
+				return;
+			}
+			ln = q;
+			nln = 2 * nl;
+		}
 		nl = columns(x, ln, nl);
+	}
 	/* the pictures in the order they stand on the page, top first */
 	if (t->pics)
 		pic_order(t);
@@ -3652,7 +3684,7 @@ static void assemble(IX *x, PTEXT *t)
 	sb_addc(&t->text, '\n');
 	while (t->pics && t->pnext < t->nimg)
 		pic_line(t, &t->img[t->pnext++]);
-	pdf_free(x->d, ln, 2 * x->nch * (long)sizeof(LN));
+	pdf_free(x->d, ln, nln * (long)sizeof(LN));
 }
 
 int pdf_page_text(PDOC *d, long n, PTEXT *t)
