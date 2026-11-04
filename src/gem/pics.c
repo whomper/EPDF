@@ -183,6 +183,11 @@ typedef struct {
 	   kept (mid: which of the few), and for each mask and byte the bits
 	   kept (cv) and how many (cn) */
 	unsigned char *mid, *cv, cn[16];
+	/* its ink kept: a column or a row not shown goes into the next one
+	   shown (the ink wins), or a 10-pixel page's letters lost strokes
+	   (Erez, 4 Nov 2026); racc: the rows passed over, ink0: 0 is ink */
+	unsigned char *racc;
+	int ink0;
 	unsigned short dc[16];
 	unsigned char dp[16];
 } SINK;
@@ -232,8 +237,15 @@ static void sink_raw(void *u, long sy, const unsigned char *r)
 	if (!bm_first(k))
 		return;
 	/* the shown rows that are this source row's (fewer, or as many) */
-	if (k->ny >= e->h || k->ny * k->sh / e->h != sy)
+	if (k->ny >= e->h || k->ny * k->sh / e->h != sy) {
+		if (k->racc && k->ny < e->h) {
+			long i, sb = (k->sw + 7) / 8;
+
+			for (i = 0; i < sb; i++)
+				k->racc[i] = (unsigned char)(k->ink0 ? k->racc[i] & r[i] : k->racc[i] | r[i]);
+		}
 		return;
+	}
 	y = k->ny++;
 	if (k->w == k->sw && k->nplanes == 1 && k->bpc == 1 && k->dn == 2 && k->dp[0] != k->dp[1]) {
 		unsigned char *o = (unsigned char *)e->bm.fd_addr + y * k->row;
@@ -262,9 +274,14 @@ static void sink_raw(void *u, long sy, const unsigned char *r)
 		int nb = 0;
 
 		for (i = 0; i < sb && o < oe; i++) {
-			int m = mid[i], c = cn[m];
+			int m = mid[i], c = cn[m], v = r[i];
 
-			acc = (acc << c) | cv[(m << 8) | r[i]];
+			if (k->racc) {
+				/* the rows passed over since the last shown one, in it */
+				v = k->ink0 ? v & k->racc[i] : v | k->racc[i];
+				k->racc[i] = (unsigned char)(k->ink0 ? 0xFF : 0);
+			}
+			acc = (acc << c) | cv[(m << 8) | v];
 			nb += c;
 			if (nb >= 8) {
 				nb -= 8;
@@ -449,11 +466,21 @@ static void mono_masks(SINK *k)
 			c += (masks[m] >> b) & 1;
 		k->cn[m] = (unsigned char)c;
 		for (v = 0; v < 256; v++) {
-			int o = 0;
+			/* each kept bit with the dropped ones before it (after the
+			   byte's last kept bit: into that one), the ink winning */
+			int o = 0, pend = k->ink0 ? 1 : 0, any = 0, bit;
 
-			for (b = 7; b >= 0; b--)
-				if (masks[m] & (1 << b))
-					o = o << 1 | ((v >> b) & 1);
+			for (b = 7; b >= 0; b--) {
+				bit = (v >> b) & 1;
+				if (masks[m] & (1 << b)) {
+					o = o << 1 | (k->ink0 ? bit & pend : bit | pend);
+					pend = k->ink0 ? 1 : 0;
+					any = 1;
+				} else
+					pend = k->ink0 ? pend & bit : pend | bit;
+			}
+			if (any)
+				o = k->ink0 ? o & (~1 | pend) : o | pend;
 			k->cv[(m << 8) | v] = (unsigned char)o;
 		}
 	}
@@ -525,8 +552,12 @@ int pics_rows(PDOC *d, PICE *e, int nplanes, PIC_PAL *pl, int *why)
 
 			for (x = 0; x < e->w; x++)
 				k.xs[x] = x * k.sw / e->w;
-			if (k.bpc == 1 && k.sw > e->w)
+			if (k.bpc == 1 && k.sw > e->w) {
+				k.ink0 = k.dp[0] == 1;		/* (pen 1: black) */
 				mono_masks(&k);
+				if (k.cv && (k.racc = malloc((size_t)(k.sw + 7) / 8)) != NULL)
+					memset(k.racc, k.ink0 ? 0xFF : 0, (size_t)(k.sw + 7) / 8);
+			}
 		}
 		if (o && k.sw > 0 && k.sh > 0 && (k.sw == e->w || k.xs))
 			/* its samples as they are, each colour its pen, a column
@@ -537,6 +568,7 @@ int pics_rows(PDOC *d, PICE *e, int nplanes, PIC_PAL *pl, int *why)
 		free(k.xs);
 		free(k.mid);
 		free(k.cv);
+		free(k.racc);
 	}
 	sink = NULL;
 	free(k.mir);
