@@ -35,6 +35,8 @@ typedef struct {
 	RFONTS *fonts;
 	const char *fontdir;		/* the standard fonts' files (Liberation*.ttf), or NULL */
 	long glyphs, glyphs_missed, images, images_missed;
+	int mono_glyphs;		/* glyphs hinted, a bit a pixel (the mono page's: grey edges
+					   dithered broke 10-pixel text into dots, Erez, 4 Nov 2026) */
 } RPAGE;
 
 /* the fonts are kept from page to page: render_init once, render_done at

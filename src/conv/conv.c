@@ -563,6 +563,10 @@ static int convert_page(CV *c, long n)
 
 	/* the page drawn: its drawings, and its whole pictures */
 	cv_phase = "render";
+	/* mono pages only (the default): the page drawn with the mono page's
+	   crisp glyphs from the start; with colour pages too, drawn as ever
+	   for them and the drawings, and again for the mono page */
+	r->mono_glyphs = c->o->pages == CV_PAGES_MONO;
 	drawn = render_page(r, n, PAGE_W) == 0;
 	if (drawn)
 		nd = render_drawings(r, dw, NDRAW);
@@ -691,18 +695,9 @@ static int convert_page(CV *c, long n)
 	/* the page whole */
 	if (drawn && c->o->pages != CV_PAGES_NONE) {
 		long rb = (r->c.w + 7) / 8;
-		unsigned char *d = malloc((size_t)rb * r->c.h);
+		unsigned char *d;
 		char dict[256];
 
-		if (d) {
-			cv_phase = "mono";
-			dither_mono(r->c.px, r->c.w, r->c.h, d);
-			mono = w_new(w);
-			snprintf(dict, sizeof dict, "/Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceGray "
-				 "/BitsPerComponent 1", r->c.w, r->c.h);
-			w_stream(w, mono, dict, d, rb * r->c.h);
-			free(d);
-		}
 		if (c->o->pages == CV_PAGES_COLOUR && has_colour(&r->c)) {
 			/* TOS's 16 colours, in their registers' order: EPDF shows
 			   the page with each colour's pen, no dither of its own */
@@ -712,23 +707,41 @@ static int convert_page(CV *c, long n)
 				{ 0, 170, 0 }, { 170, 170, 0 }, { 0, 0, 170 }, { 170, 0, 170 }, { 0, 170, 170 }, { 0, 0, 0 } };
 			long rb4 = (r->c.w + 1) / 2;
 			int nc = 16;
+			unsigned char *dp = malloc((size_t)rb4 * r->c.h);
 
-			d = nc ? malloc((size_t)rb4 * r->c.h) : NULL;
-			if (d) {
+			if (dp) {
 				char dc[512];
 				int o, q;
 
 				cv_phase = "colour";
-				dither_pal(r->c.px, r->c.w, r->c.h, (const unsigned char (*)[3])pal, nc, d);
+				dither_pal(r->c.px, r->c.w, r->c.h, (const unsigned char (*)[3])pal, nc, dp);
 				colour = w_new(w);
 				o = snprintf(dc, sizeof dc, "/Type /XObject /Subtype /Image /Width %d /Height %d "
 					     "/ColorSpace [/Indexed /DeviceRGB %d <", r->c.w, r->c.h, nc - 1);
 				for (q = 0; q < nc; q++)
 					o += snprintf(dc + o, sizeof dc - (size_t)o, "%02X%02X%02X", pal[q][0], pal[q][1], pal[q][2]);
 				snprintf(dc + o, sizeof dc - (size_t)o, ">] /BitsPerComponent 4");
-				w_stream(w, colour, dc, d, rb4 * r->c.h);
-				free(d);
+				w_stream(w, colour, dc, dp, rb4 * r->c.h);
+				free(dp);
 			}
+		}
+		if (!r->mono_glyphs) {
+			/* drawn again with the mono page's glyphs (the colour page and
+			   the drawings had the grey-edged ones) */
+			r->mono_glyphs = 1;
+			cv_phase = "render-mono";
+			drawn = render_page(r, n, PAGE_W) == 0;
+			r->mono_glyphs = 0;
+		}
+		d = drawn ? malloc((size_t)rb * r->c.h) : NULL;
+		if (d) {
+			cv_phase = "mono";
+			dither_mono(r->c.px, r->c.w, r->c.h, d);
+			mono = w_new(w);
+			snprintf(dict, sizeof dict, "/Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceGray "
+				 "/BitsPerComponent 1", r->c.w, r->c.h);
+			w_stream(w, mono, dict, d, rb * r->c.h);
+			free(d);
 		}
 	}
 	/* what other viewers draw */

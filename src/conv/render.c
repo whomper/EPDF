@@ -898,6 +898,7 @@ static FT_UInt glyph_index(FT_Face face, int comp, uint32_t code, uint32_t uni)
 	return gid;
 }
 
+#define MONO_INK 64		/* of 255: a mono glyph's pixel inked from a quarter */
 static void glyph_hook(void *u, long prog, int kind, const char *base, int comp, uint32_t code, uint32_t uni,
 		       const fx *gm, int mode)
 {
@@ -946,7 +947,7 @@ static void glyph_hook(void *u, long prog, int kind, const char *base, int comp,
 		k[1] = t.xy >> 6;
 		k[2] = t.yx >> 6;
 		k[3] = t.yy >> 6;
-		k[4] = sz >> 10;
+		k[4] = (sz >> 10) * 2 + (r->mono_glyphs != 0);	/* (a mono glyph isn't a grey one) */
 		hv = ((unsigned long)(uintptr_t)face >> 4) ^ code * 31u ^ uni * 131u ^ (unsigned long)k[4] * 7u ^
 		     (unsigned long)k[0] * 3u;
 		for (e = f->gh[hv % GC_HASH]; e; e = e->next)
@@ -964,6 +965,12 @@ static void glyph_hook(void *u, long prog, int kind, const char *base, int comp,
 			}
 			dl.x = dl.y = 0;
 			FT_Set_Transform(face, &t, &dl);
+			/* made as ever (unhinted, grey-edged); the mono page's then a
+			   bit a pixel below, every pixel a quarter inked (MONO_INK)
+			   black: crisp at 10 pixels with every stroke. FreeType's own
+			   mono rendering lost an r's arm and a t's bar at that size
+			   (EDOS_01.PDF), and its light hinting (the auto-hinter) read
+			   no better and held a Falcon 305 ms at a font's first glyph */
 			if (FT_Load_Glyph(face, gid, FT_LOAD_NO_BITMAP | FT_LOAD_NO_HINTING) ||
 			    FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL)) {
 				r->glyphs_missed++;
@@ -992,8 +999,15 @@ static void glyph_hook(void *u, long prog, int kind, const char *base, int comp,
 			e->bm = e->w * e->h > 0 ? malloc((size_t)e->w * e->h) : NULL;
 			if (e->w * e->h > 0 && !e->bm)
 				return;
-			for (y = 0; y < e->h; y++)
-				memcpy(e->bm + (long)y * e->w, bm->buffer + (long)y * bm->pitch, (size_t)e->w);
+			if (r->mono_glyphs) {
+				int x;
+
+				for (y = 0; y < e->h; y++)
+					for (x = 0; x < e->w; x++)
+						e->bm[(long)y * e->w + x] = bm->buffer[(long)y * bm->pitch + x] > MONO_INK ? 255 : 0;
+			} else
+				for (y = 0; y < e->h; y++)
+					memcpy(e->bm + (long)y * e->w, bm->buffer + (long)y * bm->pitch, (size_t)e->w);
 			f->gbytes += (long)e->w * e->h + (long)sizeof *e;
 			e->next = f->gh[hv % GC_HASH];
 			f->gh[hv % GC_HASH] = e;
