@@ -371,6 +371,27 @@ int doc_pic_busy(void)
 	return rpic != NULL;
 }
 
+/* the picture being made is one ahead of the view and one shown waits:
+   the one ahead stopped, its slot let go (made again later, if room) */
+void doc_pic_drop_ahead(void)
+{
+	if (!rpic || !rpic->ahead || !pics_shown_waiting())
+		return;
+	abandon = 1;
+	while (!pdone) {
+		running = &pic_co;
+		coro_switch(&main_co, &pic_co);
+		running = NULL;
+		pics_band();		/* (a band waiting is let go on) */
+	}
+	free(rpic_std);
+	rpic_std = NULL;
+	pics_release(rpic);
+	rpic = NULL;
+	abandon = 0;
+	log_event("picture", "ahead-stopped", NULL);
+}
+
 /* the progress row's (Erez, 2 Nov 2026) */
 long doc_reading(int *prog)
 {
@@ -384,8 +405,8 @@ long doc_reading(int *prog)
 
 int doc_pic_progress(long *page, long *made, long *of)
 {
-	if (!rpic)
-		return 0;
+	if (!rpic || rpic->ahead)
+		return 0;		/* (one ahead of the view is made quietly) */
 	*page = rpic->page;
 	*made = rpic->made;
 	*of = rpic->h;			/* (made whole, by the DSP or as a standard bitmap: 0 until done) */

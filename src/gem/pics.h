@@ -19,11 +19,18 @@ typedef struct {
 					   row at a time; h when PICS_READY */
 	int heap;			/* bm's memory is malloc's (else GEMDOS's) */
 	unsigned long used;
+	int ahead;			/* wanted ahead of the view, not yet shown (Erez, 4 Nov 2026:
+					   pictures made quietly before they come into view) */
 } PICE;
 
 PICE *pics_get(long obj, int w, int h, int flip);	/* NULL: every slot busy decoding */
 int pics_waiting(void);
-PICE *pics_next(void);			/* one to decode, marked decoding */
+PICE *pics_next(void);			/* one to decode, marked decoding (one shown first) */
+/* a picture ahead of the view wanted, quietly: 1 queued, 0 there already,
+   -1 no room (every slot taken, or the memory too short to spare) */
+int pics_ahead(long obj, int w, int h, int flip, long page);
+int pics_shown_waiting(void);		/* a picture the window shows waits to be decoded */
+void pics_release(PICE *e);		/* its slot let go (an ahead one stopped) */
 /* the decoder's answer for a picture made whole: std (the standard
    bitmap) or NULL (why) */
 void pics_done(PICE *e, unsigned char *std, long bytes, int why);

@@ -52,6 +52,7 @@ static char wname[96];
 static char bar_base[112];		/* the status bar's first words: the page, and the status after it */
 static void bar_compose(void);
 static void bar_laid(void);
+static void ahead_again(void);
 
 short win_handle(void)
 {
@@ -1049,6 +1050,7 @@ void win_redraw(const GRECT *area)
  */
 void win_draw_all(void)
 {
+	ahead_again();
 	if (win < 0)
 		return;
 	win_redraw(&whole);		/* the progress row too */
@@ -1088,6 +1090,7 @@ void win_draw_rows(long r0, long r1)
 static void moved_rest(void)
 {
 	sliders_due = 1;
+	ahead_again();
 	if (win_progress_due())
 		win_progress_draw();
 }
@@ -1254,6 +1257,62 @@ void win_goto_page(long n)
 	moved_rest();			/* the sliders and the bar's page, in the same turn */
 }
 
+/*
+ * Pictures ahead of the view (Erez, 4 Nov 2026: "can the images even
+ * though they are not yet displayed get silently converted behind the
+ * scene in a way that will not block the user reading and navigating"):
+ * the rows after the view, to AHEAD_PAGES pages on, looked at a few a
+ * turn when nothing else waits, each picture's first row queued to be
+ * made quietly (pics_ahead, which takes two at a time). Looked at again
+ * after the view moves, a page comes or a picture is made.
+ */
+#define AHEAD_PAGES 3
+static int ahead_due;			/* the view moved: look ahead again */
+static long ahead_row;			/* the next row to look at, from the top of the view */
+
+int win_ahead_due(void)
+{
+	return ahead_due && win >= 0 && !iconified && doc_view();
+}
+
+void win_ahead(void)
+{
+	DOCVIEW *v = doc_view();
+	unsigned long t0 = tos_ms();
+	long last = -1;
+
+	if (!v || win < 0 || iconified) {
+		ahead_due = 0;
+		return;
+	}
+	if (ahead_row < rows + 1)
+		ahead_row = rows + 1;
+	for (;; ahead_row++) {
+		int kind;
+		const char *str;
+		long n, page, off;
+
+		if (!dv_row(v, ahead_row, &kind, &str, &n, &page, &off) || kind == DV_WAIT)
+			break;			/* (the pages not read yet: looked at when they come) */
+		if (last < 0)
+			last = page + AHEAD_PAGES;
+		if (page > last)
+			break;			/* the pages after the view's next few: when it gets nearer */
+		if (kind == DV_PIC && v->pic.row == 0 &&
+		    pics_ahead(v->pic.obj, v->pic.w, v->pic.h, v->pic.flip, v->pic.page) < 0)
+			break;			/* enough queued, or no room: again when the view moves */
+		if (tos_ms() - t0 >= 20)
+			return;			/* (the rest in the next idle turn) */
+	}
+	ahead_due = 0;
+}
+
+static void ahead_again(void)
+{
+	ahead_due = 1;
+	ahead_row = 0;
+}
+
 /* picture obj is ready (or can't be shown): its rows drawn again where they show */
 void win_pic_ready(long obj)
 {
@@ -1272,6 +1331,7 @@ void win_pic_ready(long obj)
 		}
 	if (first >= 0)
 		win_draw_rows(first, last + 1);
+	ahead_again();			/* (room for the next one ahead) */
 }
 
 /* pixel rows from, to of picture obj made (it is made from the top
@@ -1320,6 +1380,7 @@ void win_page_ready(long n)
 	}
 	if (first >= 0)
 		win_draw_rows(first, rows + 1);	/* the rows after it moved too */
+	ahead_again();			/* (its pictures, if ahead) */
 }
 
 /* the place in the text at screen point (mx, my): its page and offset in

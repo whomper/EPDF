@@ -1044,10 +1044,10 @@ int main(void)
 		/* the sliders after a scroll, once no key waits; the reading
 		   on while nothing else does */
 		if (win_sliders_due() || menus_due || pending || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0 ||
-		    win_progress_due())
+		    win_progress_due() || win_ahead_due())
 			flags |= MU_TIMER;
 		t = win_sliders_due() || menus_due || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0 ||
-		    win_progress_due() ? 0 : bg_timer(pending, 1000);
+		    win_progress_due() ? 0 : bg_timer(pending || win_ahead_due(), 1000);
 		{
 			long pw = win_progress_wait();	/* the row to go once nothing has run for a while */
 
@@ -1107,6 +1107,8 @@ int main(void)
 			} else if ((doc_pic_busy() || pics_waiting()) && bg_may_work() && ((pic_turn ^= 1) || !doc_pending())) {
 				long obj = -1;
 
+				doc_pic_drop_ahead();	/* (one shown waits: the one ahead gives way) */
+
 				/* a picture the window shows, every other turn (it has a
 				   stack of its own): the user sees its frame, and the text goes
 				   on being read in the turns between (a big JPEG takes minutes
@@ -1143,6 +1145,8 @@ int main(void)
 				if (!find_dir)
 					while (!read_on() && doc_pending() && bg_more())
 						;
+			} else if (win_ahead_due() && bg_may_work()) {
+				win_ahead();	/* pictures ahead of the view, queued quietly */
 			}
 		}
 	}
