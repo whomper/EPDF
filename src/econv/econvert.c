@@ -31,6 +31,8 @@
 #include "av.h"
 #include "dd.h"
 #include "progbar.h"
+#include "fsel.h"
+#include "scrsize.h"
 #include "text.h"
 #include "crash.h"
 #include "inf.h"
@@ -124,21 +126,16 @@ static long mem_free(void)
    limitation is based on the actual user's machine ... figure out
    available display area yourself and adapt to it"): the whole page's
    picture as wide as EPDF's text column in a window the desktop's size
-   (its kind and margins: textwin.c's WKIND and MARGIN, the system
-   font's cell), and a picture at most the desktop's window's inside */
+   (its kind and margins: textwin.c's WKIND and MARGIN), and a picture at
+   most that window's inside (common's scr_work_size) */
 static void screen_sizes(int *page_w, int *pic_w)
 {
-	short dx, dy, dw, dh, x, y, w, h;
+	short w, h;
 
-	wind_get(0, WF_WORKXYWH, &dx, &dy, &dw, &dh);
-	wind_calc(WC_WORK, NAME | CLOSER | FULLER | MOVER | SIZER | UPARROW | DNARROW | VSLIDE, dx, dy, dw, dh,
-		  &x, &y, &w, &h);
-	*page_w = (w - 2 * 8) / gl_wchar * gl_wchar;
+	scr_work_size(NAME | CLOSER | FULLER | MOVER | SIZER | UPARROW | DNARROW | VSLIDE, 8, &w, &h);
+	*page_w = w;
+	scr_work_size(NAME | CLOSER | FULLER | MOVER | SIZER | UPARROW | DNARROW | VSLIDE, 0, &w, &h);
 	*pic_w = w;
-	if (*page_w < 64)
-		*page_w = 640;
-	if (*pic_w < 64)
-		*pic_w = *page_w;
 }
 
 #define MAXF 200
@@ -585,31 +582,13 @@ static void redraw_progress(void)
 
 static void begin(void);
 
-/* the file selector gone: the button let go and the clicks it left queued
-   swallowed (Erez, 5 Nov: the files chosen, then the folder to write to,
-   and "0 files to convert": a double click's second click in the
-   selector, after it had closed on the first, landed on the window's
-   Clear) */
-static void after_fsel(void)
-{
-	short mx, my, mb, ks, msg[8];
-	AEVENT ev;
-	int n = 0;
-
-	do
-		graf_mkstate(&mx, &my, &mb, &ks);
-	while ((mb & 1) && ++n < 2000);
-	while (evnt_multi_(MU_BUTTON | MU_TIMER, 1, 1, 1, 0, msg, &ev) & MU_BUTTON)
-		;
-}
-
 static int pick(const char *title, char *dir, long ndir, char *name, long nname)
 {
 	char path[200];
 	short button;
 
 	snprintf(path, sizeof path, "%s\\*.PDF", dir[0] ? dir : "C:");
-	if (!fsel_exinput(path, name, &button, title) || (after_fsel(), !button))
+	if (!fsel_exinput(path, name, &button, title) || (fsel_settle(), !button))	/* (its clicks left: fsel.h) */
 		return 0;
 	{
 		char *s = strrchr(path, '\\');
@@ -852,19 +831,17 @@ static void command(int c)
 
 static void click(short mx, short my)
 {
-	short o = objc_find(tree, BOX, 8, mx, my), mb, ks;
+	short o = objc_find(tree, BOX, 8, mx, my);
 
 	/* a button as GEM's: shown pressed, and taken only when let go on it
-	   (a click that wasn't the user's, or one moved off, does nothing) */
-	if (o >= 0 && (tree[o].ob_flags & EXIT) && !(tree[o].ob_state & DISABLED)) {
-		graf_mkstate(&mx, &my, &mb, &ks);
-		if (!(mb & 1))
-			return;		/* (the button already up: not a press on it) */
-		if (!graf_watchbox(tree, o, SELECTED, 0)) {
-			return;
-		}
-		tree[o].ob_state &= ~SELECTED;
+	   (a click that wasn't the user's, or one moved off, does nothing:
+	   common's dlg_win_button) */
+	if (o >= 0 && (tree[o].ob_flags & EXIT)) {
+		int took = dlg_win_button(tree, o);
+
 		redraw_obj(o);
+		if (!took)
+			return;
 	}
 	switch (o) {
 	case B_ADD: command(CMD_ADD); break;

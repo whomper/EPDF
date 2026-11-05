@@ -22,6 +22,7 @@
 #include "pic.h"
 #include "click.h"
 #include "pics.h"
+#include "enlarge.h"
 #include "epdf.h"
 #include "progbar.h"
 #include "badge.h"
@@ -424,35 +425,14 @@ static int enlargeable(const PICE *e, const DVPIC *pr)
 	return e && e->sw > pr->w + 4;
 }
 
-/* the enlarge mark at (x, y), a watermark at a picture's top right (Erez,
-   5 Nov 2026: "an icon not a text ... a visible watermark at the top right
-   of the picture"): a white square with a black edge and a two-headed
-   arrow from corner to corner, 11 x 11, drawn where the clip allows */
+/* the enlarge mark at (x, y), a watermark at a picture's top right
+   (common's enlarge_mark), where the clip c allows */
 static void enlarge_icon(const GRECT *c, short x, short y)
 {
-	short p[4];
-
-	if (x + 10 < c->x || y + 10 < c->y || x >= c->x + c->w || y >= c->y + c->h)
+	if (x + ENLARGE_SIZE <= c->x || y + ENLARGE_SIZE <= c->y || x >= c->x + c->w || y >= c->y + c->h)
 		return;
-	p[0] = x;
-	p[1] = y;
-	p[2] = (short)(x + 10);
-	p[3] = (short)(y + 10);
-	vswr_mode(vdi_h, MD_REPLACE);
-	vsf_interior(vdi_h, FIS_SOLID);
-	vsf_perimeter(vdi_h, 0);
-	vsf_color(vdi_h, 0);
-	vr_recfl(vdi_h, p);
+	enlarge_mark(vdi_h, x, y);
 	fill_set = 0;
-	line_col(x, y, (short)(x + 10), y, 1);
-	line_col(x, (short)(y + 10), (short)(x + 10), (short)(y + 10), 1);
-	line_col(x, y, x, (short)(y + 10), 1);
-	line_col((short)(x + 10), y, (short)(x + 10), (short)(y + 10), 1);
-	line_col((short)(x + 3), (short)(y + 7), (short)(x + 7), (short)(y + 3), 1);	/* the arrow */
-	line_col((short)(x + 5), (short)(y + 3), (short)(x + 7), (short)(y + 3), 1);
-	line_col((short)(x + 7), (short)(y + 3), (short)(x + 7), (short)(y + 5), 1);
-	line_col((short)(x + 3), (short)(y + 5), (short)(x + 3), (short)(y + 7), 1);
-	line_col((short)(x + 3), (short)(y + 7), (short)(x + 5), (short)(y + 7), 1);
 }
 
 static void draw_pic(const GRECT *c, short y, const DVPIC *pr)

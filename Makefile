@@ -317,7 +317,7 @@ binary/CONVTEST.PRG: $(CV_ATARI_OBJ) build/m68030cv/atari/convtest.o build/m6803
 EC_GEM_SRC = src/econv/econvert.c src/gem/gemui.c src/view/inf.c common/atari/gem.c common/atari/crash.c \
              common/ui/mbar.c common/ui/aboutbox.c common/ui/aboutline.c common/ui/alert.c common/ui/dialog.c \
              common/ui/field.c common/ui/av.c common/ui/text.c common/ui/help.c common/ui/dd.c common/ui/progbar.c \
-             common/ui/click.c common/ui/clip.c common/ui/accmem.c common/src/bidi.c
+             common/ui/click.c common/ui/clip.c common/ui/accmem.c common/src/bidi.c common/ui/fsel.c common/ui/scrsize.c
 $(patsubst %.c,build/m68030cv/%.o,$(EC_GEM_SRC)): XFLAGS += -Isrc/gem -Isrc/view -Icommon/ui -Isrc/conv
 build/m68030cv/version.o: build/m68000/version.c | build/m68030cv
 	$(XCC) $(XFLAGS) -c -o $@ $<
@@ -347,7 +347,7 @@ GEM_SRC = src/gem/epdf.c src/gem/doc.c src/gem/textwin.c src/gem/badge.c src/gem
           src/view/textview.c src/view/docview.c src/view/tstore.c src/view/inf.c src/view/search.c common/ui/bgwork.c common/ui/twin.c \
           src/pdfimg.c src/ccitt.c src/rscale.c $(PIC_SRC) \
           common/atari/gem.c common/atari/crash.c common/ui/mbar.c common/ui/aboutbox.c common/ui/aboutline.c \
-          common/ui/alert.c common/ui/dialog.c common/ui/field.c common/ui/av.c common/ui/text.c common/ui/clip.c common/ui/iconify.c common/ui/help.c common/ui/dd.c common/ui/popup.c common/ui/fontsel.c common/ui/click.c common/ui/progbar.c \
+          common/ui/alert.c common/ui/dialog.c common/ui/field.c common/ui/av.c common/ui/text.c common/ui/clip.c common/ui/iconify.c common/ui/help.c common/ui/dd.c common/ui/popup.c common/ui/fontsel.c common/ui/click.c common/ui/progbar.c common/ui/enlarge.c \
           common/src/charset.c common/src/bidi.c common/ui/accmem.c common/atari/bigbuf.c common/atari/dspjpeg.c
 GEM_OBJ = $(patsubst %.c,build/m68000/%.o,$(GEM_SRC)) build/m68000/version.o
 $(patsubst %.c,build/m68000/%.o,$(GEM_SRC)): XFLAGS += -Isrc/gem -Isrc/view -Icommon/ui -I$(T)/tjpgd -I$(T)/nsgif/include -I$(T)/nsgif/src
