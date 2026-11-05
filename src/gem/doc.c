@@ -69,21 +69,55 @@ static PPREP rprep;			/* a converted PDF's page read: its whole pictures */
 static TSTORE pstore;
 static int pstore_open, pages_mode, pages_have;
 
+/* each page's picture View > Pages shows and its double (EConvert's for
+   a machine with the room: shown whole when the page is clicked), its
+   size: kept by page, read on the main stack (doc_double_of) */
+static struct {
+	long obj, dbl, w, h;
+} *pdbl;
+
 static void pages_note(long n, const PPREP *pp)
 {
 	char b[48];
-	long obj = pp->colour >= 0 && planes >= 4 ? pp->colour : pp->mono;
+	int col = pp->colour >= 0 && planes >= 4;
+	long obj = col ? pp->colour : pp->mono, w = col ? pp->colour_w : pp->mono_w, h = col ? pp->colour_h : pp->mono_h;
 	int k = 0;
 
 	if (!pstore_open)
 		return;
+	if (w <= 0 || h <= 0) {
+		w = 640;		/* (a file of 1.1's) */
+		h = pp->w > 0 ? 640L * pp->h / pp->w : 828L;
+	}
 	if (obj >= 0) {
-		/* (its size the picture's, 640 wide: shown as it is made where
-		   the window has room, not a point a pixel) */
-		k = snprintf(b, sizeof b, "\x7F%ld %dx%ld\n", obj, 640, pp->w > 0 ? 640L * pp->h / pp->w : 828L);
+		/* (its size the picture's own: shown as it is made where the
+		   window has room, not a point a pixel) */
+		k = snprintf(b, sizeof b, "\x7F%ld %ldx%ld\n", obj, w, h);
 		pages_have = 1;
 	}
+	if (!pdbl && onpages > 0)
+		pdbl = calloc((size_t)onpages, sizeof *pdbl);
+	if (pdbl && n >= 0 && n < onpages) {
+		pdbl[n].obj = obj;
+		pdbl[n].dbl = pp->dbl >= 0 && pp->dbl_w > w ? pp->dbl : -1;
+		pdbl[n].w = pp->dbl_w;
+		pdbl[n].h = pp->dbl_h;
+	}
 	ts_put(&pstore, n, b, k);		/* (none: the page's head alone) */
+}
+
+int doc_double_of(long obj, long *dbl, long *w, long *h)
+{
+	long n;
+
+	for (n = 0; pdbl && n < onpages; n++)
+		if (pdbl[n].obj == obj && pdbl[n].dbl >= 0) {
+			*dbl = pdbl[n].dbl;
+			*w = pdbl[n].w;
+			*h = pdbl[n].h;
+			return 1;
+		}
+	return 0;
 }
 
 int doc_has_pages(void)
@@ -499,6 +533,8 @@ void doc_close(void)
 	if (pstore_open)
 		ts_close(&pstore);
 	pstore_open = pages_mode = pages_have = 0;
+	free(pdbl);
+	pdbl = NULL;
 	pdf_close(doc);
 	free(doc);
 	doc = NULL;

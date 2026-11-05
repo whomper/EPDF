@@ -55,6 +55,7 @@ void cv_defaults(CVOPT *o)
 	o->pages = CV_PAGES_MONO;
 	o->photos = CV_PHOTOS_INDEXED;
 	o->pic_size = CV_PIC_SCREEN;
+	o->page_double = 1;
 }
 
 /* ------------------------------------------------------------------ the writer */
@@ -625,7 +626,7 @@ static int convert_page(CV *c, long n)
 	RDRAWING dw[NDRAW];
 	int nd = 0, k, drawn;
 	fx cut[NDRAW * 4];
-	long cut_obj[NDRAW], textobj, mono = -1, colour = -1, contobj, pageobj = c->pages[n];
+	long cut_obj[NDRAW], textobj, mono = -1, colour = -1, dbl = -1, contobj, pageobj = c->pages[n];
 	PTEXT t;
 	char *at = NULL;
 	long alen = 0, i;
@@ -852,6 +853,7 @@ static int convert_page(CV *c, long n)
 			cv_phase = "render-mono";
 			drawn = render_page(r, n, c->page_w) == 0;
 		}
+		rb = (r->c.w + 7) / 8;
 		d = drawn ? malloc((size_t)rb * r->c.h) : NULL;
 		if (!d)
 			c->short_mem = 1;
@@ -873,6 +875,34 @@ static int convert_page(CV *c, long n)
 				 "/BitsPerComponent 1", r->c.w, r->c.h);
 			w_stream(w, mono, dict, d, rb * r->c.h);
 			free(d);
+		}
+		{
+			/* the mono page again at twice the width, where the machine
+			   has room to draw it in one piece (Erez, 5 Nov 2026: View >
+			   Pages, a click on the page shows it at double size, its text
+			   twice as high); the page as wide as the window stays what
+			   View > Pages shows (a 1-bit page halved spoilt its shading) */
+			int dw2 = 2 * c->page_w;
+			long need = (long)dw2 * (dw2 * 1414L / 1000) * 2;
+
+			if (mono >= 0 && c->o->page_double && !c->banded && (!c->o->mem_free || c->o->mem_free() > need * 5 / 2)) {
+				r->mono_glyphs = 1;
+				cv_phase = "render-double";
+				if (render_page(r, n, dw2) == 0) {
+					long rb2 = (r->c.w + 7) / 8;
+					unsigned char *d2 = malloc((size_t)rb2 * r->c.h);
+
+					if (d2) {
+						cv_phase = "double";
+						dither_mono_rows(r->c.px, r->c.w, r->c.h, 0, d2);
+						dbl = w_new(w);
+						snprintf(dict, sizeof dict, "/Type /XObject /Subtype /Image /Width %d /Height %d "
+							 "/ColorSpace /DeviceGray /BitsPerComponent 1", r->c.w, r->c.h);
+						w_stream(w, dbl, dict, d2, rb2 * r->c.h);
+						free(d2);
+					}
+				}
+			}
 		}
 		r->mono_glyphs = was;
 	}
@@ -906,6 +936,8 @@ static int convert_page(CV *c, long n)
 		w_printf(w, " /Mono %ld 0 R", mono);
 	if (colour >= 0)
 		w_printf(w, " /Colour %ld 0 R", colour);
+	if (dbl >= 0)
+		w_printf(w, " /Double %ld 0 R", dbl);
 	w_printf(w, " >> >>\nendobj\n");
 	sb_free(&txt);
 	sb_free(&cont);

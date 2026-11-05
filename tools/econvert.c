@@ -57,6 +57,8 @@ int main(int argc, char **argv)
 		else if (!strcmp(argv[i], "--pages") && i + 1 < argc) {
 			i++;
 			o.pages = !strcmp(argv[i], "none") ? CV_PAGES_NONE : !strcmp(argv[i], "colour") ? CV_PAGES_COLOUR : CV_PAGES_MONO;
+		} else if (!strcmp(argv[i], "--normal-pages")) {
+			o.page_double = 0;
 		} else if (!strcmp(argv[i], "--page-width") && i + 1 < argc) {
 			o.page_w = atoi(argv[++i]);
 		} else if (!strcmp(argv[i], "--picture-width") && i + 1 < argc) {

@@ -22,6 +22,9 @@ typedef struct {
 	/* the screen's: the whole page's pictures' width (EPDF's text column
 	   in a window the size of the desktop) and a picture's most; 0: 640 */
 	int page_w, pic_w;
+	/* the mono page at twice page_w where there is memory to draw it in
+	   one piece (EPDF shows it at page_w, and whole when clicked); 1 */
+	int page_double;
 	long canvas_max;		/* the page canvas's most bytes, 0 any: a page drawn in
 				   bands under it (slower) */
 	/* the memory free now (EConvert: GEMDOS's), or NULL: a page refused

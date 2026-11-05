@@ -415,7 +415,13 @@ static short pic_x(int w)
    (Erez, 5 Nov 2026) */
 static int enlargeable(const PICE *e, const DVPIC *pr)
 {
-	return e && e->sw > pr->w + 4 && pr->w >= 32 && pr->h >= 24;
+	long d, w, h;
+
+	if (pr->w < 32 || pr->h < 24)
+		return 0;
+	if (doc_double_of(pr->obj, &d, &w, &h))
+		return 1;		/* (a page at double size: View > Pages) */
+	return e && e->sw > pr->w + 4;
 }
 
 /* the enlarge mark at (x, y), a watermark at a picture's top right (Erez,
@@ -1067,7 +1073,7 @@ void win_progress_draw(void)
 static struct {
 	int on;
 	DVPIC p;			/* the picture at the size shown whole */
-	long top;			/* its first row in view */
+	long top, left;			/* its first row and column in view */
 } zoom;
 
 int win_zoomed(void)
@@ -1089,6 +1095,7 @@ static void draw_zoom(const GRECT *c)
 	short x = (short)(work.x + (work.w - zoom.p.w) / 2), y = work.y;
 	long made = e && e->bm.fd_addr ? (e->state == PICS_READY ? zoom.p.h : e->ready) : 0;
 	long y1 = zoom.top + work.h < zoom.p.h ? zoom.top + work.h : zoom.p.h;
+	short vw = (short)(zoom.p.w - zoom.left < work.w ? zoom.p.w - zoom.left : work.w);	/* its columns in view */
 
 	if (x < work.x)
 		x = work.x;
@@ -1101,23 +1108,23 @@ static void draw_zoom(const GRECT *c)
 		long m1 = made < y1 ? made : y1;
 
 		memset(&scr, 0, sizeof scr);
-		pxy[0] = 0;
+		pxy[0] = (short)zoom.left;
 		pxy[1] = (short)zoom.top;
-		pxy[2] = (short)(zoom.p.w - 1);
+		pxy[2] = (short)(zoom.left + vw - 1);
 		pxy[3] = (short)(m1 - 1);
 		pxy[4] = x;
 		pxy[5] = y;
-		pxy[6] = (short)(x + zoom.p.w - 1);
+		pxy[6] = (short)(x + vw - 1);
 		pxy[7] = (short)(y + (m1 - zoom.top) - 1);
 		vro_cpyfm(vdi_h, 3, pxy, &e->bm, &scr);
 	} else {
 		/* its frame till its rows come */
 		short yb = (short)(y + (y1 - zoom.top) - 1);
 
-		line_col(x, y, (short)(x + zoom.p.w - 1), y, 1);
-		line_col(x, yb, (short)(x + zoom.p.w - 1), yb, 1);
+		line_col(x, y, (short)(x + vw - 1), y, 1);
+		line_col(x, yb, (short)(x + vw - 1), yb, 1);
 		line_col(x, y, x, yb, 1);
-		line_col((short)(x + zoom.p.w - 1), y, (short)(x + zoom.p.w - 1), yb, 1);
+		line_col((short)(x + vw - 1), y, (short)(x + vw - 1), yb, 1);
 	}
 	vswr_mode(vdi_h, MD_REPLACE);
 	vst_color(vdi_h, 1);
@@ -1146,16 +1153,50 @@ int win_zoom_at(short mx, short my)
 	e = pics_get(v->pic.obj, v->pic.w, v->pic.h, v->pic.flip);
 	if (!enlargeable(e, &v->pic))
 		return 0;
-	w = e->sw < cols * cw ? e->sw : cols * cw;
-	h = e->sh * w / e->sw * 16 / (pix_aspect > 0 ? pix_aspect : 16);
-	if (h < 1)
-		h = 1;
-	if (h > 8 * 1024)
-		h = 8 * 1024;
-	zoom.p = v->pic;
+	{
+		/* a page whose double EConvert made: that one, its own size */
+		long d, dw, dh;
+
+		if (doc_double_of(v->pic.obj, &d, &dw, &dh) && dw > 0 && dh > 0) {
+			static PICE dd;
+
+			memset(&dd, 0, sizeof dd);
+			dd.sw = dw;
+			dd.sh = dh;
+			e = &dd;
+			zoom.p.obj = d;
+		} else
+			zoom.p.obj = v->pic.obj;
+	}
+	/* its own pixels, up to twice the text column (wider than the window:
+	   Left and Right move it; a converted page drawn at double size), as
+	   much of that as memory holds: the machine's own (Erez, 5 Nov) */
+	w = e->sw < 2L * cols * cw ? e->sw : 2L * cols * cw;
+	for (;;) {
+		long bytes;
+
+		h = e->sh * w / e->sw * 16 / (pix_aspect > 0 ? pix_aspect : 16);
+		if (h < 1)
+			h = 1;
+		if (h > 8 * 1024)
+			h = 8 * 1024;
+		bytes = (w + 15) / 16 * 2 * (planes > 8 ? 16 : planes) * h;
+		if (w <= v->pic.w + 4)
+			return 0;	/* (no room for more than is shown) */
+		if ((long)Malloc(-1L) >= bytes + 128 * 1024L)
+			break;
+		w = w * 3 / 4;
+	}
+	{
+		long o = zoom.p.obj;
+
+		zoom.p = v->pic;
+		zoom.p.obj = o;
+	}
 	zoom.p.w = (int)w;
 	zoom.p.h = (int)h;
 	zoom.top = 0;
+	zoom.left = 0;
 	zoom.on = 1;
 	log_event("zoom", NULL, NULL);
 	win_draw_all();
@@ -1169,6 +1210,18 @@ int win_zoom_key(short scan)
 
 	if (!zoom.on)
 		return 0;
+	if (scan == 0x4b || scan == 0x4d) {
+		/* Left, Right: its columns, where it is wider than the window */
+		long l = zoom.left + (scan == 0x4b ? -work.w / 2 : work.w / 2), mx = zoom.p.w > work.w ? zoom.p.w - work.w : 0;
+
+		l = l < 0 ? 0 : l > mx ? mx : l;
+		l &= ~15L;		/* (on a word of the bitmap: the copy's fast way) */
+		if (l != zoom.left) {
+			zoom.left = l;
+			win_redraw(&work);
+		}
+		return 1;
+	}
 	switch (scan) {
 	case 0x01: case 0x0e: case 0x1c: case 0x72: case 0x61:	/* Esc, Backspace, Return, Enter, Undo */
 		win_zoom_end();

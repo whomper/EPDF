@@ -150,6 +150,21 @@ int pdf_prepared_page(PDOC *d, long n, SBUF *text, PPREP *pp)
 		return -1;
 	pp->mono = ref_num(pd_getraw(a, "Mono"));
 	pp->colour = ref_num(pd_getraw(a, "Colour"));
+	pp->dbl = ref_num(pd_getraw(a, "Double"));
+	{
+		/* each one's own pixels */
+		long *const o[3] = { &pp->mono, &pp->colour, &pp->dbl };
+		long *const wh[3][2] = { { &pp->mono_w, &pp->mono_h }, { &pp->colour_w, &pp->colour_h },
+					 { &pp->dbl_w, &pp->dbl_h } };
+		int k;
+
+		for (k = 0; k < 3; k++) {
+			POBJ *im = *o[k] >= 0 ? pdf_get(d, *o[k]) : NULL;
+
+			*wh[k][0] = im && im->t == PO_DICT ? pd_int(d, im, "Width", 0) : 0;
+			*wh[k][1] = im && im->t == PO_DICT ? pd_int(d, im, "Height", 0) : 0;
+		}
+	}
 	t = pd_get(d, a, "Text");
 	if (!t || t->t != PO_DICT)
 		return -1;

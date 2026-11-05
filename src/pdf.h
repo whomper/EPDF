@@ -215,6 +215,8 @@ POBJ *pdf_page(PDOC *d, long n, POBJ **res, POBJ **box, long *rot);
 typedef struct {
 	long mono, colour;
 	long w, h;
+	long dbl;			/* the mono page at twice the width (-1 none) */
+	long mono_w, mono_h, colour_w, colour_h, dbl_w, dbl_h;	/* their own pixels (0 not known) */
 } PPREP;
 int pdf_prepared_page(PDOC *d, long n, SBUF *text, PPREP *pp);
 

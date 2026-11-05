@@ -32,8 +32,11 @@ Each page dictionary has an entry `/AERA`, a dictionary:
 | Key | Value |
 |---|---|
 | `/Text` | a stream (FlateDecode): the page's text as EPDF stores it (below) |
-| `/Mono` | when the batch made it: the page whole as a picture, 640 pixels wide, 1 bit a pixel |
-| `/Colour` | when the batch made it: the page whole in 16 colours, 640 pixels wide, 4 bits a pixel |
+| `/Mono` | when the batch made it: the page whole as a picture, 1 bit a pixel, as wide as EPDF's text column in a window the size of the converting machine's desktop (640 before EConvert 1.3) |
+| `/Colour` | when the batch made it: the page whole in 16 colours, 4 bits a pixel, as wide as `/Mono` |
+| `/Double` | where the converting machine had the memory: `/Mono` at twice its width, shown when the page is clicked in View > Pages |
+
+A page's pictures are kept at their own pixels up to the converting machine's window width (a drawing at what the page drawn gives it); their lines in `/Text` keep their size on the page, so EPDF shows them as the page does and whole when clicked.
 
 ### The text
 

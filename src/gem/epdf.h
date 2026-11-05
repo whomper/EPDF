@@ -105,6 +105,8 @@ int win_zoom_at(short mx, short my);
 int win_zoomed(void);
 void win_zoom_end(void);
 int win_zoom_key(short scan);
+/* doc.c: a page's picture (View > Pages) and its double: 1, its object and size */
+int doc_double_of(long obj, long *dbl, long *w, long *h);
 
 /* font.c: the text view's font (FONT= in EPDF.INF) */
 void font_init(const char *setting, const char *dir);
