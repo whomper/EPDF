@@ -20,7 +20,11 @@ typedef struct {
 	int photos;			/* CV_PHOTOS_* (indexed) */
 	int pic_size;			/* CV_PIC_* (page) */
 	long canvas_max;		/* the page canvas's most bytes, 0 any: a page drawn in
-				   bands under it (a machine short of memory; slower) */
+				   bands under it (slower) */
+	/* the memory free now (EConvert: GEMDOS's), or NULL: a page refused
+	   memory with the canvas whole is made again in bands of an eighth of
+	   it (256 KB without it), and the rest of the file so */
+	long (*mem_free)(void);
 	const char *fontdir;		/* the standard fonts' files (Liberation*.ttf), or NULL */
 	/* asked between pieces of work: done and total for this file, in
 	   thousandths of its pages; 1 stops the conversion */

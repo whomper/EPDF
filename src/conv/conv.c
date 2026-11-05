@@ -66,6 +66,7 @@ typedef struct {
 	long next;			/* the next object number */
 	unsigned char buf[8192];
 	int bl;
+	SBUF *hold;			/* a page's bytes kept here till it is done (w_commit), or NULL */
 } PW;
 
 static void w_flush(PW *w)
@@ -80,6 +81,11 @@ static void w_bytes(PW *w, const void *p, long n)
 	const unsigned char *s = p;
 
 	w->pos += n;
+	if (w->hold) {
+		if (!sb_add(w->hold, p, n))
+			w->bad = 1;
+		return;
+	}
 	while (n > 0) {
 		long k = (long)sizeof w->buf - w->bl;
 
@@ -106,6 +112,46 @@ static void w_printf(PW *w, const char *fmt, ...)
 	if (n > (int)sizeof b - 1)
 		n = (int)sizeof b - 1;
 	w_bytes(w, b, n);
+}
+
+/* a page's bytes held from here (the page may be made again: w_undo) */
+typedef struct {
+	long pos, next;
+	int bad;
+} WMARK;
+
+static void w_hold(PW *w, SBUF *b, WMARK *m)
+{
+	sb_init(b);
+	m->pos = w->pos;
+	m->next = w->next;
+	m->bad = w->bad;
+	w->hold = b;
+}
+
+/* what was held written out */
+static void w_commit(PW *w)
+{
+	SBUF *b = w->hold;
+
+	w->hold = NULL;
+	if (b) {
+		w->pos -= b->len;	/* (w_bytes counts them again) */
+		if (b->len)
+			w_bytes(w, b->s, b->len);
+		sb_free(b);
+	}
+}
+
+/* what was held thrown away: the file as it was at w_hold */
+static void w_undo(PW *w, const WMARK *m)
+{
+	if (w->hold)
+		sb_free(w->hold);
+	w->hold = NULL;
+	w->pos = m->pos;
+	w->next = m->next;
+	w->bad = m->bad;
 }
 
 static long w_new(PW *w)
@@ -410,6 +456,8 @@ typedef struct {
 	long npm, cappm;
 	long npages;
 	long *pages;			/* each page's object */
+	int short_mem;			/* the page was refused memory somewhere (made worse or not at all) */
+	int banded;			/* the canvas in bands for the rest of the file */
 } CV;
 
 static long pic_known(CV *c, long src, int pw, int flip)
@@ -589,6 +637,8 @@ static int convert_page(CV *c, long n)
 	   for them and the drawings, and again for the mono page */
 	r->mono_glyphs = c->o->pages == CV_PAGES_MONO;
 	drawn = render_page(r, n, PAGE_W) == 0;
+	if (!drawn)
+		c->short_mem = 1;	/* (or damaged: made again in bands once, the same then) */
 	if (drawn)
 		nd = render_drawings(r, dw, NDRAW);
 	pwpt = drawn ? r->pw >> 16 : 612;
@@ -670,11 +720,15 @@ static int convert_page(CV *c, long n)
 
 				cv_phase = "drawing";
 				px = crop(r, n, &g->px, pw, ph);
+				if (!px)
+					c->short_mem = 1;
 
 				if (px) {
 					obj = w_new(w);
-					if (w_picture(w, obj, px, pw, ph, 0))	/* (a drawing: never a JPEG) */
+					if (w_picture(w, obj, px, pw, ph, 0)) {	/* (a drawing: never a JPEG) */
 						obj = -1;
+						c->short_mem = 1;
+					}
 					free(px);
 					c->st->drawings++;
 				}
@@ -684,12 +738,16 @@ static int convert_page(CV *c, long n)
 
 				cv_phase = "picture";
 				p = cv_image(&c->d, src, pw, ph, &why);
+				if (!p && why == PIC_MEMORY)
+					c->short_mem = 1;
 
 				if (p && p->w == pw && p->h == ph) {
 					flip_px(p->px, pw, ph, flip);
 					obj = w_new(w);
-					if (w_picture(w, obj, p->px, pw, ph, c->o->photos == CV_PHOTOS_JPEG))
+					if (w_picture(w, obj, p->px, pw, ph, c->o->photos == CV_PHOTOS_JPEG)) {
 						obj = -1;
+						c->short_mem = 1;
+					}
 					else {
 						pic_remember(c, src, pw, flip, obj);
 						c->st->pictures++;
@@ -747,6 +805,8 @@ static int convert_page(CV *c, long n)
 			int nc = 16;
 			unsigned char *dp = malloc((size_t)rb4 * r->c.h);
 
+			if (!dp)
+				c->short_mem = 1;
 			if (dp) {
 				char dc[512];
 				int o, q;
@@ -783,6 +843,8 @@ static int convert_page(CV *c, long n)
 			drawn = render_page(r, n, PAGE_W) == 0;
 		}
 		d = drawn ? malloc((size_t)rb * r->c.h) : NULL;
+		if (!d)
+			c->short_mem = 1;
 		if (d) {
 			int y;
 
@@ -921,7 +983,38 @@ int cv_convert(const char *in, const char *out, const CVOPT *o, CVSTAT *st, char
 			rc = -2;
 			break;
 		}
-		rc = convert_page(c, n);
+		{
+			/* the page's bytes held till it is done: one refused memory
+			   with the canvas whole (the fast way) is made again with it
+			   in bands, and so is the rest of the file (a 4 MB Falcon's
+			   2.2 MB free: EDOS_01.PDF) */
+			SBUF hb;
+			WMARK m;
+			long npm = c->npm, pics = st->pictures, draws = st->drawings;
+
+			w_hold(&c->w, &hb, &m);
+			c->short_mem = 0;
+			rc = convert_page(c, n);
+			if (rc != -2 && c->short_mem && !c->banded) {
+				long fr = o->mem_free ? o->mem_free() : 0;
+
+				w_undo(&c->w, &m);
+				c->npm = npm;
+				st->pictures = pics;
+				st->drawings = draws;
+				c->banded = 1;
+				rc_free(&c->r.c);
+				fr += (long)PAGE_W * 905 * 2;	/* (the canvas just given back, about) */
+				c->r.canvas_max = fr > 0 ? fr / 8 : 256L * 1024;
+				w_hold(&c->w, &hb, &m);
+				c->short_mem = 0;
+				rc = convert_page(c, n);
+			}
+			if (rc == -2)
+				w_undo(&c->w, &m);
+			else
+				w_commit(&c->w);
+		}
 		if (!rc && stopped)
 			rc = -2;
 		if (rc == -1 && !err[0])

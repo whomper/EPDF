@@ -113,6 +113,13 @@ static void setting(const char *name, const char *value, const char *note)
 
 /* ---------------------------------------------------------------- the batch */
 
+/* GEMDOS's largest free block: the converter's bands' size when a page
+   doesn't fit with its canvas whole */
+static long mem_free(void)
+{
+	return (long)Malloc(-1L);
+}
+
 #define MAXF 200
 static struct {
 	char path[160];
@@ -343,15 +350,7 @@ static void worker(void)
 			cv_defaults(&o);
 			o.pages = pages_set;
 			o.photos = photos_set;
-			{
-				/* the page canvas (640 x 905 at 16 bits, 1.16 MB) in
-				   bands where memory is short: on a 4 MB Falcon (some
-				   2.2 MB free) an eighth of what is free, the page drawn
-				   in four passes; with 6 MB free or more, in one */
-				long fr = (long)Malloc(-1L);
-
-				o.canvas_max = fr >= 6L * 1024 * 1024 ? 0 : fr / 8;
-			}
+			o.mem_free = mem_free;	/* (a page refused memory: made again in bands) */
 			o.fontdir = font_dir;
 			o.progress = progress_cb;
 			o.turn = turn;
