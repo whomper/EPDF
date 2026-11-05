@@ -625,6 +625,23 @@ static int convert_page(CV *c, long n)
 			for (; q < at + e; q++)
 				flip |= *q == 'v' ? PIMG_V : *q == 'h' ? PIMG_H : 0;
 			stored_size(wpt, hpt, &pw, &ph);
+			if (c->o->pic_size == CV_PIC_SCREEN && !(src >= DRAW_ID && src < DRAW_ID + nd) && wpt > 0 && hpt > 0) {
+				/* its own pixels, up to the screen's width, the line
+				   saying that size (EPDF shows it so) */
+				POBJ *io = pdf_get(&c->d, src), *wo = io && io->t == PO_DICT ? pd_get(&c->d, io, "Width") : NULL;
+				long sw = wo && wo->t == PO_INT ? (long)wo->a : 0;
+
+				if (sw > pw) {
+					pw = (int)(sw < PAGE_W ? sw : PAGE_W);
+					ph = (int)(hpt * pw / wpt);
+					if (ph < 1)
+						ph = 1;
+					if (ph > 4 * PAGE_W)
+						ph = 4 * PAGE_W;
+					wpt = pw;
+					hpt = ph;
+				}
+			}
 			if (src >= DRAW_ID && src < DRAW_ID + nd) {
 				/* a drawing: cut from the page drawn */
 				const RDRAWING *g = &dw[src - DRAW_ID];
@@ -797,6 +814,8 @@ int cv_convert(const char *in, const char *out, const CVOPT *o, CVSTAT *st, char
 	long t0 = pdf_ms(), n, xref;
 	int rc = 0;
 
+	if (errlen > 0)
+		err[0] = '\0';		/* (a page that failed said nothing: the alert showed what was there) */
 	memset(st, 0, sizeof *st);
 	c = calloc(1, sizeof *c);
 	if (!c) {
@@ -861,6 +880,8 @@ int cv_convert(const char *in, const char *out, const CVOPT *o, CVSTAT *st, char
 		rc = convert_page(c, n);
 		if (!rc && stopped)
 			rc = -2;
+		if (rc == -1 && !err[0])
+			snprintf(err, (size_t)errlen, "page %ld: not enough memory (%s)", n + 1, cv_phase ? cv_phase : "");
 	}
 	if (rc)
 		goto done;

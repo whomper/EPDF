@@ -8,7 +8,7 @@
  *   econvert --render PAGE OUT.ppm IN.pdf  page PAGE (1-based) drawn 640 wide, and its drawings listed
  *
  * options: --pages none|mono|colour (whole pages: none, mono, mono and colour; mono),
- *          --photos indexed|jpeg (indexed), --fonts DIR (the standard fonts' files,
+ *          --photos indexed|jpeg (indexed), --pictures page|screen (page), --fonts DIR (the standard fonts' files,
  *          Liberation*.ttf; /usr/share/fonts/truetype/liberation), --width N (640)
  */
 #include <stdio.h>
@@ -57,6 +57,9 @@ int main(int argc, char **argv)
 		else if (!strcmp(argv[i], "--pages") && i + 1 < argc) {
 			i++;
 			o.pages = !strcmp(argv[i], "none") ? CV_PAGES_NONE : !strcmp(argv[i], "colour") ? CV_PAGES_COLOUR : CV_PAGES_MONO;
+		} else if (!strcmp(argv[i], "--pictures") && i + 1 < argc) {
+			i++;
+			o.pic_size = !strcmp(argv[i], "screen") ? CV_PIC_SCREEN : CV_PIC_PAGE;
 		} else if (!strcmp(argv[i], "--photos") && i + 1 < argc) {
 			i++;
 			o.photos = !strcmp(argv[i], "jpeg") ? CV_PHOTOS_JPEG : CV_PHOTOS_INDEXED;

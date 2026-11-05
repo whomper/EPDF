@@ -206,6 +206,40 @@ PIC *cv_jpeg(const unsigned char *d, long n, int w, int h, int inverted, int *wh
 
 /* an image XObject as a picture of w x h: a JPEG through cv_jpeg, the
    rest through the reader's pdf_image */
+/* a row the row decoder made, into the picture */
+static void row_in(void *u, long y, const unsigned short *px)
+{
+	PIC *p = u;
+
+	if (y >= 0 && y < p->h)
+		memcpy(p->px + y * (long)p->w, px, (size_t)p->w * 2);
+}
+
+/* the picture made a row at a time (pdf_image_rows): only its w x h in
+   memory, never its decoded stream (EDOS_01.PDF's 1368 x 815 CMYK
+   screenshot was 4.4 MB of samples, refused on a 4 MB Falcon, the file
+   lost); 1 made, 0 not (why), -1 a kind it doesn't make */
+static int by_rows(PDOC *d, long obj, int w, int h, PIC **out, int *why)
+{
+	PIC *p = calloc(1, sizeof *p);
+	int r;
+
+	*out = NULL;
+	if (!p || !(p->px = malloc((size_t)w * h * 2))) {
+		free(p);
+		*why = PIC_MEMORY;
+		return 0;
+	}
+	p->w = w;
+	p->h = h;
+	r = pdf_image_rows(d, obj, w, h, row_in, p, 32L << 20, why);
+	if (r == 1)
+		*out = p;
+	else
+		pic_free(p);
+	return r;
+}
+
 PIC *cv_image(PDOC *d, long obj, int w, int h, int *why)
 {
 	POBJ *o = pdf_get(d, obj), *fl, *dec;
@@ -220,8 +254,14 @@ PIC *cv_image(PDOC *d, long obj, int w, int h, int *why)
 	fl = pd_get(d, o, "Filter");
 	if (fl && fl->t == PO_ARR && fl->a)
 		fl = pdf_res(d, &fl->u.v[fl->a - 1]);
-	if (!fl || fl->t != PO_NAME || (strcmp(fl->u.p, "DCTDecode") && strcmp(fl->u.p, "DCT")))
+	if (!fl || fl->t != PO_NAME || (strcmp(fl->u.p, "DCTDecode") && strcmp(fl->u.p, "DCT"))) {
+		PIC *q;
+		int r = by_rows(d, obj, w, h, &q, why);
+
+		if (r >= 0)
+			return q;
 		return pdf_image(d, obj, w, h, 32L << 20, why);
+	}
 	dec = pd_get(d, o, "Decode");
 	inv = dec && dec->t == PO_ARR && dec->a >= 2 && pa_at(dec, 0)->a > pa_at(dec, 1)->a;
 	sb_init(&b);

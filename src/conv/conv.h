@@ -10,10 +10,15 @@
 
 enum { CV_PAGES_NONE, CV_PAGES_MONO, CV_PAGES_COLOUR };
 enum { CV_PHOTOS_INDEXED, CV_PHOTOS_JPEG };
+/* a picture's stored width: its size on the page (a point a pixel), or its
+   own pixels up to the screen's 640, shown that wide (EPDF takes the
+   width from the picture's line) */
+enum { CV_PIC_PAGE, CV_PIC_SCREEN };
 
 typedef struct {
 	int pages;			/* whole pages: CV_PAGES_* (mono) */
 	int photos;			/* CV_PHOTOS_* (indexed) */
+	int pic_size;			/* CV_PIC_* (page) */
 	const char *fontdir;		/* the standard fonts' files (Liberation*.ttf), or NULL */
 	/* asked between pieces of work: done and total for this file, in
 	   thousandths of its pages; 1 stops the conversion */
