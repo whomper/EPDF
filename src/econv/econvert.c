@@ -385,6 +385,17 @@ static void texts(void)
 
 	for (i = 0; i < nfiles; i++)
 		kb += files[i].bytes / 1024;
+	{
+		static int logged = -1;	/* the list's count for the rigs, when it changes */
+
+		if (nfiles != logged) {
+			char q[8];
+
+			snprintf(q, sizeof q, "%d", nfiles);
+			log_event("files", q, NULL);
+			logged = nfiles;
+		}
+	}
 	if (!nfiles)
 		snprintf(s_files, sizeof s_files, "Files to convert: none yet");
 	else
@@ -543,13 +554,31 @@ static void redraw_progress(void)
 
 static void begin(void);
 
+/* the file selector gone: the button let go and the clicks it left queued
+   swallowed (Erez, 5 Nov: the files chosen, then the folder to write to,
+   and "0 files to convert": a double click's second click in the
+   selector, after it had closed on the first, landed on the window's
+   Clear) */
+static void after_fsel(void)
+{
+	short mx, my, mb, ks, msg[8];
+	AEVENT ev;
+	int n = 0;
+
+	do
+		graf_mkstate(&mx, &my, &mb, &ks);
+	while ((mb & 1) && ++n < 2000);
+	while (evnt_multi_(MU_BUTTON | MU_TIMER, 1, 1, 1, 0, msg, &ev) & MU_BUTTON)
+		;
+}
+
 static int pick(const char *title, char *dir, long ndir, char *name, long nname)
 {
 	char path[200];
 	short button;
 
 	snprintf(path, sizeof path, "%s\\*.PDF", dir[0] ? dir : "C:");
-	if (!fsel_exinput(path, name, &button, title) || !button)
+	if (!fsel_exinput(path, name, &button, title) || (after_fsel(), !button))
 		return 0;
 	{
 		char *s = strrchr(path, '\\');
@@ -792,8 +821,20 @@ static void command(int c)
 
 static void click(short mx, short my)
 {
-	short o = objc_find(tree, BOX, 8, mx, my);
+	short o = objc_find(tree, BOX, 8, mx, my), mb, ks;
 
+	/* a button as GEM's: shown pressed, and taken only when let go on it
+	   (a click that wasn't the user's, or one moved off, does nothing) */
+	if (o >= 0 && (tree[o].ob_flags & EXIT) && !(tree[o].ob_state & DISABLED)) {
+		graf_mkstate(&mx, &my, &mb, &ks);
+		if (!(mb & 1))
+			return;		/* (the button already up: not a press on it) */
+		if (!graf_watchbox(tree, o, SELECTED, 0)) {
+			return;
+		}
+		tree[o].ob_state &= ~SELECTED;
+		redraw_obj(o);
+	}
 	switch (o) {
 	case B_ADD: command(CMD_ADD); break;
 	case B_FOLDER: command(CMD_FOLDER); break;
