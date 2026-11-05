@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(m68k-linux-gnu-objdump *)",
+      "Bash(m68k-linux-gnu-nm *)",
+      "Bash(m68k-linux-gnu-size *)",
+      "Bash(ms_print *)",
+      "mcp__claude-code-remote__list_repos"
+    ]
+  }
+}
