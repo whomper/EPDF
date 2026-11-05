@@ -190,6 +190,11 @@ typedef struct {
 	int ink0;
 	unsigned short dc[16];
 	unsigned char dp[16];
+	/* Sharp (Erez, 5 Nov 2026): a picture of few colours (a screenshot, a
+	   diagram) on 16 colours or fewer: each pixel its nearest pen, no
+	   dither (a dither made its letters dots); photos keep the dither */
+	int sharp;
+	PIC_PAL *pl;
 } SINK;
 
 static SINK *sink;			/* the one being made */
@@ -331,7 +336,22 @@ static void sink_row(void *u, long y, const unsigned short *px)
 			e->ready = y + 1;
 		return;
 	}
-	if (k->direct) {
+	if (k->sharp) {
+		/* few colours: each its nearest pen (the colour a pixel came to,
+		   shown smaller, its nearest too) */
+		unsigned short last = px[0] ^ 1;
+		unsigned char q = 0;
+
+		for (x = 0; x < k->w; x++) {
+			if (px[x] != last) {
+				last = px[x];
+				q = (unsigned char)pic_pal_nearest(k->pl, ((last >> 11) << 3) | (last >> 13),
+								   (((last >> 5) & 63) << 2) | ((last >> 9) & 3),
+								   ((last & 31) << 3) | ((last >> 2) & 7));
+			}
+			k->pens[x] = q;
+		}
+	} else if (k->direct) {
 		/* a palette's colours each with a pen near it: the pen, no dither */
 		unsigned short last = px[0] ^ 1;
 		unsigned char q = 0;
@@ -524,7 +544,11 @@ int pics_rows(PDOC *d, PICE *e, int nplanes, PIC_PAL *pl, int *why)
 		unsigned char ip[256 * 3];
 		int n = 0, i, ok;
 
-		ok = pdf_image_palette(d, e->obj, ip, &n) && n <= 16;
+		ok = pdf_image_palette(d, e->obj, ip, &n);
+		/* few colours, more than the pens near them hold: Sharp */
+		k.sharp = ok && n <= 128 && nplanes <= 4;	/* (a photo comes with 256) */
+		k.pl = pl;
+		ok = ok && n <= 16;
 		for (i = 0; ok && i < n; i++) {
 			int q = pic_pal_nearest(pl, ip[3 * i], ip[3 * i + 1], ip[3 * i + 2]), c;
 
@@ -539,6 +563,8 @@ int pics_rows(PDOC *d, PICE *e, int nplanes, PIC_PAL *pl, int *why)
 		}
 		k.dn = n;
 		k.direct = ok;
+		if (k.direct)
+			k.sharp = 0;	/* (its pens exact already: the faster way) */
 	}
 	sink = &k;
 	{
