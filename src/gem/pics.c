@@ -187,7 +187,8 @@ typedef struct {
 	   shown (the ink wins), or a 10-pixel page's letters lost strokes
 	   (Erez, 4 Nov 2026); racc: the rows passed over, ink0: 0 is ink */
 	unsigned char *racc;
-	int ink0;
+	int ink0, dark0;		/* dark0: colour 0 the darker of the two */
+	unsigned char *mrow;		/* colour: a 1-bit row, spread to the band's planes */
 	unsigned short dc[16];
 	unsigned char dp[16];
 } SINK;
@@ -198,6 +199,8 @@ void (*pics_wait)(void);
 static void *bm_alloc(long bytes, int *heap);
 
 static void put_pens(SINK *k, long y);
+static void spread(SINK *k, long y);
+static void band_row(SINK *k, long y);
 
 /* the bitmap at the first row (a JPEG made whole gives none); 0 none */
 static int bm_first(SINK *k)
@@ -247,6 +250,13 @@ static void sink_raw(void *u, long sy, const unsigned char *r)
 		return;
 	}
 	y = k->ny++;
+	if (k->w == k->sw && k->mrow) {
+		memcpy(k->mrow, r, (size_t)((k->w + 7) / 8));
+		spread(k, y);
+		if (k->ny < e->h && k->ny * k->sh / e->h == sy)
+			sink_raw(u, sy, r);
+		return;
+	}
 	if (k->w == k->sw && k->nplanes == 1 && k->bpc == 1 && k->dn == 2 && k->dp[0] != k->dp[1]) {
 		unsigned char *o = (unsigned char *)e->bm.fd_addr + y * k->row;
 		long n = (k->w + 7) / 8;
@@ -262,12 +272,13 @@ static void sink_raw(void *u, long sy, const unsigned char *r)
 		e->ready = y + 1;
 		return;
 	}
-	if (k->nplanes == 1 && k->bpc == 1 && k->dn == 2 && k->dp[0] != k->dp[1] && k->cv) {
+	if ((k->nplanes == 1 || k->mrow) && k->bpc == 1 && k->dn == 2 && k->dp[0] != k->dp[1] && k->cv) {
 		/* a mono page shown narrower: each source byte's kept bits (a
 		   table for each of the few masks), one after another (a pixel
 		   at a time it was 17 s of an ST's 20 for a page) */
-		unsigned char *o = (unsigned char *)e->bm.fd_addr + y * k->row, *oe = o + (k->w + 7) / 8;
-		unsigned char inv = k->dp[0] == 1 ? 0xFF : 0;
+		unsigned char *o0 = k->mrow ? k->mrow : (unsigned char *)e->bm.fd_addr + y * k->row;
+		unsigned char *o = o0, *oe = o + (k->w + 7) / 8;
+		unsigned char inv = !k->mrow && k->dp[0] == 1 ? 0xFF : 0;
 		const unsigned char *mid = k->mid, *cv = k->cv, *cn = k->cn;
 		long i, sb = (k->sw + 7) / 8;
 		unsigned acc = 0;
@@ -290,11 +301,15 @@ static void sink_raw(void *u, long sy, const unsigned char *r)
 		}
 		if (nb > 0 && o < oe)
 			*o++ = (unsigned char)((acc << (8 - nb)) ^ inv);
-		o = (unsigned char *)e->bm.fd_addr + y * k->row;
-		if (k->w & 7)
-			o[(k->w + 7) / 8 - 1] &= (unsigned char)(0xFF00 >> (k->w & 7));
-		e->made = y + 1;
-		e->ready = y + 1;
+		if (k->mrow)
+			spread(k, y);
+		else {
+			o = o0;
+			if (k->w & 7)
+				o[(k->w + 7) / 8 - 1] &= (unsigned char)(0xFF00 >> (k->w & 7));
+			e->made = y + 1;
+			e->ready = y + 1;
+		}
 		if (k->ny < e->h && k->ny * k->sh / e->h == sy)
 			sink_raw(u, sy, r);
 		return;
@@ -378,6 +393,43 @@ static void put_pens(SINK *k, long y)
 			if (k->pens[x] & bit)
 				o[x >> 3] |= (unsigned char)(0x80 >> (x & 7));
 	}
+	band_row(k, y);
+}
+
+/* a 1-bit row (mrow: a bit set is colour 1) into the band: each plane
+   the row, its inverse, all set or none, as the two pens' bits say (a
+   pixel at a time, the double page took 22.7 s on a Falcon in 16
+   colours) */
+static void spread(SINK *k, long y)
+{
+	long n = (k->w + 7) / 8, i;
+	unsigned char last = (unsigned char)(0xFF00 >> ((k->w & 7) ? (k->w & 7) : 8));
+	int p;
+
+	for (p = 0; p < k->nplanes; p++) {
+		unsigned char *o = k->band + (p * BAND + y - k->b0) * k->wd * 2;
+		int one = (k->dp[1] >> p) & 1, zero = (k->dp[0] >> p) & 1;
+
+		if (one && zero)
+			memset(o, 0xFF, (size_t)n);
+		else if (one)
+			memcpy(o, k->mrow, (size_t)n);
+		else if (zero)
+			for (i = 0; i < n; i++)
+				o[i] = (unsigned char)~k->mrow[i];
+		else
+			continue;
+		o[n - 1] &= last;
+	}
+	band_row(k, y);
+}
+
+/* the band's row y is in: a full band (or the last row) turned on the
+   main stack */
+static void band_row(SINK *k, long y)
+{
+	PICE *e = k->e;
+
 	if (++k->bn == BAND || y == e->h - 1) {
 		/* the band to the screen's format, on the main stack */
 		k->full = 1;
@@ -543,6 +595,8 @@ int pics_rows(PDOC *d, PICE *e, int nplanes, PIC_PAL *pl, int *why)
 			k.dc[i] = (unsigned short)(((ip[3 * i] & 0xF8) << 8) | ((ip[3 * i + 1] & 0xFC) << 3) | (ip[3 * i + 2] >> 3));
 			k.dp[i] = (unsigned char)q;
 		}
+		if (n == 2)
+			k.dark0 = ip[0] * 3 + ip[1] * 6 + ip[2] < ip[3] * 3 + ip[4] * 6 + ip[5];
 		k.dn = n;
 		k.direct = ok;
 		if (sharp && !k.direct)
@@ -561,12 +615,15 @@ int pics_rows(PDOC *d, PICE *e, int nplanes, PIC_PAL *pl, int *why)
 			for (x = 0; x < e->w; x++)
 				k.xs[x] = x * k.sw / e->w;
 			if (k.bpc == 1 && k.sw > e->w) {
-				k.ink0 = k.dp[0] == 1;		/* (pen 1: black) */
+				k.ink0 = nplanes == 1 ? k.dp[0] == 1 : k.dark0;	/* (pen 1: black) */
 				mono_masks(&k);
 				if (k.cv && (k.racc = malloc((size_t)(k.sw + 7) / 8)) != NULL)
 					memset(k.racc, k.ink0 ? 0xFF : 0, (size_t)(k.sw + 7) / 8);
 			}
 		}
+		if (o && k.bpc == 1 && k.dn == 2 && k.dp[0] != k.dp[1] && nplanes > 1 && nplanes != 16 &&
+		    !e->flip && (k.sw == e->w || k.cv))
+			k.mrow = calloc(1, (size_t)(k.wd * 2));
 		if (o && k.sw > 0 && k.sh > 0 && (k.sw == e->w || k.xs))
 			/* its samples as they are, each colour its pen, a column
 			   and a row taken where it is shown smaller */
@@ -577,6 +634,7 @@ int pics_rows(PDOC *d, PICE *e, int nplanes, PIC_PAL *pl, int *why)
 		free(k.mid);
 		free(k.cv);
 		free(k.racc);
+		free(k.mrow);
 	}
 	sink = NULL;
 	free(k.mir);
