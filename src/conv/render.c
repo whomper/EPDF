@@ -803,6 +803,16 @@ static FT_Face face_for(RPAGE *r, long prog, const char *base)
 
 		sb_init(&b);
 		if (src) {
+			/* its size as the font's dictionary gives it, room for that
+			   once (doubling from 4 KB made a 300 KB font 512 KB, a
+			   quarter of a 4 MB Falcon's room while a page is drawn) */
+			long want = pd_int(r->d, o, "Length1", 0) + pd_int(r->d, o, "Length2", 0) +
+				    pd_int(r->d, o, "Length3", 0);
+
+			if (want > 0 && want < (8L << 20))
+				sb_reserve(&b, want + 16);
+		}
+		if (src) {
 			/* a piece at a time, a turn between (a font unpacked at once
 			   was a stretch of 150 ms on a Falcon) */
 			unsigned char piece[4096];
@@ -819,7 +829,10 @@ static FT_Face face_for(RPAGE *r, long prog, const char *base)
 				sb_free(&b);
 		}
 		if (src ? b.len > 0 : (o && o->t == PO_DICT && pdf_stream(r->d, o, prog, &b, &term, 8L << 20) == 0 && !term && b.len > 0)) {
-			f->e[v].buf = (unsigned char *)b.s;
+			/* (the room past it given back) */
+			char *q = realloc(b.s, (size_t)b.len + 1);
+
+			f->e[v].buf = (unsigned char *)(q ? q : b.s);
 			f->e[v].len = b.len;
 		} else
 			sb_free(&b);
