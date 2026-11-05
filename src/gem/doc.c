@@ -224,7 +224,17 @@ static void decoder(void)
 			   time into the window's bitmap, shown from the top down as the
 			   rows come (never the whole picture in memory); the rest
 			   whole, then dithered */
-			int how = pics_rows(doc, rpic, rpic_planes, rpic_pal, &rpic_why);
+			int how;
+
+			{
+				/* its own size, for its click to enlarge (textwin.c):
+				   read here, before the stack's first hand-back */
+				POBJ *o = pdf_get(doc, rpic->obj);
+
+				rpic->sw = o && o->t == PO_DICT ? pd_int(doc, o, "Width", 0) : 0;
+				rpic->sh = o && o->t == PO_DICT ? pd_int(doc, o, "Height", 0) : 0;
+			}
+			how = pics_rows(doc, rpic, rpic_planes, rpic_pal, &rpic_why);
 
 			rpic_rows = how >= 0;
 			if (how >= 0) {

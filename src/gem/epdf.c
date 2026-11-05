@@ -502,6 +502,12 @@ static void click(short mx, short my, short kstate, int dbl)
 	static const GRECT anywhere = { 0, 0, 32767, 32767 };
 	int how;
 
+	if (win_zoomed()) {
+		win_zoom_end();		/* (a click gives the text back) */
+		return;
+	}
+	if (!dbl && !(kstate & (K_LSHIFT | K_RSHIFT)) && win_zoom_at(mx, my))
+		return;			/* a picture with more pixels: shown whole */
 	if (!v || !win_hit(mx, my, &p, &o)) {
 		if (v && v->sel_p0 >= 0)
 			select_span(-1, 0, 0, 0);
@@ -640,6 +646,8 @@ static void command(int c)
 {
 	char n[8];
 
+	if (c != CMD_ABOUT)
+		win_zoom_end();		/* (a picture shown whole: the text back first) */
 	switch (c) {
 	case CMD_ABOUT:
 		about_box();
@@ -730,6 +738,8 @@ static void key(short kstate, short k)
 
 	if (win_iconified())
 		return;			/* an iconified window takes no keys (5.1) */
+	if (win_zoom_key(scan))
+		return;			/* a picture shown whole takes them */
 	if (cp.on && (scan == 0x01 || scan == 0x61)) {
 		copy_end("copy stopped");	/* Esc or Undo: the copy given up */
 		log_event("copy-stopped", NULL, NULL);

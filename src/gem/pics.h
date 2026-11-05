@@ -21,6 +21,7 @@ typedef struct {
 	unsigned long used;
 	int ahead;			/* wanted ahead of the view, not yet shown (Erez, 4 Nov 2026:
 					   pictures made quietly before they come into view) */
+	long sw, sh;			/* the picture's own pixels, once it is being made (0: not known) */
 } PICE;
 
 PICE *pics_get(long obj, int w, int h, int flip);	/* NULL: every slot busy decoding */

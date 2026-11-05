@@ -411,6 +411,44 @@ static short pic_x(int w)
 
 /* a row of a picture: its bitmap's band, or, until it is decoded, its
    frame with a word in it */
+/* a picture shown with fewer pixels than it has: a click shows it whole
+   (Erez, 5 Nov 2026) */
+static int enlargeable(const PICE *e, const DVPIC *pr)
+{
+	return e && e->sw > pr->w + 4 && pr->w >= 32 && pr->h >= 24;
+}
+
+/* the enlarge mark at (x, y), a watermark at a picture's top right (Erez,
+   5 Nov 2026: "an icon not a text ... a visible watermark at the top right
+   of the picture"): a white square with a black edge and a two-headed
+   arrow from corner to corner, 11 x 11, drawn where the clip allows */
+static void enlarge_icon(const GRECT *c, short x, short y)
+{
+	short p[4];
+
+	if (x + 10 < c->x || y + 10 < c->y || x >= c->x + c->w || y >= c->y + c->h)
+		return;
+	p[0] = x;
+	p[1] = y;
+	p[2] = (short)(x + 10);
+	p[3] = (short)(y + 10);
+	vswr_mode(vdi_h, MD_REPLACE);
+	vsf_interior(vdi_h, FIS_SOLID);
+	vsf_perimeter(vdi_h, 0);
+	vsf_color(vdi_h, 0);
+	vr_recfl(vdi_h, p);
+	fill_set = 0;
+	line_col(x, y, (short)(x + 10), y, 1);
+	line_col(x, (short)(y + 10), (short)(x + 10), (short)(y + 10), 1);
+	line_col(x, y, x, (short)(y + 10), 1);
+	line_col((short)(x + 10), y, (short)(x + 10), (short)(y + 10), 1);
+	line_col((short)(x + 3), (short)(y + 7), (short)(x + 7), (short)(y + 3), 1);	/* the arrow */
+	line_col((short)(x + 5), (short)(y + 3), (short)(x + 7), (short)(y + 3), 1);
+	line_col((short)(x + 7), (short)(y + 3), (short)(x + 7), (short)(y + 5), 1);
+	line_col((short)(x + 3), (short)(y + 5), (short)(x + 3), (short)(y + 7), 1);
+	line_col((short)(x + 3), (short)(y + 7), (short)(x + 5), (short)(y + 7), 1);
+}
+
 static void draw_pic(const GRECT *c, short y, const DVPIC *pr)
 {
 	PICE *e = pics_get(pr->obj, pr->w, pr->h, pr->flip);
@@ -450,6 +488,8 @@ static void draw_pic(const GRECT *c, short y, const DVPIC *pr)
 		}
 		if (y1 - y0 < ch)
 			blank(c, x, (short)(x + pr->w), (short)(y + (y1 - y0)), (short)(ch - (y1 - y0)));
+		if (y0 < 15 && enlargeable(e, pr))
+			enlarge_icon(c, (short)(x + pr->w - 14), (short)(y - y0 + 3));
 		vswr_mode(vdi_h, MD_REPLACE);
 		vst_color(vdi_h, 1);
 		return;
@@ -1017,6 +1057,144 @@ void win_progress_draw(void)
 }
 
 /* the window's rectangles over area, each drawn */
+/*
+ * A picture whole (Erez, 5 Nov 2026: clicked, "it expands to full
+ * glory"): in the one window (3.2), the picture alone at its own pixels,
+ * at most the text column's width, made like any other (pics.c, its rows
+ * as they come); Up, Down and the page keys move it, Esc, Backspace,
+ * Return or a click give the text back as it was.
+ */
+static struct {
+	int on;
+	DVPIC p;			/* the picture at the size shown whole */
+	long top;			/* its first row in view */
+} zoom;
+
+int win_zoomed(void)
+{
+	return zoom.on;
+}
+
+void win_zoom_end(void)
+{
+	if (!zoom.on)
+		return;
+	zoom.on = 0;
+	win_draw_all();
+}
+
+static void draw_zoom(const GRECT *c)
+{
+	PICE *e = pics_get(zoom.p.obj, zoom.p.w, zoom.p.h, zoom.p.flip);
+	short x = (short)(work.x + (work.w - zoom.p.w) / 2), y = work.y;
+	long made = e && e->bm.fd_addr ? (e->state == PICS_READY ? zoom.p.h : e->ready) : 0;
+	long y1 = zoom.top + work.h < zoom.p.h ? zoom.top + work.h : zoom.p.h;
+
+	if (x < work.x)
+		x = work.x;
+	blank(c, work.x, (short)(work.x + work.w), work.y, work.h);
+	if (e)
+		e->page = zoom.p.page;
+	if (made > zoom.top) {
+		MFDB scr;
+		short pxy[8];
+		long m1 = made < y1 ? made : y1;
+
+		memset(&scr, 0, sizeof scr);
+		pxy[0] = 0;
+		pxy[1] = (short)zoom.top;
+		pxy[2] = (short)(zoom.p.w - 1);
+		pxy[3] = (short)(m1 - 1);
+		pxy[4] = x;
+		pxy[5] = y;
+		pxy[6] = (short)(x + zoom.p.w - 1);
+		pxy[7] = (short)(y + (m1 - zoom.top) - 1);
+		vro_cpyfm(vdi_h, 3, pxy, &e->bm, &scr);
+	} else {
+		/* its frame till its rows come */
+		short yb = (short)(y + (y1 - zoom.top) - 1);
+
+		line_col(x, y, (short)(x + zoom.p.w - 1), y, 1);
+		line_col(x, yb, (short)(x + zoom.p.w - 1), yb, 1);
+		line_col(x, y, x, yb, 1);
+		line_col((short)(x + zoom.p.w - 1), y, (short)(x + zoom.p.w - 1), yb, 1);
+	}
+	vswr_mode(vdi_h, MD_REPLACE);
+	vst_color(vdi_h, 1);
+}
+
+/* a click at (mx, my) on a picture with more pixels than it shows: shown
+   whole; 1 when it was one */
+int win_zoom_at(short mx, short my)
+{
+	DOCVIEW *v = doc_view();
+	long r, n, page, off;
+	int kind;
+	const char *s;
+	PICE *e;
+	short x;
+	long w, h;
+
+	if (!v || win < 0 || iconified || zoom.on || my < work.y || my >= work.y + work.h)
+		return 0;
+	r = (my - work.y) / ch;
+	if (!dv_row(v, r, &kind, &s, &n, &page, &off) || kind != DV_PIC)
+		return 0;
+	x = pic_x(v->pic.w);
+	if (mx < x || mx >= x + v->pic.w)
+		return 0;
+	e = pics_get(v->pic.obj, v->pic.w, v->pic.h, v->pic.flip);
+	if (!enlargeable(e, &v->pic))
+		return 0;
+	w = e->sw < cols * cw ? e->sw : cols * cw;
+	h = e->sh * w / e->sw * 16 / (pix_aspect > 0 ? pix_aspect : 16);
+	if (h < 1)
+		h = 1;
+	if (h > 8 * 1024)
+		h = 8 * 1024;
+	zoom.p = v->pic;
+	zoom.p.w = (int)w;
+	zoom.p.h = (int)h;
+	zoom.top = 0;
+	zoom.on = 1;
+	log_event("zoom", NULL, NULL);
+	win_draw_all();
+	return 1;
+}
+
+/* a key while a picture is shown whole: 1 taken */
+int win_zoom_key(short scan)
+{
+	long step = 0, most;
+
+	if (!zoom.on)
+		return 0;
+	switch (scan) {
+	case 0x01: case 0x0e: case 0x1c: case 0x72: case 0x61:	/* Esc, Backspace, Return, Enter, Undo */
+		win_zoom_end();
+		return 1;
+	case 0x48: step = -2L * ch; break;			/* Up */
+	case 0x50: step = 2L * ch; break;			/* Down */
+	case 0x49: step = -(long)(work.h - ch); break;		/* Page Up */
+	case 0x51: step = work.h - ch; break;			/* Page Down */
+	case 0x47: step = -zoom.p.h; break;			/* Clr/Home */
+	default:
+		win_zoom_end();		/* any other key: the text back, the key its own */
+		return 0;
+	}
+	most = zoom.p.h > work.h ? zoom.p.h - work.h : 0;
+	step += zoom.top;
+	if (step < 0)
+		step = 0;
+	if (step > most)
+		step = most;
+	if (step != zoom.top) {
+		zoom.top = step;
+		win_redraw(&work);
+	}
+	return 1;
+}
+
 void win_redraw(const GRECT *area)
 {
 	GRECT r, c, a = *area, ba;
@@ -1053,8 +1231,12 @@ void win_redraw(const GRECT *area)
 	graf_mouse(M_OFF, NULL);
 	wind_get(win, WF_FIRSTXYWH, &r.x, &r.y, &r.w, &r.h);
 	while (r.w > 0 && r.h > 0) {
-		if (has_text && overlap(&r, &a, &c))
-			draw_rows(&c, r0, r1);
+		if (has_text && overlap(&r, &a, &c)) {
+			if (zoom.on)
+				draw_zoom(&c);
+			else
+				draw_rows(&c, r0, r1);
+		}
 		if (has_bar && overlap(&r, &ba, &c))
 			draw_bar(&c);
 		wind_get(win, WF_NEXTXYWH, &r.x, &r.y, &r.w, &r.h);
@@ -1348,6 +1530,11 @@ void win_pic_ready(long obj)
 
 	if (!v || win < 0 || iconified)
 		return;
+	if (zoom.on) {
+		if (obj == zoom.p.obj)
+			win_redraw(&work);
+		return;
+	}
 	for (r = 0; r <= rows && dv_row(v, r, &kind, &s, &n, &page, &off); r++)
 		if (kind == DV_PIC && v->pic.obj == obj) {
 			if (first < 0)
@@ -1370,6 +1557,11 @@ void win_pic_rows(long obj, long from, long to)
 
 	if (!v || win < 0 || iconified || to <= from)
 		return;
+	if (zoom.on) {
+		if (obj == zoom.p.obj && from < zoom.top + work.h && to > zoom.top)
+			win_redraw(&work);
+		return;
+	}
 	for (r = 0; r <= rows && dv_row(v, r, &kind, &s, &n, &page, &off); r++)
 		if (kind == DV_PIC && v->pic.obj == obj && (v->pic.row + 1) * ch > from && v->pic.row * ch < to) {
 			if (first < 0)

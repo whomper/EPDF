@@ -99,6 +99,12 @@ void win_sel_change(long q0, long r0, long q1, long r1, long p0, long o0, long p
 void win_show(long page, long off);		/* that place in view */
 void win_pic_ready(long obj);		/* a picture decoded: its rows drawn */
 void win_pic_rows(long obj, long from, long to);	/* its pixel rows from, to made: drawn */
+/* a picture shown whole in the window (clicked: win_zoom_at, 1 when it was
+   one); win_zoom_key takes the keys while it is (1 taken) */
+int win_zoom_at(short mx, short my);
+int win_zoomed(void);
+void win_zoom_end(void);
+int win_zoom_key(short scan);
 
 /* font.c: the text view's font (FONT= in EPDF.INF) */
 void font_init(const char *setting, const char *dir);
