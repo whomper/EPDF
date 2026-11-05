@@ -25,7 +25,7 @@
 #include "charset.h"
 #include "pdf.h"
 
-#define PAGE_W 640			/* the whole page's pictures, and a picture at most */
+#define PAGE_W 640			/* the whole page's pictures' width when the caller gives none */
 #define NDRAW 16			/* drawings a page at most */
 #define DRAW_ID 900000000L		/* a drawing's number in the text until it has its object */
 
@@ -54,6 +54,7 @@ void cv_defaults(CVOPT *o)
 	memset(o, 0, sizeof *o);
 	o->pages = CV_PAGES_MONO;
 	o->photos = CV_PHOTOS_INDEXED;
+	o->pic_size = CV_PIC_SCREEN;
 }
 
 /* ------------------------------------------------------------------ the writer */
@@ -308,6 +309,8 @@ static int w_picture(PW *w, long num, const uint16_t *px, int pw, int ph, int jp
 		}
 		sb_free(&j);
 	}
+	if (n <= 0)
+		return -1;
 	d = malloc((size_t)n);
 	if (!d)
 		return -1;
@@ -363,18 +366,18 @@ static void flip_px(uint16_t *px, int w, int h, int flip)
 }
 
 /* the size a picture of wpt x hpt points is stored at: a point a pixel,
-   at most PAGE_W wide */
-static void stored_size(long wpt, long hpt, int *pw, int *ph)
+   at most cap wide */
+static void stored_size(long wpt, long hpt, int cap, int *pw, int *ph)
 {
-	long w = wpt < PAGE_W ? wpt : PAGE_W, h;
+	long w = wpt < cap ? wpt : cap, h;
 
 	if (w < 1)
 		w = 1;
 	h = hpt * w / (wpt > 0 ? wpt : 1);
 	if (h < 1)
 		h = 1;
-	if (h > 4 * PAGE_W)
-		h = 4 * PAGE_W;
+	if (h > 4L * cap)
+		h = 4L * cap;
 	*pw = (int)w;
 	*ph = (int)h;
 }
@@ -457,6 +460,7 @@ typedef struct {
 	long npages;
 	long *pages;			/* each page's object */
 	int short_mem;			/* the page was refused memory somewhere (made worse or not at all) */
+	int page_w, pic_w;		/* the whole page's width, a picture's most (CVOPT's)*/
 	int banded;			/* the canvas in bands for the rest of the file */
 } CV;
 
@@ -636,7 +640,7 @@ static int convert_page(CV *c, long n)
 	   crisp glyphs from the start; with colour pages too, drawn as ever
 	   for them and the drawings, and again for the mono page */
 	r->mono_glyphs = c->o->pages == CV_PAGES_MONO;
-	drawn = render_page(r, n, PAGE_W) == 0;
+	drawn = render_page(r, n, c->page_w) == 0;
 	if (!drawn)
 		c->short_mem = 1;	/* (or damaged: made again in bands once, the same then) */
 	if (drawn)
@@ -695,22 +699,28 @@ static int convert_page(CV *c, long n)
 				q++;
 			for (; q < at + e; q++)
 				flip |= *q == 'v' ? PIMG_V : *q == 'h' ? PIMG_H : 0;
-			stored_size(wpt, hpt, &pw, &ph);
-			if (c->o->pic_size == CV_PIC_SCREEN && !(src >= DRAW_ID && src < DRAW_ID + nd) && wpt > 0 && hpt > 0) {
-				/* its own pixels, up to the screen's width, the line
-				   saying that size (EPDF shows it so) */
-				POBJ *io = pdf_get(&c->d, src), *wo = io && io->t == PO_DICT ? pd_get(&c->d, io, "Width") : NULL;
-				long sw = wo && wo->t == PO_INT ? (long)wo->a : 0;
+			stored_size(wpt, hpt, c->page_w, &pw, &ph);
+			if (c->o->pic_size == CV_PIC_SCREEN && wpt > 0 && hpt > 0) {
+				/* more pixels than its size on the page has, up to the
+				   screen's (EPDF shows it at its size on the page, and
+				   whole when it is clicked: Erez, 5 Nov): a picture its
+				   own, a drawing what the page drawn gives it */
+				long sw = 0;
 
+				if (src >= DRAW_ID && src < DRAW_ID + nd)
+					sw = dw[src - DRAW_ID].px.x1 - dw[src - DRAW_ID].px.x0;
+				else {
+					POBJ *io = pdf_get(&c->d, src), *wo = io && io->t == PO_DICT ? pd_get(&c->d, io, "Width") : NULL;
+
+					sw = wo && wo->t == PO_INT ? (long)wo->a : 0;
+				}
 				if (sw > pw) {
-					pw = (int)(sw < PAGE_W ? sw : PAGE_W);
+					pw = (int)(sw < c->pic_w ? sw : c->pic_w);
 					ph = (int)(hpt * pw / wpt);
 					if (ph < 1)
 						ph = 1;
-					if (ph > 4 * PAGE_W)
-						ph = 4 * PAGE_W;
-					wpt = pw;
-					hpt = ph;
+					if (ph > 4 * c->pic_w)
+						ph = 4 * c->pic_w;
 				}
 			}
 			if (src >= DRAW_ID && src < DRAW_ID + nd) {
@@ -840,7 +850,7 @@ static int convert_page(CV *c, long n)
 			   the drawings had the grey-edged ones) */
 			r->mono_glyphs = 1;
 			cv_phase = "render-mono";
-			drawn = render_page(r, n, PAGE_W) == 0;
+			drawn = render_page(r, n, c->page_w) == 0;
 		}
 		d = drawn ? malloc((size_t)rb * r->c.h) : NULL;
 		if (!d)
@@ -955,6 +965,8 @@ int cv_convert(const char *in, const char *out, const CVOPT *o, CVSTAT *st, char
 		return -1;
 	}
 	c->o = o;
+	c->page_w = o->page_w >= 64 ? o->page_w : PAGE_W;
+	c->pic_w = o->pic_w >= 64 ? o->pic_w : c->page_w;
 	c->st = st;
 	stopped = 0;
 	turn_o = o;
@@ -1031,7 +1043,7 @@ int cv_convert(const char *in, const char *out, const CVOPT *o, CVSTAT *st, char
 				st->drawings = draws;
 				c->banded = 1;
 				rc_free(&c->r.c);
-				fr += (long)PAGE_W * 905 * 2;	/* (the canvas just given back, about) */
+				fr += (long)c->page_w * (c->page_w * 1414L / 1000) * 2;	/* (the canvas just given back, about) */
 				c->r.canvas_max = fr > 0 ? fr / 8 : 256L * 1024;
 				w_hold(&c->w, &hb, &m);
 				c->short_mem = 0;

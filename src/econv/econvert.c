@@ -120,6 +120,27 @@ static long mem_free(void)
 	return (long)Malloc(-1L);
 }
 
+/* the sizes this machine shows (Erez, 5 Nov 2026: "the 640 pixel
+   limitation is based on the actual user's machine ... figure out
+   available display area yourself and adapt to it"): the whole page's
+   picture as wide as EPDF's text column in a window the desktop's size
+   (its kind and margins: textwin.c's WKIND and MARGIN, the system
+   font's cell), and a picture at most the desktop's window's inside */
+static void screen_sizes(int *page_w, int *pic_w)
+{
+	short dx, dy, dw, dh, x, y, w, h;
+
+	wind_get(0, WF_WORKXYWH, &dx, &dy, &dw, &dh);
+	wind_calc(WC_WORK, NAME | CLOSER | FULLER | MOVER | SIZER | UPARROW | DNARROW | VSLIDE, dx, dy, dw, dh,
+		  &x, &y, &w, &h);
+	*page_w = (w - 2 * 8) / gl_wchar * gl_wchar;
+	*pic_w = w;
+	if (*page_w < 64)
+		*page_w = 640;
+	if (*pic_w < 64)
+		*pic_w = *page_w;
+}
+
 #define MAXF 200
 static struct {
 	char path[160];
@@ -351,6 +372,7 @@ static void worker(void)
 			o.pages = pages_set;
 			o.photos = photos_set;
 			o.mem_free = mem_free;	/* (a page refused memory: made again in bands) */
+			screen_sizes(&o.page_w, &o.pic_w);
 			o.fontdir = font_dir;
 			o.progress = progress_cb;
 			o.turn = turn;

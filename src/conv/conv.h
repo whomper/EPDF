@@ -10,15 +10,18 @@
 
 enum { CV_PAGES_NONE, CV_PAGES_MONO, CV_PAGES_COLOUR };
 enum { CV_PHOTOS_INDEXED, CV_PHOTOS_JPEG };
-/* a picture's stored width: its size on the page (a point a pixel), or its
-   own pixels up to the screen's 640, shown that wide (EPDF takes the
-   width from the picture's line) */
+/* a picture's stored size: its size on the page (a point a pixel), or its
+   own pixels (a drawing: the page drawn's) up to pic_w, for EPDF to show
+   whole when it is clicked; its line keeps its size on the page */
 enum { CV_PIC_PAGE, CV_PIC_SCREEN };
 
 typedef struct {
 	int pages;			/* whole pages: CV_PAGES_* (mono) */
 	int photos;			/* CV_PHOTOS_* (indexed) */
-	int pic_size;			/* CV_PIC_* (page) */
+	int pic_size;			/* CV_PIC_* (screen) */
+	/* the screen's: the whole page's pictures' width (EPDF's text column
+	   in a window the size of the desktop) and a picture's most; 0: 640 */
+	int page_w, pic_w;
 	long canvas_max;		/* the page canvas's most bytes, 0 any: a page drawn in
 				   bands under it (slower) */
 	/* the memory free now (EConvert: GEMDOS's), or NULL: a page refused
