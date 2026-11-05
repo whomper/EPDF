@@ -14,7 +14,9 @@ added ("ECONVERT files 1") and still after the folder was chosen (no
 "files 0" after it), and the batch converts it. The clicks are at the
 window's places on a 640 x 480 screen with the system font's 16-pixel
 cells (Falcon:16, Falcon:256, TT high's lower half is not covered).
-ECONVERT_PRG another build (1.2's, to compare). Shots in WORK/<machine>/shots.
+On TOS 4.04 the selector's steps are its own (STEPS_TOS4, the hub's).
+ECONVERT_PRG another build: 1.2's prints no "files" lines, so with it only
+the shots' "Files to convert: N" say anything. Shots in WORK/<machine>/shots.
 """
 import os
 import shutil
@@ -40,6 +42,15 @@ STEPS = [
     ("click", 235, 238),        # OUT, the second folder
     ("click", 220, 400),        # OK
 ]
+# TOS 4.04's selector (the hub's, 5 Nov): no OUT at that place, its OK
+# further right; the folder typed into the Directory line instead
+STEPS_TOS4 = STEPS[:3] + [
+    ("click", 300, 145),        # the selector's Directory line
+    ("key", "Escape", 0),       # clears the line
+    ("type", "C:\\OUT\\*.PDF", 0),
+    ("key", "Return", 0),       # takes the folder (without it the old one stays)
+    ("click", 264, 393),        # OK: TOS 4.04's button is at x 226-306
+]
 
 
 def run(work, machine):
@@ -60,8 +71,14 @@ def run(work, machine):
             time.sleep(1)
         time.sleep(3)
         r.still()
-        for i, (what, x, y) in enumerate(STEPS):
-            if what == "double":
+        steps = STEPS_TOS4 if "TOS 4" in r.describe() else STEPS
+        for i, (what, x, y) in enumerate(steps):
+            if what == "key":
+                r.key(x)
+                time.sleep(1)
+            elif what == "type":
+                r.type(x)
+            elif what == "double":
                 g = dict(l.split("=") for l in r.xdo("getwindowgeometry", "--shell", r.win()).split())
                 r.xdo("mousemove", str(int(g["X"]) + x), str(int(g["Y"]) + y))
                 time.sleep(0.4)
