@@ -266,7 +266,7 @@ static void set_radio(short first, short last, short on)
 
 /* ---------------------------------------------------------------- the work */
 
-#define CONV_STACK (64L * 1024)		/* FreeType's rasteriser and the reader's interpreter */
+#define CONV_STACK (256L * 1024)		/* FreeType's rasteriser and the reader's interpreter */
 static CORO main_co, work_co;
 static char *work_stack;
 static int working;			/* the batch under way */
@@ -358,7 +358,8 @@ static void worker(void)
 			{
 				char a[48];
 
-				snprintf(a, sizeof a, "%d %ld ms %ld bytes", r, st.ms, st.out_bytes);
+				snprintf(a, sizeof a, "%d %ld ms %ld bytes stack %ld", r, st.ms, st.out_bytes,
+					 coro_used(work_stack, CONV_STACK));
 				log_event("converted", base_of(files[i].path), a);
 			}
 			bytes_done += files[i].bytes;
