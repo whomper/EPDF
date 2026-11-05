@@ -829,8 +829,9 @@ static FT_Face face_for(RPAGE *r, long prog, const char *base)
 				sb_free(&b);
 		}
 		if (src ? b.len > 0 : (o && o->t == PO_DICT && pdf_stream(r->d, o, prog, &b, &term, 8L << 20) == 0 && !term && b.len > 0)) {
-			/* (the room past it given back) */
-			char *q = realloc(b.s, (size_t)b.len + 1);
+			/* (the room past it given back: only a buffer read here,
+			   pdf_stream's may not be the heap's own) */
+			char *q = src ? realloc(b.s, (size_t)b.len + 1) : NULL;
 
 			f->e[v].buf = (unsigned char *)(q ? q : b.s);
 			f->e[v].len = b.len;

@@ -526,7 +526,7 @@ static int rows_ccitt(PDOC *d, POBJ *o, PCSRC *src, const unsigned char *s, long
 	gw = f > 1 ? cols / f : cols;
 	gh = f > 1 ? sh / f : sh;		/* the grey rows there will be: pdf_image's gh */
 	row = malloc((size_t)(cols + 7) / 8);
-	grey = malloc((size_t)gw);
+	grey = malloc((size_t)(f > 1 ? (cols + f - 1) / f : cols));	/* (rs_row's row: its width rounded up) */
 	xs = malloc((size_t)out->w * sizeof *xs);
 	if (!row || !grey || !xs || (f > 1 && rs_init(&rs, (int)cols, f))) {
 		free(row);
