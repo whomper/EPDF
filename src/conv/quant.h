@@ -14,4 +14,10 @@ void dither_mono(const uint16_t *px, int w, int h, unsigned char *out);
 /* dithered to the n colours of pal, 4 bits a pixel (rows of (w + 1) / 2 bytes) */
 void dither_pal(const uint16_t *px, int w, int h, const unsigned char (*pal)[3], int n, unsigned char *out);
 
+/* the same for rows ytop .. ytop + h - 1 of a page (px and out at its
+   first): a band at a time gives the bytes the page whole gives */
+void dither_mono_rows(const uint16_t *px, int w, int h, int ytop, unsigned char *out);
+void dither_pal_rows(const uint16_t *px, int w, int h, int ytop, const unsigned char (*pal)[3], int n,
+		     unsigned char *out);
+
 #endif

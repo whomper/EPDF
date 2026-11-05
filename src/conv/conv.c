@@ -335,8 +335,19 @@ static void stored_size(long wpt, long hpt, int *pw, int *ph)
 
 /* a part of the canvas (a drawing) at pw x ph, each pixel the average of
    those it covers */
-static uint16_t *crop(const RCANVAS *c, const RCLIP *b, int pw, int ph)
+/* the canvas holding rows y .. y + n - 1 of page pg: drawn again from the
+   band they start in when it holds a band elsewhere (only on a machine
+   short of memory: CVOPT.canvas_max); 0 ok */
+static int band_at(RPAGE *r, long pg, int y, int n)
 {
+	if (y >= r->c.y0 && y + n <= r->c.y0 + r->c.rows)
+		return 0;
+	return render_page_from(r, pg, r->c.w, y & ~7);
+}
+
+static uint16_t *crop(RPAGE *r, long pg, const RCLIP *b, int pw, int ph)
+{
+	const RCANVAS *c = &r->c;
 	uint16_t *o = malloc((size_t)pw * ph * 2);
 	int x, y, bw = b->x1 - b->x0, bh = b->y1 - b->y0;
 
@@ -352,6 +363,12 @@ static uint16_t *crop(const RCANVAS *c, const RCLIP *b, int pw, int ph)
 
 		if (y1 <= y0)
 			y1 = y0 + 1;
+		if (y1 > c->h)
+			y1 = c->h;
+		if (y0 < y1 && band_at(r, pg, y0, y1 - y0)) {
+			free(o);
+			return NULL;
+		}
 		for (x = 0; x < pw; x++) {
 			int x0 = b->x0 + (int)((long)x * bw / pw), x1 = b->x0 + (int)((long)(x + 1) * bw / pw), i, j;
 			long r = 0, g = 0, bl = 0, n = 0;
@@ -360,7 +377,7 @@ static uint16_t *crop(const RCANVAS *c, const RCLIP *b, int pw, int ph)
 				x1 = x0 + 1;
 			for (j = y0; j < y1 && j < c->h; j++)
 				for (i = x0; i < x1 && i < c->w; i++) {
-					uint16_t p = c->px[(long)j * c->w + i];
+					uint16_t p = c->px[(long)(j - c->y0) * c->w + i];
 
 					r += R8(p);
 					g += G8(p);
@@ -517,13 +534,16 @@ static long layout(const char *t, long n, int fs, long wid, long top, const XPIC
 /* a page with colour on it (a pixel in four, each row in four; a few
    red words aren't): one without has no colour picture, EPDF shows its
    mono one (a novel's 330 pages in 16 colours were 22 MB) */
-static int has_colour(const RCANVAS *cv)
+static int has_colour(RPAGE *r, long pg)
 {
+	const RCANVAS *cv = &r->c;
 	long y, x, n = 0;
 
-	for (y = 0; y < cv->h; y += 4)
+	for (y = 0; y < cv->h; y += 4) {
+		if (band_at(r, pg, (int)y, 1))
+			return 0;
 		for (x = 0; x < cv->w; x += 4) {
-			uint16_t p = cv->px[y * cv->w + x];
+			uint16_t p = cv->px[(y - cv->y0) * cv->w + x];
 			int r = R8(p), g = G8(p), b = B8(p), mx = r > g ? r : g, mn = r < g ? r : g;
 
 			mx = b > mx ? b : mx;
@@ -531,6 +551,7 @@ static int has_colour(const RCANVAS *cv)
 			if (mx - mn > 48 && ++n >= 200)
 				return 1;
 		}
+	}
 	return 0;
 }
 
@@ -648,7 +669,7 @@ static int convert_page(CV *c, long n)
 				uint16_t *px;
 
 				cv_phase = "drawing";
-				px = crop(&r->c, &g->px, pw, ph);
+				px = crop(r, n, &g->px, pw, ph);
 
 				if (px) {
 					obj = w_new(w);
@@ -715,7 +736,7 @@ static int convert_page(CV *c, long n)
 		unsigned char *d;
 		char dict[256];
 
-		if (c->o->pages == CV_PAGES_COLOUR && has_colour(&r->c)) {
+		if (c->o->pages == CV_PAGES_COLOUR && has_colour(r, n)) {
 			/* TOS's 16 colours, in their registers' order: EPDF shows
 			   the page with each colour's pen, no dither of its own */
 			static const unsigned char pal[16][3] = {
@@ -730,8 +751,18 @@ static int convert_page(CV *c, long n)
 				char dc[512];
 				int o, q;
 
+				int y;
+
 				cv_phase = "colour";
-				dither_pal(r->c.px, r->c.w, r->c.h, (const unsigned char (*)[3])pal, nc, dp);
+				/* a band at a time where the canvas holds one */
+				for (y = 0; y < r->c.h; y += r->c.rows) {
+					int k = r->c.h - y < r->c.rows ? r->c.h - y : r->c.rows;
+
+					if (band_at(r, n, y, k))
+						break;
+					dither_pal_rows(r->c.px + (long)(y - r->c.y0) * r->c.w, r->c.w, k, y,
+							(const unsigned char (*)[3])pal, nc, dp + (long)y * rb4);
+				}
 				colour = w_new(w);
 				o = snprintf(dc, sizeof dc, "/Type /XObject /Subtype /Image /Width %d /Height %d "
 					     "/ColorSpace [/Indexed /DeviceRGB %d <", r->c.w, r->c.h, nc - 1);
@@ -742,24 +773,36 @@ static int convert_page(CV *c, long n)
 				free(dp);
 			}
 		}
+		int was = r->mono_glyphs;
+
 		if (!r->mono_glyphs) {
 			/* drawn again with the mono page's glyphs (the colour page and
 			   the drawings had the grey-edged ones) */
 			r->mono_glyphs = 1;
 			cv_phase = "render-mono";
 			drawn = render_page(r, n, PAGE_W) == 0;
-			r->mono_glyphs = 0;
 		}
 		d = drawn ? malloc((size_t)rb * r->c.h) : NULL;
 		if (d) {
+			int y;
+
 			cv_phase = "mono";
-			dither_mono(r->c.px, r->c.w, r->c.h, d);
+			/* a band at a time where the canvas holds one (the glyphs the
+			   mono page's while they are drawn again) */
+			for (y = 0; y < r->c.h; y += r->c.rows) {
+				int k = r->c.h - y < r->c.rows ? r->c.h - y : r->c.rows;
+
+				if (band_at(r, n, y, k))
+					break;
+				dither_mono_rows(r->c.px + (long)(y - r->c.y0) * r->c.w, r->c.w, k, y, d + (long)y * rb);
+			}
 			mono = w_new(w);
 			snprintf(dict, sizeof dict, "/Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceGray "
 				 "/BitsPerComponent 1", r->c.w, r->c.h);
 			w_stream(w, mono, dict, d, rb * r->c.h);
 			free(d);
 		}
+		r->mono_glyphs = was;
 	}
 	/* what other viewers draw */
 	if (colour >= 0 || mono >= 0)
@@ -858,6 +901,7 @@ int cv_convert(const char *in, const char *out, const CVOPT *o, CVSTAT *st, char
 		free(c);
 		return -1;
 	}
+	c->r.canvas_max = o->canvas_max;
 	c->w.h = cv_create(out);
 	c->pages = malloc((size_t)c->npages * sizeof *c->pages);
 	if (!c->w.h || !c->pages) {

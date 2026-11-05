@@ -19,6 +19,8 @@ typedef struct {
 	int pages;			/* whole pages: CV_PAGES_* (mono) */
 	int photos;			/* CV_PHOTOS_* (indexed) */
 	int pic_size;			/* CV_PIC_* (page) */
+	long canvas_max;		/* the page canvas's most bytes, 0 any: a page drawn in
+				   bands under it (a machine short of memory; slower) */
 	const char *fontdir;		/* the standard fonts' files (Liberation*.ttf), or NULL */
 	/* asked between pieces of work: done and total for this file, in
 	   thousandths of its pages; 1 stops the conversion */

@@ -1147,6 +1147,11 @@ void render_done(RPAGE *r)
 
 int render_page(RPAGE *r, long n, int width)
 {
+	return render_page_from(r, n, width, 0);
+}
+
+int render_page_from(RPAGE *r, long n, int width, int y0)
+{
 	POBJ *res, *box, *pg;
 	long rot;
 	fx bx[4] = { 0, 0, FX_INT(612), FX_INT(792) }, s, pw, ph;
@@ -1195,11 +1200,20 @@ int render_page(RPAGE *r, long n, int width)
 		  r->base[4] = -fxmul(bx[0], s); r->base[5] = fxmul(bx[3], s); break;
 	}
 	if (r->c.w != width || r->c.h != h) {
+		/* all of it, or the band canvas_max allows (8 rows at least, a
+		   multiple of 8: the dithers' patterns are 8 rows) */
+		long rows = h;
+
+		if (r->canvas_max > 0 && (long)width * h * 2 > r->canvas_max) {
+			rows = r->canvas_max / ((long)width * 2) & ~7L;
+			if (rows < 8)
+				rows = 8;
+		}
 		rc_free(&r->c);
-		if (rc_init(&r->c, width, h))
+		if (rc_init_rows(&r->c, width, h, (int)rows))
 			return -1;
-	} else
-		rc_clear(&r->c, 0xFFFF);
+	}
+	rc_band(&r->c, y0);
 	r->width = width;
 	r->narea = 0;
 	r->glyphs = r->glyphs_missed = r->images = r->images_missed = 0;

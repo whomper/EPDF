@@ -172,6 +172,11 @@ static const unsigned char bayer[64] = {
 
 void dither_mono(const uint16_t *px, int w, int h, unsigned char *out)
 {
+	dither_mono_rows(px, w, h, 0, out);
+}
+
+void dither_mono_rows(const uint16_t *px, int w, int h, int ytop, unsigned char *out)
+{
 	unsigned char thr[64];
 	int x, y, rb = (w + 7) / 8, i;
 
@@ -181,7 +186,7 @@ void dither_mono(const uint16_t *px, int w, int h, unsigned char *out)
 	for (y = 0; y < h; y++) {
 		const uint16_t *s = px + (long)y * w;
 		unsigned char *o = out + (long)y * rb;
-		const unsigned char *t = thr + (y & 7) * 8;
+		const unsigned char *t = thr + ((y + ytop) & 7) * 8;
 
 		if ((y & 3) == 3 && cv_turn)
 			cv_turn();
@@ -228,19 +233,30 @@ static int nearest(const unsigned char (*pal)[3], int n, int r, int g, int b)
 
 void dither_pal(const uint16_t *px, int w, int h, const unsigned char (*pal)[3], int n, unsigned char *out)
 {
-	signed char *inv = malloc(32768);
+	dither_pal_rows(px, w, h, 0, pal, n, out);
+}
+
+void dither_pal_rows(const uint16_t *px, int w, int h, int ytop, const unsigned char (*pal)[3], int n,
+		     unsigned char *out)
+{
+	/* each 15-bit colour's nearest, the first found keeping it: kept for the
+	   whole page (cleared at its first row), so a page in bands gets the
+	   same as in one piece */
+	static signed char *inv;
 	int x, y, rb = (w + 1) / 2, white = nearest(pal, n, 255, 255, 255), black = nearest(pal, n, 0, 0, 0);
 	short off[64];
 
 	for (x = 0; x < 64; x++)
 		off[x] = (short)((bayer[x] - 32) * 3);	/* about -96 .. 93: the 16 colours' steps */
-	if (inv)
+	if (!inv)
+		inv = malloc(32768);
+	if (inv && ytop == 0)
 		memset(inv, -1, 32768);
 	memset(out, 0, (size_t)rb * h);
 	for (y = 0; y < h; y++) {
 		const uint16_t *s = px + (long)y * w;
 		unsigned char *o = out + (long)y * rb;
-		const short *t = off + (y & 7) * 8;
+		const short *t = off + ((y + ytop) & 7) * 8;
 
 		if ((y & 3) == 3 && cv_turn)
 			cv_turn();
@@ -267,5 +283,4 @@ void dither_pal(const uint16_t *px, int w, int h, const unsigned char (*pal)[3],
 			o[x >> 1] |= (unsigned char)(x & 1 ? best : best << 4);
 		}
 	}
-	free(inv);
 }

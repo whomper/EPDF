@@ -34,8 +34,9 @@ typedef struct {
 } RPATH;
 
 typedef struct {
-	int w, h;
-	uint16_t *px;			/* w * h, 5-6-5 */
+	int w, h;			/* the page's size */
+	int y0, rows;			/* the rows held: y0 .. y0 + rows - 1 (all of them, or a band) */
+	uint16_t *px;			/* w * rows, 5-6-5 */
 	int16_t *acc;			/* a row's coverage, w + 2 */
 	struct REDGE *e;		/* a fill's edges */
 	long ne, cape;
@@ -44,6 +45,11 @@ typedef struct {
 } RCANVAS;
 
 int rc_init(RCANVAS *c, int w, int h);	/* white; 0 ok */
+/* a band of rows of a w x h canvas (y0 0), white; 0 ok. Everything drawn
+   lands only where it is held */
+int rc_init_rows(RCANVAS *c, int w, int h, int rows);
+/* the band moved to start at row y0, white */
+void rc_band(RCANVAS *c, int y0);
 void rc_free(RCANVAS *c);
 void rc_clear(RCANVAS *c, uint16_t px);
 

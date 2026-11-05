@@ -37,6 +37,8 @@ typedef struct {
 	long glyphs, glyphs_missed, images, images_missed;
 	int mono_glyphs;		/* glyphs hinted, a bit a pixel (the mono page's: grey edges
 					   dithered broke 10-pixel text into dots, Erez, 4 Nov 2026) */
+	long canvas_max;		/* set by the caller: the canvas's most bytes (0 any): a page
+				   taller is drawn a band at a time (render_page_from) */
 } RPAGE;
 
 /* the fonts are kept from page to page: render_init once, render_done at
@@ -46,6 +48,9 @@ void render_done(RPAGE *r);
 /* page n drawn width pixels wide (its height from its shape): r->c
    holds it; 0 ok */
 int render_page(RPAGE *r, long n, int width);
+/* the same page drawn again into the band starting at row y0 (a multiple
+   of 8), when the canvas holds a band (r->c.rows < r->c.h); 0 ok */
+int render_page_from(RPAGE *r, long n, int width, int y0);
 /* the drawings found on the page drawn: their boxes in page points
    (x0, y0 bottom left, x1, y1 top right, as PDF's), at most max */
 typedef struct {

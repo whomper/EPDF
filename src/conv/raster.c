@@ -28,10 +28,16 @@ typedef struct REDGE {
 
 int rc_init(RCANVAS *c, int w, int h)
 {
+	return rc_init_rows(c, w, h, h);
+}
+
+int rc_init_rows(RCANVAS *c, int w, int h, int rows)
+{
 	memset(c, 0, sizeof *c);
 	c->w = w;
 	c->h = h;
-	c->px = malloc((size_t)w * h * 2);
+	c->rows = rows < h ? rows : h;
+	c->px = malloc((size_t)w * c->rows * 2);
 	c->acc = calloc((size_t)w + 4, sizeof *c->acc);
 	if (!c->px || !c->acc) {
 		rc_free(c);
@@ -50,9 +56,15 @@ void rc_free(RCANVAS *c)
 	memset(c, 0, sizeof *c);
 }
 
+void rc_band(RCANVAS *c, int y0)
+{
+	c->y0 = y0;
+	rc_clear(c, 0xFFFF);
+}
+
 void rc_clear(RCANVAS *c, uint16_t px)
 {
-	long i, n = (long)c->w * c->h;
+	long i, n = (long)c->w * c->rows;
 
 	/* in bands of 32 rows, a turn after each: a page of 640 is a MB,
 	   145 ms on a Falcon in one piece */
@@ -319,9 +331,9 @@ static inline uint16_t mix(uint16_t d, uint16_t s, int c)
 static void clip_to(const RCANVAS *c, const RCLIP *in, RCLIP *out)
 {
 	out->x0 = 0;
-	out->y0 = 0;
+	out->y0 = c->y0;		/* (the rows held) */
 	out->x1 = c->w;
-	out->y1 = c->h;
+	out->y1 = c->y0 + c->rows < c->h ? c->y0 + c->rows : c->h;
 	if (in) {
 		if (in->x0 > out->x0) out->x0 = in->x0;
 		if (in->y0 > out->y0) out->y0 = in->y0;
@@ -438,7 +450,7 @@ void rc_fill(RCANVAS *c, const RPATH *p, int evenodd, uint16_t col, const RCLIP 
 		}
 		if (any) {
 			int32_t x, run = 0;
-			uint16_t *row = c->px + (long)y * c->w;
+			uint16_t *row = c->px + (long)(y - c->y0) * c->w;
 
 			for (x = k.x0; x <= k.x1; x++) {
 				run += c->acc[x];
@@ -632,7 +644,7 @@ void rc_mask(RCANVAS *c, int x, int y, const unsigned char *a, int w, int h, int
 
 		if (yy < k.y0 || yy >= k.y1)
 			continue;
-		row = c->px + (long)yy * c->w;
+		row = c->px + (long)(yy - c->y0) * c->w;
 		for (i = 0; i < w; i++) {
 			int xx = x + i, v = a[(long)j * pitch + i];
 
@@ -694,7 +706,7 @@ void rc_image(RCANVAS *c, const uint16_t *px, const unsigned char *alpha, int pw
 	for (X = k.x0; X < k.x1; X++)
 		cmap[X - k.x0] = swap ? along(X, m[4], m[2], ph) : along(X, m[4], m[0], pw);
 	for (Y = k.y0; Y < k.y1; Y++) {
-		uint16_t *row = c->px + (long)Y * c->w;
+		uint16_t *row = c->px + (long)(Y - c->y0) * c->w;
 		int r = swap ? along(Y, m[5], m[1], pw) : along(Y, m[5], m[3], ph);
 
 		if (r < 0)
