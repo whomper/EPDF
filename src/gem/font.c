@@ -151,6 +151,18 @@ void font_sys_pop(void)
 	set(font_id, font_pt);
 }
 
+void font_small(short *w, short *h)
+{
+	vst_font(vdi_h, 1);
+	vst_height(vdi_h, 4, w, h);
+	text_font(vdi_h, 1, *w, *h);
+}
+
+void font_back(void)
+{
+	set(font_id, font_pt);
+}
+
 void font_exit(void)
 {
 	if (gdos > 0)

@@ -8,27 +8,37 @@
  * A rounded box with a dark edge, shaded from its top down, drawn a band
  * of rows at a time (rows alike are one rectangle). EPDF sets no pens: the
  * shades are the loaded palette's, found once with vq_color.
- *   256 colours and more: the greens nearest to a ramp from a mid green to
- *     a deep one, each step either a pen or two neighbours dithered (the
- *     VDI's 50 % pattern), so the ramp has twice the steps the palette has.
+ *   256 colours and more: a gloss (Erez, 5 Nov: "shade it much better.
+ *     Use more hues as needed"): a bright mint top falling to an emerald
+ *     body and a deep green foot, five stops each the palette's nearest
+ *     green of any hue (TOS's 256 have greens at four brightnesses, each
+ *     with blue and yellow beside it, and no pale ones), each row a stop
+ *     or two neighbouring ones dithered (the VDI's 50 % pattern, which
+ *     reads as one colour where a finer dither of two hues showed as a
+ *     texture).
  *   16 colours: the VDI's dark green (pen 11, the darkest green of the 16:
  *     darker only by a dither behind the text, which showed as dots), its
  *     first row dithered with the light green (pen 3) for a lit top edge,
  *     its last two with black for the shade below; a black edge.
  *   4 colours: the green (pen 3), the last two rows dithered with black.
  *   mono: a black box (the text white on it).
- *   A font under 12 pixels (ST low and medium's 8): one green, a pixel off
- *   each corner, no edge, no shadow (they cut into its letters).
+ *   A box under 10 pixels (ST low and medium's 8-pixel line): one green,
+ *   a pixel off each corner, no edge, no shadow (they cut into its
+ *   letters). The text is the system's small font (textwin.c).
  */
 #include "gemui.h"
 #include "badge.h"
 
-#define NSH 8
+#define NSH 5
 
 static short nsh, sh[NSH], edge = 1, body = 3, lit = -1, dark = 1;
 
-/* the ramp's ends and the edge, in the VDI's 0 to 1000 */
-static const short top[3] = { 235, 705, 315 }, bot[3] = { 0, 235, 80 }, edge_rgb[3] = { 0, 157, 40 };
+/* the gloss's stops, top to foot, and the edge, in the VDI's 0 to 1000
+   (two stops alike: the body holds its colour a while) */
+static const short stop[NSH][3] = {
+	{ 0, 1000, 333 }, { 0, 733, 200 }, { 0, 467, 133 }, { 0, 467, 133 }, { 0, 267, 67 }
+};
+static const short edge_rgb[3] = { 0, 240, 60 };
 
 static long dist(const short *a, const short *b)
 {
@@ -41,8 +51,8 @@ static long lum(const short *c)
 	return 299L * c[0] + 587L * c[1] + 114L * c[2];
 }
 
-/* a green: green the strongest by a clear step, red and blue well under it
-   (the palette's teals and yellow-greens out: the ramp's steps keep their hue) */
+/* a green: green the strongest by a clear step, red and blue well under
+   it (a teal's or a yellow-green's dither shows as a texture) */
 static int green(const short *c)
 {
 	short mx = c[0] > c[2] ? c[0] : c[2];
@@ -73,7 +83,7 @@ void badge_pens(void)
 	{
 		short crgb[256][3];		/* (the greens' colours, read once; on the stack: no resident bytes) */
 		short cand[256], nc = 0, j;
-		long bd, el = 0x7fffffffL, sl[NSH];
+		long bd, el = 0x7fffffffL;
 
 		edge = 1;
 		for (p = 1; p < n; p++) {
@@ -96,32 +106,19 @@ void badge_pens(void)
 			dark = 1;
 			return;
 		}
+		/* each stop: the nearest green */
 		for (i = 0; i < NSH; i++) {
-			short want[3], best = 0, k, c;
-			long l;
+			short best = 0;
 
-			for (c = 0; c < 3; c++)
-				want[c] = (short)(top[c] + (long)(bot[c] - top[c]) * i / (NSH - 1));
 			bd = 0x7fffffffL;
 			for (j = 0; j < nc; j++)
-				if (dist(crgb[j], want) < bd) {
-					bd = dist(crgb[j], want);
+				if (dist(crgb[j], stop[i]) < bd) {
+					bd = dist(crgb[j], stop[i]);
 					best = j;
 				}
-			/* each pen once, light to dark */
-			for (k = 0; k < nsh && sh[k] != cand[best]; k++)
-				;
-			if (k < nsh)
-				continue;
-			l = lum(crgb[best]);
-			for (k = nsh; k > 0 && sl[k - 1] < l; k--) {
-				sh[k] = sh[k - 1];
-				sl[k] = sl[k - 1];
-			}
-			sh[k] = cand[best];
-			sl[k] = l;
-			nsh++;
+			sh[i] = cand[best];
 		}
+		nsh = NSH;
 	}
 }
 
@@ -147,12 +144,12 @@ static void row_pens(short i, short h, short *a, short *b)
 		*b = dark;
 }
 
-/* the corner's inset of row i (rounded: 2 1 at a tall font's ends, 1 at a short one's) */
+/* the corner's inset of row i (rounded: 2 1 at a tall box's ends, 1 at a short one's) */
 static short inset(short i, short h)
 {
 	short e = i < h - 1 - i ? i : (short)(h - 1 - i);
 
-	if (h >= 12)
+	if (h >= 10)
 		return e == 0 ? 2 : e == 1 ? 1 : 0;
 	return e == 0 ? 1 : 0;
 }
@@ -195,10 +192,10 @@ short badge_draw(short x, short y, short w, short h)
 		v_rfbox(vdi_h, p);
 		return -1;
 	}
-	if (h < 12) {
-		/* a short font (8 pixels: ST low and medium) fills its cell: an edge
-		   and shaded rows cut into its letters, and so did v_rfbox's
-		   corners; one green, a pixel off each corner */
+	if (h < 10) {
+		/* a short box (an 8-pixel line: ST low and medium): an edge and
+		   shaded rows cut into its letters, and so did v_rfbox's corners;
+		   one green, a pixel off each corner */
 		short pen = nsh ? sh[nsh / 2] : body;
 
 		bar((short)(x + 1), y, (short)(x + w - 2), y, pen, 0);

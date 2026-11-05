@@ -250,15 +250,31 @@ static void draw_head(short x, short y, short w, long page)
 {
 	static const char badge[] = "Optimised";
 	char s[32];
-	short n, my = (short)(y + ch / 2), tx, end = (short)(x + w - MARGIN - 1), bx = 0, bw = 0;
+	short n, my = (short)(y + ch / 2), tx, end = (short)(x + w - MARGIN - 1), bx = 0, bw = 0, bh = 0, sw = 0, sh = 0, small = 0;
 
 	n = (short)snprintf(s, sizeof s, " Page %ld ", page + 1);
 	tx = (short)(x + MARGIN + 2 * cw);
 	if (doc_prepared()) {
-		/* the text centred, half a cell each side and its shadow's pixel
-		   (Erez, 4 Nov: "the text is centered and the bounding box
-		   isn't too wide") */
-		bw = (short)((sizeof badge - 1) * cw + 2 * (cw / 2) + 1);
+		/* the text centred in the system's small font, 3 pixels each side
+		   and its shadow's pixel, the box 0.7 of the line high (Erez, 4
+		   Nov: "the text is centered and the bounding box isn't too
+		   wide"; 5 Nov: "smaller by 30%"): a 16-pixel font's badge 81 x
+		   16 -> 61 x 11. An 8-pixel line (ST low and medium) keeps its
+		   font and the box its height: the small font there is 3 pixels
+		   of a monitor high, past reading */
+		static short sw0, sh0;		/* (its cell, asked once) */
+
+		small = ch >= 12;
+		if (small && !sw0) {
+			font_small(&sw0, &sh0);
+			font_back();
+		}
+		sw = small ? sw0 : cw;
+		sh = small ? sh0 : ch;
+		bh = small ? (short)((ch * 7 + 5) / 10) : ch;
+		if (bh < sh + 2)
+			bh = (short)(sh + 2 < ch ? sh + 2 : ch);
+		bw = (short)((sizeof badge - 1) * sw + (small ? 2 * 3 : 2 * (cw / 2)) + 1);
 		bx = (short)(end + 1 - bw);
 		if (bx > tx + (n + 2) * cw)
 			end = (short)(bx - cw - 1);
@@ -271,17 +287,24 @@ static void draw_head(short x, short y, short w, long page)
 	vst_color(vdi_h, 1);
 	text_n(vdi_h, tx, y, s, n);
 	if (bw) {
-		short sh = badge_draw(bx, y, bw, ch);	/* (badge.c: shaded green, black in mono) */
+		short by = (short)(y + (ch - bh) / 2), ty, tx2, shadow;
 
+		shadow = badge_draw(bx, by, bw, bh);	/* (badge.c: shaded green, black in mono) */
 		fill_set = 0;
+		if (small)
+			font_small(&sw, &sh);
+		ty = (short)(by + (bh - sh - (shadow >= 0)) / 2);
+		tx2 = (short)(bx + (bw - 1 - (sizeof badge - 1) * sw) / 2);
 		vswr_mode(vdi_h, MD_TRANS);
-		if (sh >= 0) {
-			vst_color(vdi_h, sh);
-			text_n(vdi_h, (short)(bx + cw / 2 + 1), (short)(y + 1), badge, (short)(sizeof badge - 1));
+		if (shadow >= 0) {
+			vst_color(vdi_h, shadow);
+			text_n(vdi_h, (short)(tx2 + 1), (short)(ty + 1), badge, (short)(sizeof badge - 1));
 		}
 		vst_color(vdi_h, 0);
-		text_n(vdi_h, (short)(bx + cw / 2), y, badge, (short)(sizeof badge - 1));
+		text_n(vdi_h, tx2, ty, badge, (short)(sizeof badge - 1));
 		vst_color(vdi_h, 1);
+		if (small)
+			font_back();
 	}
 }
 

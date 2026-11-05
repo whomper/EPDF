@@ -105,6 +105,10 @@ void font_init(const char *setting, const char *dir);
 const char *font_setting(void);
 int font_dialog(void);			/* View > Font...: 1 when another was chosen */
 void font_exit(void);
+/* the system's small font (6x6, the desktop's icon labels) on vdi_h and
+   the text drawing told its cell (*w, *h), then the view's font back */
+void font_small(short *w, short *h);
+void font_back(void);
 
 /* find.c */
 int find_dialog(char *text);		/* text: 65 bytes; 1 when Find was chosen */
