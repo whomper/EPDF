@@ -903,6 +903,33 @@ static int convert_page(CV *c, long n)
 	return w->bad ? -1 : 0;
 }
 
+/* the original's information kept (Erez, 5 Nov 2026: "the converted file
+   should hold the meta data of the original, for example creation date,
+   last update"): its title, author, subject, keywords, the program that
+   made it and its dates, each string as it was (hex: UTF-16 and any
+   bytes as they came); the Producer is EConvert's, which made this one */
+static void w_info(CV *c)
+{
+	static const char *const keys[] = { "Title", "Author", "Subject", "Keywords", "Creator", "CreationDate",
+					     "ModDate" };
+	POBJ *info = c->d.trailer ? pd_get(&c->d, c->d.trailer, "Info") : NULL;
+	int k;
+
+	if (!info || info->t != PO_DICT)
+		return;
+	for (k = 0; k < (int)(sizeof keys / sizeof keys[0]); k++) {
+		POBJ *v = pd_get(&c->d, info, keys[k]);
+		long i;
+
+		if (!v || v->t != PO_STR || v->a <= 0 || v->a > 2000)
+			continue;
+		w_printf(&c->w, "\n/%s <", keys[k]);
+		for (i = 0; i < v->a; i++)
+			w_printf(&c->w, "%02X", (unsigned char)v->u.p[i]);
+		w_printf(&c->w, ">");
+	}
+}
+
 static const char *base_name(const char *p)
 {
 	const char *b = p, *s;
@@ -995,7 +1022,7 @@ int cv_convert(const char *in, const char *out, const CVOPT *o, CVSTAT *st, char
 			w_hold(&c->w, &hb, &m);
 			c->short_mem = 0;
 			rc = convert_page(c, n);
-			if (rc != -2 && c->short_mem && !c->banded) {
+			if (rc != -2 && (c->short_mem || rc == -1) && !c->banded) {
 				long fr = o->mem_free ? o->mem_free() : 0;
 
 				w_undo(&c->w, &m);
@@ -1030,7 +1057,9 @@ int cv_convert(const char *in, const char *out, const CVOPT *o, CVSTAT *st, char
 		w_printf(&c->w, "%s%ld 0 R", n ? " " : "", c->pages[n]);
 	w_printf(&c->w, "] >>\nendobj\n");
 	w_obj(&c->w, 3);
-	w_printf(&c->w, "<< /Producer (EConvert 1.1 \\(AERA\\): prepared for the Atari) >>\nendobj\n");
+	w_printf(&c->w, "<< /Producer (EConvert 1.1 \\(AERA\\): prepared for the Atari)");
+	w_info(c);
+	w_printf(&c->w, " >>\nendobj\n");
 	w_obj(&c->w, 1);
 	w_printf(&c->w, "<< /Type /Catalog /Pages 2 0 R\n/AERA << /Type /AERAPrepared /Version 1 /Creator (EConvert 1.1)\n"
 		 "/Prepared [/Text /Pictures /Drawings%s%s] /Photos /%s\n/Source << /Name ",

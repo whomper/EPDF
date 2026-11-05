@@ -364,10 +364,10 @@ static void worker(void)
 				strncpy(files[i].why, err, sizeof files[i].why - 1);
 			}
 			{
-				char a[48];
+				char a[120];
 
-				snprintf(a, sizeof a, "%d %ld ms %ld bytes stack %ld", r, st.ms, st.out_bytes,
-					 coro_used(work_stack, CONV_STACK));
+				snprintf(a, sizeof a, "%d %ld ms %ld bytes stack %ld%s%s", r, st.ms, st.out_bytes,
+					 coro_used(work_stack, CONV_STACK), r == -1 ? " why " : "", r == -1 ? err : "");
 				log_event("converted", base_of(files[i].path), a);
 			}
 			bytes_done += files[i].bytes;

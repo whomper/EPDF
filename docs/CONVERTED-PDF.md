@@ -20,7 +20,7 @@ The document catalog has an entry `/AERA`, a dictionary:
 | `/Photos` | `/Indexed` (256 colours, the default) or `/JPEG`: how the photos are stored (EConvert's per-batch setting) |
 | `/Source` | a dictionary on the original: `/Name` (its file name), `/Bytes` (its size), `/Pages` (its page count) |
 
-The document information dictionary's `/Producer` is `(EConvert 1.1 \(AERA\): prepared for the Atari)`.
+The document information dictionary's `/Producer` is `(EConvert 1.1 \(AERA\): prepared for the Atari)`. Its `/Title`, `/Author`, `/Subject`, `/Keywords`, `/Creator`, `/CreationDate` and `/ModDate` are the original's, each as it was (written as a hex string).
 
 The page tree has the same pages, in the same order and at the same sizes (`/MediaBox`, `/Rotate`), as the
 original.
