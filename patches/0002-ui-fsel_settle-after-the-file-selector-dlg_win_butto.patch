@@ -1,0 +1,348 @@
+From ddb24ec7e1337688cbd9d0f557629d5effb8263e Mon Sep 17 00:00:00 2001
+From: AERA | Erez Yaary <yaary@me.com>
+Date: Thu, 5 Nov 2026 17:11:35 +0000
+Subject: [PATCH 2/4] ui: fsel_settle after the file selector; dlg_win_button,
+ a window's button on release
+
+EConvert's first (5 Nov 2026), the hub's yes to common. Erez: "when
+selecting a file to convert, and then selecting the target, it forgets
+the file and says there are 0 files to convert". A window whose buttons
+act on a press can be given a click the file selector left as it
+closed on a double click's first: EConvert's Clear.
+
+fsel_settle (ui/fsel.c, new): after fsel_exinput, the button waited up
+(2,000 polls at most) and the button events queued taken off (16 at
+most). dlg_win_button (dialog.c): a press on a window's own EXIT button
+taken as a dialog's are, only when let go over it (graf_watchbox): 0
+for the button already up, let go elsewhere, disabled, not EXIT.
+
+tests/dialog: five dlg_win_button checks (stand-in graf_mkstate and
+graf_watchbox), 143 checks ok, both builds. tests/uibits (new, also
+scr_work_size and enlarge_mark's): fsel_settle's three.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01SZeNoDLt48EM4msuao4J1n
+---
+ common/tests/dialog/test_dialog.c |  31 +++++++
+ common/tests/uibits/Makefile      |  18 +++++
+ common/tests/uibits/test_uibits.c | 130 ++++++++++++++++++++++++++++++
+ common/ui/dialog.c                |  14 ++++
+ common/ui/dialog.h                |   9 +++
+ common/ui/fsel.c                  |  21 +++++
+ common/ui/fsel.h                  |  20 +++++
+ 7 files changed, 243 insertions(+)
+ create mode 100644 common/tests/uibits/Makefile
+ create mode 100644 common/tests/uibits/test_uibits.c
+ create mode 100644 common/ui/fsel.c
+ create mode 100644 common/ui/fsel.h
+
+diff --git a/common/tests/dialog/test_dialog.c b/common/tests/dialog/test_dialog.c
+index 7f97a06..4c5d697 100644
+--- a/common/tests/dialog/test_dialog.c
++++ b/common/tests/dialog/test_dialog.c
+@@ -493,6 +493,22 @@ short form_dial(short flag, short x, short y, short w, short h)
+ 	return 1;
+ }
+ 
++/* dlg_win_button's: the button's state now, and where it is let go */
++static short fake_mb, fake_watch, watches;
++short graf_mkstate(short *mx, short *my, short *mb, short *ks)
++{
++	*mx = *my = *ks = 0;
++	*mb = fake_mb;
++	return 1;
++}
++
++short graf_watchbox(OBJECT *t, short obj, short instate, short outstate)
++{
++	watches++;
++	t[obj].ob_state = fake_watch ? instate : outstate;
++	return fake_watch;
++}
++
+ short graf_handle(short *wchar, short *hchar, short *wbox, short *hbox)
+ {
+ 	*wchar = 8;
+@@ -1282,6 +1298,21 @@ int main(void)
+ 	check(pen_nearest(1, 16, 1000, 1000, 500, 0) == 14, "pen_nearest: pale yellow, not for text: pen 14");
+ 	check(pen_nearest(1, 2, 1000, 0, 0, 1) == 1, "pen_nearest: two pens, text: black");
+ 	check(pen_nearest(1, 256, 0, 0, 1000, 1) == 4, "pen_nearest: 256 pens: only the first 16");
++	/* a window's button (dlg_win_button): taken only on a press let go over it */
++	setup();
++	fake_mb = 0, fake_watch = 1, watches = 0;
++	check(!dlg_win_button(tree, OK) && !watches, "dlg_win_button: the button already up: nothing (a selector's click)");
++	fake_mb = 1;
++	check(dlg_win_button(tree, OK) && watches == 1 && !(tree[OK].ob_state & SELECTED),
++	      "dlg_win_button: pressed and let go over it: taken, SELECTED off again");
++	fake_watch = 0;
++	check(!dlg_win_button(tree, OK), "dlg_win_button: let go elsewhere: nothing");
++	fake_watch = 1;
++	tree[OK].ob_state |= DISABLED;
++	check(!dlg_win_button(tree, OK), "dlg_win_button: a disabled button: nothing");
++	tree[OK].ob_state &= ~DISABLED;
++	check(!dlg_win_button(tree, TITLE) && !dlg_win_button(tree, -1), "dlg_win_button: not an EXIT object: nothing");
++	fake_mb = 0;
+ printf("%d checks, %d failed\n", checks, failed);
+ 	return failed != 0;
+ }
+diff --git a/common/tests/uibits/Makefile b/common/tests/uibits/Makefile
+new file mode 100644
+index 0000000..a1bd1bf
+--- /dev/null
++++ b/common/tests/uibits/Makefile
+@@ -0,0 +1,18 @@
++# SPDX-License-Identifier: GPL-2.0-or-later
++# Copyright (C) 2026 AERA | Erez Yaary
++# The small UI helpers (ui/fsel.c, ui/scrsize.c, ui/enlarge.c) on the build machine, against a
++# stand-in AES and VDI, with AddressSanitizer: make test
++CFLAGS := -O1 -g -Wall -Wextra -fsanitize=address,undefined -fno-sanitize-recover=all \
++          -I../dialog/stub -I../../ui -I../../atari
++B      := build
++U      := ../../ui
++
++$(B)/test_uibits: test_uibits.c $(U)/fsel.c $(U)/fsel.h $(U)/scrsize.c $(U)/scrsize.h $(U)/enlarge.c $(U)/enlarge.h | $(B)
++	cc $(CFLAGS) -o $@ test_uibits.c $(U)/fsel.c $(U)/scrsize.c $(U)/enlarge.c
++$(B):
++	mkdir -p $@
++test: $(B)/test_uibits
++	./$(B)/test_uibits
++clean:
++	rm -rf $(B)
++.PHONY: test clean
+diff --git a/common/tests/uibits/test_uibits.c b/common/tests/uibits/test_uibits.c
+new file mode 100644
+index 0000000..1e94e63
+--- /dev/null
++++ b/common/tests/uibits/test_uibits.c
+@@ -0,0 +1,130 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later
++ * Copyright (C) 2026 AERA | Erez Yaary */
++/*
++ * The small UI helpers on the build machine, against a stand-in AES and
++ * VDI: fsel_settle (fsel.c), scr_work_size (scrsize.c), enlarge_mark
++ * (enlarge.c). make test
++ */
++#include <stdio.h>
++#include <string.h>
++#include "gemui.h"
++#include "fsel.h"
++#include "scrsize.h"
++#include "enlarge.h"
++
++short vdi_h, cw, ch, scr_w, scr_h, desk_x, desk_y, desk_w, desk_h, planes, gl_wchar = 8, gl_hchar = 16;
++
++static int checks, failed;
++static void check(int ok, const char *what)
++{
++	checks++;
++	failed += !ok;
++	printf("%s %s\n", ok ? "ok  " : "FAIL", what);
++}
++
++/* the AES: the button down for some polls, button events queued */
++static int down_polls, polls, queued, multis;
++short graf_mkstate(short *mx, short *my, short *mb, short *ks)
++{
++	*mx = *my = *ks = 0;
++	polls++;
++	*mb = down_polls > 0 ? (down_polls--, 1) : 0;
++	return 1;
++}
++
++short evnt_multi_(short flags, short clicks, short mask, short state, unsigned long timer, short *msg, AEVENT *ev)
++{
++	(void)clicks, (void)mask, (void)state, (void)timer, (void)msg;
++	multis++;
++	memset(ev, 0, sizeof *ev);
++	ev->which = (flags & MU_BUTTON) && queued > 0 ? (queued--, MU_BUTTON) : MU_TIMER;
++	return ev->which;
++}
++
++/* the desktop's work area and a window's borders */
++short wind_get(short h, short field, short *a, short *b, short *c, short *d)
++{
++	(void)h, (void)field;
++	*a = 0, *b = 19, *c = 640, *d = 461;
++	return 1;
++}
++
++short wind_calc(short type, short kind, short x, short y, short w, short h, short *ox, short *oy, short *ow, short *oh)
++{
++	(void)type;
++	/* a title bar (19), and a slider at the right (20) when the kind has one */
++	*ox = (short)(x + 1);
++	*oy = (short)(y + 20);
++	*ow = (short)(w - 2 - ((kind & VSLIDE) ? 19 : 0));
++	*oh = (short)(h - 21 - ((kind & SIZER) ? 19 : 0));
++	return 1;
++}
++
++/* the VDI: what was drawn */
++static int fills, lines, fill_pen, line_pen, mode;
++static short box[4], seen_x0, seen_y0, seen_x1, seen_y1;
++void vswr_mode(short h, short m) { (void)h; mode = m; }
++void vsf_interior(short h, short s) { (void)h, (void)s; }
++void vsf_perimeter(short h, short p) { (void)h, (void)p; }
++void vsf_color(short h, short c) { (void)h; fill_pen = c; }
++void vsl_color(short h, short c) { (void)h; line_pen = c; }
++void vsl_type(short h, short t) { (void)h, (void)t; }
++void vr_recfl(short h, const short *p)
++{
++	(void)h;
++	fills++;
++	memcpy(box, p, sizeof box);
++}
++
++void v_pline(short h, short n, const short *p)
++{
++	int i;
++	(void)h;
++	lines++;
++	for (i = 0; i < n; i++) {
++		if (p[2 * i] < seen_x0) seen_x0 = p[2 * i];
++		if (p[2 * i] > seen_x1) seen_x1 = p[2 * i];
++		if (p[2 * i + 1] < seen_y0) seen_y0 = p[2 * i + 1];
++		if (p[2 * i + 1] > seen_y1) seen_y1 = p[2 * i + 1];
++	}
++}
++
++int main(void)
++{
++	short w, h;
++
++	setvbuf(stdout, 0, _IOLBF, 0);
++	/* fsel_settle */
++	down_polls = 3, queued = 2;
++	fsel_settle();
++	check(polls == 4 && down_polls == 0, "fsel_settle: waits for the button to be let go");
++	check(queued == 0 && multis == 3, "fsel_settle: the clicks queued taken off, then no more asked");
++	polls = multis = 0, down_polls = 0, queued = 100;
++	fsel_settle();
++	check(polls == 1 && multis == 16, "fsel_settle: a flood of clicks: taken off 16 at most");
++	queued = 0;
++
++	/* scr_work_size */
++	scr_work_size(NAME | MOVER, 8, &w, &h);
++	check(w == 616 && h == 424, "scr_work_size: 640 x 461 less borders and 8 at each side, in 8-pixel cells");
++	scr_work_size(NAME | MOVER | VSLIDE | SIZER, 8, &w, &h);
++	check(w == 600 && h == 405, "scr_work_size: a slider and a sizer take theirs, the width in cells");
++	gl_wchar = 6;
++	scr_work_size(NAME, 0, &w, &h);
++	check(w == 636 && w % 6 == 0, "scr_work_size: the system font's cell");
++	scr_work_size(NAME, 400, &w, &h);
++	check(w == 64 && h == 64, "scr_work_size: never under 64 x 64");
++
++	/* enlarge_mark */
++	seen_x0 = seen_y0 = 32767, seen_x1 = seen_y1 = -32768;
++	enlarge_mark(1, 100, 50);
++	check(fills == 1 && fill_pen == 0 && box[0] == 100 && box[1] == 50 && box[2] == 100 + ENLARGE_SIZE - 1 &&
++	      box[3] == 50 + ENLARGE_SIZE - 1, "enlarge_mark: a white square of ENLARGE_SIZE at x, y");
++	check(lines == 9 && line_pen == 1, "enlarge_mark: its edge and arrow in black, 9 strokes");
++	check(seen_x0 == 100 && seen_y0 == 50 && seen_x1 == 100 + ENLARGE_SIZE - 1 && seen_y1 == 50 + ENLARGE_SIZE - 1,
++	      "enlarge_mark: nothing drawn outside its square");
++	check(mode == MD_REPLACE, "enlarge_mark: the writing mode left MD_REPLACE");
++
++	printf("%d checks, %d failed\n", checks, failed);
++	return failed != 0;
++}
+diff --git a/common/ui/dialog.c b/common/ui/dialog.c
+index 26a20ac..424e616 100644
+--- a/common/ui/dialog.c
++++ b/common/ui/dialog.c
+@@ -1488,6 +1488,20 @@ short dlg_do(OBJECT *tree, short start, short cancel)
+ 	return next;
+ }
+ 
++int dlg_win_button(OBJECT *tree, short o)
++{
++	short mx, my, mb, ks;
++	if (o < 0 || !(tree[o].ob_flags & EXIT) || (tree[o].ob_state & DISABLED))
++		return 0;
++	graf_mkstate(&mx, &my, &mb, &ks);
++	if (!(mb & 1))
++		return 0;		/* the button already up: no press on it */
++	if (!graf_watchbox(tree, o, SELECTED, 0))
++		return 0;		/* let go elsewhere */
++	tree[o].ob_state &= ~SELECTED;
++	return 1;
++}
++
+ #ifdef DLG_TRACE
+ #include <stdio.h>
+ /* built with -DDLG_TRACE: each exit object's place on the screen to the
+diff --git a/common/ui/dialog.h b/common/ui/dialog.h
+index 27ea521..8cf7328 100644
+--- a/common/ui/dialog.h
++++ b/common/ui/dialog.h
+@@ -195,6 +195,15 @@ int dlg_touch_up_idle(void (*idle)(void));
+ #define DLG_CLICKS 2
+ #endif
+ 
++/* a window's own object tree (not a dialog: a program's main window of
++   buttons, EConvert's): a press on its EXIT button o taken as a dialog's
++   are, only when let go over it, shown pressed meanwhile (graf_watchbox).
++   1: let go over it (its SELECTED taken off again; the caller redraws o
++   and acts); 0: not one, the button already up (a click a file selector
++   left: fsel.h), or let go elsewhere. A button that acted on the press
++   emptied EConvert's list on a click it never had (5 Nov 2026) */
++int dlg_win_button(OBJECT *tree, short o);
++
+ /* the pen of the first npens (16 at most: the UI's) whose colour is nearest
+    r, g, b (VDI's 0-1000), read with vq_color; text: one dark enough to read
+    on white, where there is one. A UI colour in 16 colours or fewer is never
+diff --git a/common/ui/fsel.c b/common/ui/fsel.c
+new file mode 100644
+index 0000000..136320f
+--- /dev/null
++++ b/common/ui/fsel.c
+@@ -0,0 +1,21 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later
++ * Copyright (C) 2026 AERA | Erez Yaary */
++/* fsel.c - the file selector's clicks settled (see fsel.h) */
++#include "gemui.h"
++#include "fsel.h"
++
++void fsel_settle(void)
++{
++	short mx, my, mb, ks, msg[8];
++	AEVENT ev;
++	int n = 0;
++
++	/* the button let go (at most some seconds of polling: a stuck mouse
++	   doesn't hold the program) */
++	do
++		graf_mkstate(&mx, &my, &mb, &ks);
++	while ((mb & 1) && ++n < 2000);
++	/* the button events queued, taken off (a few at most) */
++	for (n = 0; n < 16 && (evnt_multi_(MU_BUTTON | MU_TIMER, 1, 1, 1, 0, msg, &ev) & MU_BUTTON); n++)
++		;
++}
+diff --git a/common/ui/fsel.h b/common/ui/fsel.h
+new file mode 100644
+index 0000000..1b144c2
+--- /dev/null
++++ b/common/ui/fsel.h
+@@ -0,0 +1,20 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later
++ * Copyright (C) 2026 AERA | Erez Yaary */
++/*
++ * fsel.h - what to do after the file selector (EConvert's first, 5 Nov
++ * 2026).
++ *
++ * A double click in a file selector can close it on its first click; its
++ * second, and the release, then come to the program's own window as
++ * clicks of their own. A window that takes a button on a press acted on
++ * one: EConvert's Clear emptied the list of files chosen ("it forgets the
++ * file and says there are 0 files to convert", Erez). fsel_settle() waits
++ * for the button to be let go and takes off the button events the
++ * selector left queued; call it as fsel_exinput (or fsel_input) returns.
++ */
++#ifndef FSEL_H
++#define FSEL_H
++
++void fsel_settle(void);
++
++#endif
+-- 
+2.43.0
+

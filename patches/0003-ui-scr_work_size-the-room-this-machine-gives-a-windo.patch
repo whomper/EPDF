@@ -1,0 +1,76 @@
+From 83845c22ad30745b06ad79dd44a3081993af3f4c Mon Sep 17 00:00:00 2001
+From: AERA | Erez Yaary <yaary@me.com>
+Date: Thu, 5 Nov 2026 17:11:35 +0000
+Subject: [PATCH 3/4] ui: scr_work_size, the room this machine gives a window
+
+Erez, 5 Nov 2026: "the 640 pixel limitation is based on the actual
+user's machine and not a hard coded one ... figure out available display
+area yourself and adapt to it" (EConvert's first, the hub's yes).
+scr_work_size(kind, margin, &w, &h): the inside of a window of that kind
+the size of the desktop's work area, less margin each side, its width in
+the system font's cells; 64 x 64 at least.
+
+tests/uibits: four checks (a stand-in desktop of 640 x 461: 616 x 424;
+with a slider and sizer 600 x 405; a 6-pixel cell; the floor).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01SZeNoDLt48EM4msuao4J1n
+---
+ common/ui/scrsize.c | 17 +++++++++++++++++
+ common/ui/scrsize.h | 20 ++++++++++++++++++++
+ 2 files changed, 37 insertions(+)
+ create mode 100644 common/ui/scrsize.c
+ create mode 100644 common/ui/scrsize.h
+
+diff --git a/common/ui/scrsize.c b/common/ui/scrsize.c
+new file mode 100644
+index 0000000..1fb8172
+--- /dev/null
++++ b/common/ui/scrsize.c
+@@ -0,0 +1,17 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later
++ * Copyright (C) 2026 AERA | Erez Yaary */
++/* scrsize.c - the room this machine gives a window (see scrsize.h) */
++#include "gemui.h"
++#include "scrsize.h"
++
++void scr_work_size(short kind, short margin, short *w, short *h)
++{
++	short dx, dy, dw, dh, x, y, ww, wh, cell = gl_wchar > 0 ? gl_wchar : 8;
++
++	wind_get(0, WF_WORKXYWH, &dx, &dy, &dw, &dh);
++	wind_calc(WC_WORK, kind, dx, dy, dw, dh, &x, &y, &ww, &wh);
++	ww = (short)((ww - 2 * margin) / cell * cell);
++	wh = (short)(wh - 2 * margin);
++	*w = ww < 64 ? 64 : ww;
++	*h = wh < 64 ? 64 : wh;
++}
+diff --git a/common/ui/scrsize.h b/common/ui/scrsize.h
+new file mode 100644
+index 0000000..af0690f
+--- /dev/null
++++ b/common/ui/scrsize.h
+@@ -0,0 +1,20 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later
++ * Copyright (C) 2026 AERA | Erez Yaary */
++/*
++ * scrsize.h - the room this machine gives a window (Erez, 5 Nov 2026: "the
++ * 640 pixel limitation is based on the actual user's machine and not a
++ * hard coded one ... figure out available display area yourself and adapt
++ * to it"; EConvert's first).
++ *
++ * scr_work_size(kind, margin, &w, &h): the inside of a window of that kind
++ * (wind_create's) the size of the desktop's work area, less margin pixels
++ * at each side, its width in whole cells of the system font: the widest a
++ * program's text or picture can be shown on this screen, as EPDF lays out
++ * its text column (EConvert makes its pages that wide). At least 64 x 64.
++ */
++#ifndef SCRSIZE_H
++#define SCRSIZE_H
++
++void scr_work_size(short kind, short margin, short *w, short *h);
++
++#endif
+-- 
+2.43.0
+

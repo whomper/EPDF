@@ -1,0 +1,141 @@
+From 1a33ce0d2386950b8ffc7c22fdf714576b501f49 Mon Sep 17 00:00:00 2001
+From: AERA | Erez Yaary <yaary@me.com>
+Date: Thu, 5 Nov 2026 17:05:32 +0000
+Subject: [PATCH 1/4] pic: pic_dither_sharp, each pixel its nearest pen (Sharp)
+
+Erez, 5 Nov 2026 (EPDF's, the hub's yes to common): a picture of few
+colours on 16 colours or fewer, a screenshot or a diagram, drawn with
+each pixel's nearest pen, no dither (its letters were dots). The
+dither's own way without room for its errors, asked for: the rows
+freed, row_two and row_many's nearest pens. Off unless the caller asks
+(EWeb and EPlay unchanged); EPDF asks for palette pictures of up to 128
+colours.
+
+tests/pic: -S (run.py's step): on 2 and 16 pens, every pixel of a
+gradient's rows its pic_pal_nearest; the dither's rows differ (768
+pens of 2048).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01SZeNoDLt48EM4msuao4J1n
+---
+ common/src/pic.c            |  8 +++++++
+ common/src/pic.h            |  6 +++++
+ common/tests/pic/run.py     |  7 ++++++
+ common/tests/pic/test_pic.c | 46 +++++++++++++++++++++++++++++++++++++
+ 4 files changed, 67 insertions(+)
+
+diff --git a/common/src/pic.c b/common/src/pic.c
+index 34acf9f..0b13be0 100644
+--- a/common/src/pic.c
++++ b/common/src/pic.c
+@@ -3333,6 +3333,14 @@ void pic_dither_row(PIC_DITHER *dt, const unsigned short *px, const unsigned cha
+ 	dt->y++;
+ }
+ 
++void pic_dither_sharp(PIC_DITHER *dt)
++{
++	if (dt != NULL) {
++		free(dt->rows);
++		dt->rows = dt->cur = dt->nxt = NULL;	/* (row_two and row_many's nearest pens) */
++	}
++}
++
+ void pic_dither_close(PIC_DITHER *dt)
+ {
+ 	if (dt != NULL) {
+diff --git a/common/src/pic.h b/common/src/pic.h
+index b868c64..2317681 100644
+--- a/common/src/pic.h
++++ b/common/src/pic.h
+@@ -155,5 +155,11 @@ typedef struct pic_dither_rows PIC_DITHER;
+ PIC_DITHER *pic_dither_open(long w, PIC_PAL *pal);
+ void pic_dither_row(PIC_DITHER *dt, const unsigned short *px, const unsigned char *alpha, unsigned char *out);
+ void pic_dither_close(PIC_DITHER *dt);
++/* Sharp (Erez, 5 Nov 2026, EPDF's first): from here each pixel its
++   nearest pen, no dither, as without room for the errors. For a picture
++   of few colours (a screenshot, a diagram) on 16 colours or fewer, whose
++   letters a dither makes dots; photos keep the dither (the caller
++   decides: EPDF, a palette of up to 128 colours). Off unless asked */
++void pic_dither_sharp(PIC_DITHER *dt);
+ 
+ #endif
+diff --git a/common/tests/pic/run.py b/common/tests/pic/run.py
+index daec9fe..e4a98b2 100644
+--- a/common/tests/pic/run.py
++++ b/common/tests/pic/run.py
+@@ -358,6 +358,13 @@ def main():
+     if r.returncode != 0:
+         fails += 1
+         print("FAIL robustness")
++    # Sharp: each pixel its nearest pen (pic_dither_sharp)
++    r = subprocess.run(shlex.split(cmd) + ["-S"], capture_output=True, text=True)
++    checks += 1
++    print(r.stdout.strip(), r.stderr.strip()[-2000:])
++    if r.returncode != 0:
++        fails += 1
++        print("FAIL sharp")
+     print("%d checks, %d failed" % (checks, fails))
+     sys.exit(1 if fails else 0)
+ 
+diff --git a/common/tests/pic/test_pic.c b/common/tests/pic/test_pic.c
+index f640679..22a8819 100644
+--- a/common/tests/pic/test_pic.c
++++ b/common/tests/pic/test_pic.c
+@@ -457,8 +457,54 @@ static int dsame(int argc, char **argv)
+ }
+ #endif
+ 
++/* Sharp (pic_dither_sharp): each pixel its nearest pen, on 2 and 16 pens,
++   and a dither's row (the default) not that on a gradient */
++static int sharp(void)
++{
++	static PIC_PAL pal[2];
++	unsigned short px[256];
++	unsigned char a[256], b[256];
++	int k, x, bad = 0, differs = 0;
++	pic_pal_init(&pal[0], 2, bw);
++	pic_pal_init(&pal[1], 16, vga16);
++	for (x = 0; x < 256; x++)
++		px[x] = (unsigned short) (((x >> 3) << 11) | ((x >> 2) << 5) | ((255 - x) >> 3));
++	for (k = 0; k < 2; k++) {
++		PIC_DITHER *d = pic_dither_open(256, &pal[k]), *s = pic_dither_open(256, &pal[k]);
++		int y;
++		if (d == NULL || s == NULL)
++			return 1;
++		pic_dither_sharp(s);
++		for (y = 0; y < 4; y++) {
++			pic_dither_row(d, px, NULL, a);
++			pic_dither_row(s, px, NULL, b);
++			for (x = 0; x < 256; x++) {
++				unsigned v = px[x];
++				int r = ((v >> 8) & 0xF8) | (v >> 13), g = ((v >> 3) & 0xFC) | ((v >> 9) & 3), bl = ((v << 3) & 0xF8) | ((v >> 2) & 7);
++				if (b[x] != pic_pal_nearest(&pal[k], r, g, bl)) {
++					if (!bad)
++						printf("FAIL sharp, %d pens: pixel %d pen %d, its nearest %d\n", pal[k].n, x, b[x],
++						       pic_pal_nearest(&pal[k], r, g, bl));
++					bad++;
++				}
++				differs += a[x] != b[x];
++			}
++		}
++		pic_dither_close(d);
++		pic_dither_close(s);
++	}
++	if (!differs) {
++		printf("FAIL sharp: the same pens as the dither's on a gradient\n");
++		bad++;
++	}
++	printf("sharp: %s (%d pens differ from the dither's)\n", bad ? "FAIL" : "ok", differs);
++	return bad != 0;
++}
++
+ static int run(int argc, char **argv)
+ {
++	if (argc >= 2 && strcmp(argv[1], "-S") == 0)
++		return sharp();
+ 	if (argc >= 2 && strcmp(argv[1], "-r") == 0)
+ 		return robust(argc - 2, argv + 2);
+ 	if (argc >= 2 && strcmp(argv[1], "-s") == 0)
+-- 
+2.43.0
+

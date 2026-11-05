@@ -1,0 +1,103 @@
+From 6d9be2277c752cd0c3786a28e8f853eab6b408f1 Mon Sep 17 00:00:00 2001
+From: AERA | Erez Yaary <yaary@me.com>
+Date: Thu, 5 Nov 2026 17:11:35 +0000
+Subject: [PATCH 4/4] ui: enlarge_mark, the family's enlarge mark
+
+Erez, 5 Nov 2026: "Click to enlarge should be an icon not a text. Place
+it as a visible watermark at the top right of the picture" (EPDF's
+first, the hub's yes). ENLARGE_SIZE (11) square: white, a black edge, a
+two-headed arrow corner to corner, pens 0 and 1; enlarge_mark(h, x, y)
+at its top left, inside the caller's clip; 3 pixels in from a picture's
+top right.
+
+tests/uibits: four checks (the square, 9 strokes in black, nothing
+outside it, MD_REPLACE left); 11 checks ok in all.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01SZeNoDLt48EM4msuao4J1n
+---
+ common/ui/enlarge.c | 42 ++++++++++++++++++++++++++++++++++++++++++
+ common/ui/enlarge.h | 22 ++++++++++++++++++++++
+ 2 files changed, 64 insertions(+)
+ create mode 100644 common/ui/enlarge.c
+ create mode 100644 common/ui/enlarge.h
+
+diff --git a/common/ui/enlarge.c b/common/ui/enlarge.c
+new file mode 100644
+index 0000000..d1a00c1
+--- /dev/null
++++ b/common/ui/enlarge.c
+@@ -0,0 +1,42 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later
++ * Copyright (C) 2026 AERA | Erez Yaary */
++/* enlarge.c - the family's enlarge mark (see enlarge.h) */
++#include "gemui.h"
++#include "enlarge.h"
++
++static void line(short h, short x1, short y1, short x2, short y2)
++{
++	short p[4];
++
++	p[0] = x1;
++	p[1] = y1;
++	p[2] = x2;
++	p[3] = y2;
++	v_pline(h, 2, p);
++}
++
++void enlarge_mark(short h, short x, short y)
++{
++	short p[4], e = ENLARGE_SIZE - 1;
++
++	p[0] = x;
++	p[1] = y;
++	p[2] = (short)(x + e);
++	p[3] = (short)(y + e);
++	vswr_mode(h, MD_REPLACE);
++	vsf_interior(h, FIS_SOLID);
++	vsf_perimeter(h, 0);
++	vsf_color(h, 0);
++	vr_recfl(h, p);
++	vsl_color(h, 1);
++	vsl_type(h, 1);
++	line(h, x, y, (short)(x + e), y);			/* the edge */
++	line(h, (short)(x + e), y, (short)(x + e), (short)(y + e));
++	line(h, (short)(x + e), (short)(y + e), x, (short)(y + e));
++	line(h, x, (short)(y + e), x, y);
++	line(h, (short)(x + 3), (short)(y + 7), (short)(x + 7), (short)(y + 3));	/* the arrow */
++	line(h, (short)(x + 5), (short)(y + 3), (short)(x + 7), (short)(y + 3));
++	line(h, (short)(x + 7), (short)(y + 3), (short)(x + 7), (short)(y + 5));
++	line(h, (short)(x + 3), (short)(y + 5), (short)(x + 3), (short)(y + 7));
++	line(h, (short)(x + 3), (short)(y + 7), (short)(x + 5), (short)(y + 7));
++}
+diff --git a/common/ui/enlarge.h b/common/ui/enlarge.h
+new file mode 100644
+index 0000000..77ecef2
+--- /dev/null
++++ b/common/ui/enlarge.h
+@@ -0,0 +1,22 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later
++ * Copyright (C) 2026 AERA | Erez Yaary */
++/*
++ * enlarge.h - the family's enlarge mark (Erez, 5 Nov 2026: "Click to
++ * enlarge should be an icon not a text. Place it as a visible watermark at
++ * the top right of the picture"; EPDF's first).
++ *
++ * ENLARGE_SIZE pixels square: a white square, a black edge and a
++ * two-headed arrow from its lower left to its upper right, drawn in pens
++ * 0 and 1 (white and black on every screen). enlarge_mark(h, x, y) draws
++ * it with its top left at x, y, inside the clip the caller set; put it 3
++ * pixels in from a picture's top right corner (x = right - 14, y = top +
++ * 3). It leaves the fill solid in MD_REPLACE.
++ */
++#ifndef ENLARGE_H
++#define ENLARGE_H
++
++#define ENLARGE_SIZE 11
++
++void enlarge_mark(short h, short x, short y);
++
++#endif
+-- 
+2.43.0
+
