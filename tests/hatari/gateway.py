@@ -32,6 +32,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TOP = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 from pdfgen import make_pdf, book  # noqa: E402
+import showcase  # noqa: E402
 _spec = importlib.util.spec_from_file_location("aera_speed", os.path.join(TOP, "common", "tests", "speed", "speed.py"))
 speed = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(speed)
@@ -77,7 +78,7 @@ def run(work, machine, port, there=True):
         shutil.copy(os.environ.get("ECONVERT_PRG") or os.path.join(TOP, "binary", "ECONVERT.PRG"),
                     os.path.join(r.hd, "ECONV", "ECONVERT.PRG"))
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
-        make_pdf(os.path.join(r.hd, names[0]), book(3))
+        showcase.cut(os.path.join(r.hd, names[0]))     # (pictures, drawings, fonts: the hub's cut)
         make_pdf(os.path.join(r.hd, names[1]), book(5))
         r.write("ECONV/ECONVERT.INF", "WRITETO=C:\\OUT\nCONVERT=gateway\nGATE=127.0.0.1\nGATEPORT=%d\n" %
                 (port if there else 1))

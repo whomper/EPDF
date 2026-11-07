@@ -4,7 +4,7 @@
 """EConvert's window in Hatari, on common's speed rig (common/tests/speed/
 speed.py, its Rig on an X display):
 
-    econv.py WORK [MACHINE] [FILE.pdf]     (default Falcon-4:16, a book made here)
+    econv.py WORK [MACHINE] [FILE.pdf]     (default Falcon-4:16, the showcase's cut made here)
 
 ECONVERT.PRG is started through LAUNCH.PRG with the PDF (it comes into the
 batch), writes to C:\\OUT (econvert.inf), Return converts. Checked: the
@@ -23,6 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TOP = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 from pdfgen import make_pdf, book  # noqa: E402
+import showcase  # noqa: E402
 import importlib.util  # noqa: E402
 _spec = importlib.util.spec_from_file_location("aera_speed", os.path.join(TOP, "common", "tests", "speed", "speed.py"))
 speed = importlib.util.module_from_spec(_spec)
@@ -49,7 +50,9 @@ def run(work, machine, src):
         if src:
             shutil.copy(src, os.path.join(r.hd, "IN.PDF"))
         else:
-            make_pdf(os.path.join(r.hd, "IN.PDF"), book(3))
+            # the showcase's cut (the hub, 7 Nov 2026: pictures, drawings,
+            # fonts and Hebrew in 4 pages, about 40 s on Falcon-4)
+            showcase.cut(os.path.join(r.hd, "IN.PDF"))
         make_pdf(os.path.join(r.hd, "IN2.PDF"), book(8))     # the second: stopped in the middle
         r.write("ECONV/ECONVERT.INF", "WRITETO=C:\\OUT\n")
         r.write("LAUNCH.TXT", "C:\\ECONV\\ECONVERT.PRG\nC:\\IN.PDF C:\\IN2.PDF\n")

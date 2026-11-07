@@ -7,6 +7,7 @@ redistributable; nothing of anyone else's in it but the Liberation Sans
 glyphs EPDF already ships (OFL 1.1), subset.
 
     python3 showcase.py OUT.pdf        (about 9 pages, well under 300 KB)
+    python3 showcase.py --cut OUT.pdf  (CUT's 4 pages, pictures at half size)
 
 What each page is for (a failure names the page):
   1  title page: big heading, a logo (curves filled by a radial gradient,
@@ -241,7 +242,16 @@ STD14 = ["Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldObli
          "Symbol", "ZapfDingbats"]
 
 
-def make(path):
+# the cut the converting rows take (the hub, 7 Nov 2026: EConvert on a 4 MB
+# Falcon and the Gateway's row in 60-90 s, not the whole document's 309 s):
+# the article and its JPEG, the table with its transparency, the pictures
+# (PNG with alpha, CMYK) and the fonts with the Hebrew, pictures smaller
+CUT = (2, 4, 6, 8)
+
+
+def make(path, keep=None, scale=1.0):
+    """the document (keep: its pages by number, 1-based; scale: the
+    pictures' pixels)"""
     d = Doc()
     fonts = {}
     for i, name in enumerate(STD14):
@@ -252,23 +262,28 @@ def make(path):
     F = {n: f for n, (f, _) in fonts.items()}
 
     # pictures
-    sun = jpeg(480, 300, "sun")
-    prog = jpeg(400, 260, "cards", progressive=True, seed=3)
-    cmyk = jpeg(320, 220, "cards", cmyk=True, seed=5)
-    rgb, alpha = rgba(160, 160)
-    sc = scan(600, 800)
-    im_sun = d.add("<< /Type /XObject /Subtype /Image /Width 480 /Height 300 /ColorSpace /DeviceRGB "
-                   "/BitsPerComponent 8 /Filter /DCTDecode /Length %d >>" % len(sun), sun)
-    im_prog = d.add("<< /Type /XObject /Subtype /Image /Width 400 /Height 260 /ColorSpace /DeviceRGB "
-                    "/BitsPerComponent 8 /Filter /DCTDecode /Length %d >>" % len(prog), prog)
-    im_cmyk = d.add("<< /Type /XObject /Subtype /Image /Width 320 /Height 220 /ColorSpace /DeviceCMYK "
-                    "/BitsPerComponent 8 /Decode [1 0 1 0 1 0 1 0] /Filter /DCTDecode /Length %d >>" % len(cmyk), cmyk)
-    im_alpha = d.add("<< /Type /XObject /Subtype /Image /Width 160 /Height 160 /ColorSpace /DeviceGray "
-                     "/BitsPerComponent 8 /Filter /FlateDecode /Length %d >>" % len(alpha), alpha)
-    im_badge = d.add("<< /Type /XObject /Subtype /Image /Width 160 /Height 160 /ColorSpace /DeviceRGB "
-                     "/BitsPerComponent 8 /SMask %d 0 R /Filter /FlateDecode /Length %d >>" % (im_alpha, len(rgb)), rgb)
-    im_scan = d.add("<< /Type /XObject /Subtype /Image /Width 600 /Height 800 /ColorSpace /DeviceGray "
-                    "/BitsPerComponent 1 /Filter /FlateDecode /Length %d >>" % len(sc), sc)
+    def px(n):
+        return max(16, int(n * scale))
+    sw, sh, pw, ph, cw, ch, bw, kw, kh = (px(480), px(300), px(400), px(260), px(320), px(220), px(160),
+                                          px(600) & ~7, px(800))
+    sun = jpeg(sw, sh, "sun")
+    prog = jpeg(pw, ph, "cards", progressive=True, seed=3)
+    cmyk = jpeg(cw, ch, "cards", cmyk=True, seed=5)
+    rgb, alpha = rgba(bw, bw)
+    sc = scan(kw, kh)
+    im_sun = d.add("<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB "
+                   "/BitsPerComponent 8 /Filter /DCTDecode /Length %d >>" % (sw, sh, len(sun)), sun)
+    im_prog = d.add("<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB "
+                    "/BitsPerComponent 8 /Filter /DCTDecode /Length %d >>" % (pw, ph, len(prog)), prog)
+    im_cmyk = d.add("<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceCMYK "
+                    "/BitsPerComponent 8 /Decode [1 0 1 0 1 0 1 0] /Filter /DCTDecode /Length %d >>" % (cw, ch, len(cmyk)),
+                    cmyk)
+    im_alpha = d.add("<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceGray "
+                     "/BitsPerComponent 8 /Filter /FlateDecode /Length %d >>" % (bw, bw, len(alpha)), alpha)
+    im_badge = d.add("<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB "
+                     "/BitsPerComponent 8 /SMask %d 0 R /Filter /FlateDecode /Length %d >>" % (bw, bw, im_alpha, len(rgb)), rgb)
+    im_scan = d.add("<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceGray "
+                    "/BitsPerComponent 1 /Filter /FlateDecode /Length %d >>" % (kw, kh, len(sc)), sc)
     xobj = "/Sun %d 0 R /Prog %d 0 R /Cmyk %d 0 R /Badge %d 0 R /Scan %d 0 R" % (im_sun, im_prog, im_cmyk, im_badge, im_scan)
     lin = d.add("<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 0 300] /Extend [true true] "
                 "/Function << /FunctionType 2 /Domain [0 1] /C0 [0.92 0.95 1] /C1 [0.75 0.85 1] /N 1 >> >>")
@@ -430,7 +445,11 @@ def make(path):
     c.append(text(56, 80, "The end.", "Times-Italic", 11))
     pages_content.append((c, (W, H)))
 
-    # the pages, and page 1's contents linked to the pages
+    # the pages kept (a cut: CUT), and page 1's contents linked to the pages
+    titles = ["Title"] + toc
+    if keep:
+        pages_content = [pages_content[k - 1] for k in keep]
+        titles = [titles[k - 1] for k in keep]
     content_objs = []
     for item in pages_content:
         ops = item[0]
@@ -439,17 +458,23 @@ def make(path):
     for k, item in enumerate(pages_content):
         (w_, h_) = item[1]
         annots = list(item[2]) if len(item) > 2 else []
-        if k == 0:
+        if k == 0 and not keep:
             annots += ["<< /Type /Annot /Subtype /Link /Rect [66 %d 300 %d] /Border [0 0 0] /Dest [%d 0 R /Fit] >>" %
                        (332 - j * 18, 348 - j * 18, page_nums[j + 1]) for j in range(len(pages_content) - 1)]
         refs = " ".join("%d 0 R" % d.add(a_) for a_ in annots)
         d.objs[page_nums[k] - 1] = ("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %d %d] /Resources %s /Contents %d 0 R%s >>" % (
             w_, h_, res, content_objs[k], " /Annots [%s]" % refs if refs else ""), None)
         d.pages.append(page_nums[k])
-    outline = [("Title", 0)] + [(t, k + 1) for k, t in enumerate(toc)]
+    outline = [(t, k) for k, t in enumerate(titles)]
     return d.write(path, outline), len(d.pages)
 
 
+def cut(path):
+    """the converting rows' document: CUT's pages, pictures at half size"""
+    return make(path, CUT, 0.5)
+
+
 if __name__ == "__main__":
-    size, n = make(sys.argv[1] if len(sys.argv) > 1 else "showcase.pdf")
+    out = [a for a in sys.argv[1:] if not a.startswith("--")]
+    size, n = (cut if "--cut" in sys.argv else make)(out[0] if out else "showcase.pdf")
     print("%d pages, %d bytes" % (n, size))
