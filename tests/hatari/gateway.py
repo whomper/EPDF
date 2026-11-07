@@ -139,12 +139,15 @@ def direct_same(src, sizes, got, work):
     return os.path.exists(got) and open(got, "rb").read() == open(want, "rb").read()
 
 
+RATE = int(os.environ.get("GW_RATE", "0")) or None    # bytes a second on the serial line: the phases' shots
+
+
 def run_epdf(work, machine, port, there=True):
     r = speed.Rig(os.path.join(work, "epdf-" + machine.replace(":", "_") + ("" if there else "-none")), machine,
                   display=os.environ.get("XDISPLAY", ":91"))
     bad = []
     try:
-        r.extra += r.m.network()
+        r.extra += r.m.network(RATE)
         os.makedirs(os.path.join(r.hd, "EPDF"))
         os.makedirs(os.path.join(r.hd, "DOCS"))
         shutil.copy(os.path.join(TOP, "binary", "EPDF.PRG"), os.path.join(r.hd, "EPDF", "EPDF.PRG"))
@@ -154,9 +157,14 @@ def run_epdf(work, machine, port, there=True):
         r.write("EPDF/epdf.inf", "GATEWAY=1\nGATE=127.0.0.1\nGATEPORT=%d\n" % (port if there else 1))
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\DOCS\\BOOK.PDF\n")
         r.start("C:\\LAUNCH.PRG")
-        end = time.time() + 300
+        end = time.time() + 900
+        k = 0
         while time.time() < end and "EPDF gateway-done" not in r.console():
             time.sleep(1)
+            if RATE and "EPDF gateway started" in r.console() and k < 40:
+                k += 1
+                if k % 4 == 0:
+                    r.shot("phase%02d" % k)     # (GW_RATE: the three phases as they go)
         time.sleep(6)
         r.still()
         r.shot("after")
