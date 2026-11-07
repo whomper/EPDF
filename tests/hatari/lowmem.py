@@ -14,13 +14,15 @@ every 8 s (Space) so its pictures come into view and are made:
             grid and labels): photos decoded on a 68000, drawings read;
   mixedc    the same converted by build/econvert: its photos at screen
             size and its charts as pictures, shown in the text;
-  manual-compendium, photo-nasa-sunda   from the corpus (build/pdfs,
-            tools/fetch-corpus.py; mid-size, 2.7 and 1.5 MB): text and
-            fonts, and a photo, that run a 1 MB ST short of memory;
+  manual-compendium  from the corpus (build/pdfs, tools/fetch-corpus.py;
+            2.7 MB): text and fonts that run a 1 MB ST short of memory;
+  photo-nasa-sunda  the corpus's 1.5 MB: an 803 x 399 CMYK photo, Flate
+            with a PNG predictor, read a row at a time (1.3 MB whole: it
+            wasn't shown on an ST before 7 Nov 2026), shown in 150 s;
   map-europe  the corpus's map: a page of vector drawing (0.5 MB).
-Each passes when nothing failed, was lost or crashed; the two from the
-corpus also when memory was refused at least once and given back (the
-point of the test); the two made here also when pictures were shown.
+Each passes when nothing failed, was lost or crashed; manual-compendium
+also when memory was refused at least once and given back (the point of
+the test); the photo and the two made here also when pictures were shown.
 """
 import argparse
 import os
@@ -33,7 +35,8 @@ sys.path.insert(0, HERE)
 import big  # noqa: E402
 from pdfgen import mixed  # noqa: E402
 
-CORPUS = {"manual-compendium": "oom", "photo-nasa-sunda": "oom", "map-europe": "read"}
+# what each must show, and its seconds (0: --seconds)
+CORPUS = {"manual-compendium": ("oom", 0), "photo-nasa-sunda": ("pics", 150), "map-europe": ("read", 0)}
 
 
 def main(argv):
@@ -51,17 +54,17 @@ def main(argv):
     subprocess.run([os.path.join(TOP, "build", "econvert"), "--fonts",
                     os.path.join(TOP, "third_party", "liberation", "fonts"), plain, conv],
                    check=True, stdout=subprocess.DEVNULL)
-    docs = [(plain, "pics"), (conv, "pics")]
-    for name, need in CORPUS.items():
+    docs = [(plain, "pics", 0), (conv, "pics", 0)]
+    for name, (need, secs) in CORPUS.items():
         p = os.path.join(TOP, "build", "pdfs", name + ".pdf")
         if os.path.exists(p):
-            docs.append((p, need))
+            docs.append((p, need, secs))
         else:
             print("  %s: not in build/pdfs (tools/fetch-corpus.py)" % name)
     bad = 0
     print("EPDF on %s, %d s a document" % (a.machine, a.seconds))
-    for pdf, need in docs:
-        res = big.one(work, a.machine, pdf, a.seconds, os.environ.get("XDISPLAY", ":91"), key="space", every=8)
+    for pdf, need, secs in docs:
+        res = big.one(work, a.machine, pdf, secs or a.seconds, os.environ.get("XDISPLAY", ":91"), key="space", every=8)
         why = []
         if not res["opened"] or res["read"] == 0:
             why.append("not read")
