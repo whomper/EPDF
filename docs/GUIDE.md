@@ -55,7 +55,8 @@ gives way to you at once.
 - **View:** Font... (⇧^F): the system font in its two sizes, or a fixed-width GDOS font, kept in
   `EPDF.INF`. **The page's lines**: ticked, each line is as it is on the page; not ticked (as EPDF
   starts), the lines of a paragraph are joined and wrapped to the window, so the text reads at any
-  window width. **Pages**: a converted PDF's pages whole (see below); greyed for any other file.
+  window width. **Pages**: each page whole, as it is printed: on a Falcon or a TT any PDF (see
+  below), on an ST a converted PDF's; greyed where there are none.
 - **Page:** the previous and the next page (^Left, ^Right), the first and the last (^Clr/Home,
   ⇧^Clr/Home).
 - **Help:** this guide.
@@ -83,6 +84,12 @@ fonts to read and no JPEG to decode on a 68000, and each page's line says **Opti
 right. Their charts and maps are pictures, with their labels in them. When EConvert was asked
 for the pages whole, **View > Pages** shows each page as a picture, in 16 colours on a screen with
 them, else in black and white; choose it again for the text.
+
+**Pages as printed** (a Falcon or a TT): View > Pages shows any PDF's pages whole, with their
+fonts, pictures and drawings where the page has them, drawn by the Atari itself. A page is drawn
+when it comes into view (the status bar says "Drawing page 3 / 9").
+EPDF needs `RENDER.OVL` beside `EPDF.PRG` and the standard fonts in a `FONTS` folder beside it
+(or EConvert's, in `ECONVERT\FONTS`), as the release's zip has them.
 
 The window can be moved, sized, sent to the back and iconified (where the AES can iconify); the
 icon shows the page you are on.

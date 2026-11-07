@@ -68,6 +68,15 @@ typedef struct {
 	   68030's; and where they went: "DSP", "68030", "-" */
 	void (*use_dsp)(int on);
 	const char *(*dsp_state)(void);
+	/* the page being drawn: how far through its content, in thousandths
+	   (the progress bar's) */
+	int (*progress)(void *doc);
+	/* rows y .. y + rows - 1 of the band last drawn (y from the band's
+	   first) dithered to the n (2 to 16) colours of pal (src/rovl/pens.c:
+	   error diffusion, white kept white), on the 68030: each row into out
+	   as `planes` rows of (w + 15) / 16 words, pen bit p in plane p (the
+	   VDI's standard format). 0 ok */
+	int (*pens)(void *doc, const unsigned char (*pal)[3], int n, int planes, int y, int rows, unsigned char *out);
 } ROVL;
 
 #endif

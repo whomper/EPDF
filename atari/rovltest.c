@@ -63,6 +63,7 @@ int main(void)
 	for (pg = 0; pg < o->pages(doc); pg++) {
 		ROVL_PAGE p;
 		int rc = 0, y0 = 0, bands = 0;
+		long pens_ms = 0;
 		long fh = -1;
 		char name[24];
 
@@ -79,14 +80,29 @@ int main(void)
 			bands++;
 			if (fh >= 0)
 				Fwrite((short)fh, (long)p.w * p.rows * 2, (void *)p.px);
+			if (strstr(cfg, "pens")) {
+				/* the band to TOS's 16 pens as EPDF asks (8 rows at a time) */
+				static const unsigned char tos16[16][3] = {
+					{ 255, 255, 255 }, { 255, 0, 0 }, { 0, 255, 0 }, { 255, 255, 0 }, { 0, 0, 255 },
+					{ 255, 0, 255 }, { 0, 255, 255 }, { 170, 170, 170 }, { 85, 85, 85 }, { 255, 85, 85 },
+					{ 85, 255, 85 }, { 255, 255, 85 }, { 85, 85, 255 }, { 255, 85, 255 }, { 85, 255, 255 },
+					{ 0, 0, 0 } };
+				static unsigned char pl[40 * 2 * 4 * 8];
+				long q = pdf_ms();
+				int r;
+
+				for (r = 0; r < p.rows; r += 8)
+					o->pens(doc, tos16, 16, 4, r, p.rows - r < 8 ? p.rows - r : 8, pl);
+				pens_ms += pdf_ms() - q;
+			}
 			y0 += p.rows;
 		} while (p.rows > 0 && y0 < p.h);
 		if (fh >= 0)
 			Fclose((short)fh);
 		snprintf(b, sizeof b, "{\"page\":%ld,\"ms\":%ld,\"rc\":%d,\"w\":%d,\"h\":%d,\"bands\":%d,\"image_ms\":%ld,"
-			 "\"glyphs\":%ld,\"images\":%ld,\"turns\":%ld,\"dsp\":\"%s\",\"free_kb\":%ld}\n",
+			 "\"glyphs\":%ld,\"images\":%ld,\"turns\":%ld,\"dsp\":\"%s\",\"free_kb\":%ld,\"pens_ms\":%ld}\n",
 			 pg + 1, pdf_ms() - t, rc, p.w, p.h, bands, p.image_ms,
-			 p.glyphs, p.images, turns, o->dsp_state(), (long)Malloc(-1L) / 1024);
+			 p.glyphs, p.images, turns, o->dsp_state(), (long)Malloc(-1L) / 1024, pens_ms);
 		nf_debug(b);
 	}
 	o->close(doc);

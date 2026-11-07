@@ -16,6 +16,7 @@
 #include "cvjpeg.h"
 #include "dspjpeg.h"
 #include "rovl.h"
+#include "pens.h"
 
 #ifndef ROVL_VERSION
 #define ROVL_VERSION "0.0"
@@ -137,7 +138,22 @@ static void rv_close(void *doc)
 	render_done(&x->r);
 	pdf_close(&x->d);
 	free(x);
+	pens_free();
 	cv_turn = NULL;
+}
+
+static int rv_progress(void *doc)
+{
+	return doc ? ((RDOC *)doc)->d.page_prog : 0;
+}
+
+static int rv_pens(void *doc, const unsigned char (*pal)[3], int n, int planes, int y, int rows, unsigned char *out)
+{
+	RCANVAS *c = &((RDOC *)doc)->r.c;
+
+	if (y < 0 || rows <= 0 || y + rows > c->rows || !c->px || planes < 1 || planes > 4)
+		return -1;
+	return pens_planes(c->px + (long)y * c->w, c->w, rows, c->y0 + y, pal, n, planes, out);
 }
 
 static void use_dsp(int on)
@@ -148,5 +164,5 @@ static void use_dsp(int on)
 __attribute__((section(".tlsovl"), used))
 const ROVL rovl = {
 	ROVL_MAGIC, ROVL_MAJOR, sizeof(ROVL), ROVL_VERSION,
-	init, rv_open, rv_pages, rv_page, rv_close, use_dsp, pic_dsp_state
+	init, rv_open, rv_pages, rv_page, rv_close, use_dsp, pic_dsp_state, rv_progress, rv_pens
 };

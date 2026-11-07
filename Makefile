@@ -58,6 +58,9 @@ build/glyphjob: tools/glyphjob.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSS
 build/imgdump: tools/imgdump.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HDRS) | build
 	$(CC) $(HCFLAGS) -o $@ tools/imgdump.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC)
 
+build/test_pens: tests/test_pens.c src/rovl/pens.c src/rovl/pens.h | build
+	$(CC) $(HCFLAGS) -Isrc/rovl -fsanitize=address,undefined -o $@ tests/test_pens.c src/rovl/pens.c
+
 build/test_ccitt: tests/test_ccitt.c src/ccitt.c src/ccitt.h src/ccitt_tab.h | build
 	$(CC) $(HCFLAGS) -fsanitize=address,undefined -o $@ tests/test_ccitt.c src/ccitt.c
 
@@ -78,8 +81,9 @@ build/test_tstore build/test_docview: build/test_%: tests/test_%.c $(VIEW_TEST_S
 build/test_xe: tests/test_xe.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HDRS) | build
 	$(CC) $(HCFLAGS) -fsanitize=address,undefined -o $@ tests/test_xe.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC)
 
-test: build/test_xe build/test_ccitt build/test_textview build/test_inf build/test_tstore build/test_docview build/test_search build/pdftext build/econvert
+test: build/test_xe build/test_ccitt build/test_textview build/test_inf build/test_tstore build/test_docview build/test_search build/pdftext build/econvert build/test_pens
 	build/test_xe
+	build/test_pens
 	python3 tests/convtext.py
 	python3 tests/ccitt.py
 	python3 tests/glyphwise.py
@@ -322,9 +326,9 @@ binary/CONVTEST.PRG: $(CV_ATARI_OBJ) build/m68030cv/atari/convtest.o build/m6803
 # renderer and the reader as CONVTEST.PRG has them, built for the 68030,
 # loaded by EPDF.PRG with common's ovl.c (an ST never loads it); its heap
 # is the program's (libc.c with LIBC_NO_HEAP)
-ROVL_OBJ = build/m68030cv/src/rovl/head.o build/m68030ovl/libc.o \
+ROVL_OBJ = build/m68030cv/src/rovl/head.o build/m68030cv/src/rovl/pens.o build/m68030ovl/libc.o \
            $(filter-out build/m68030cv/common/atari/libc.o,$(CV_ATARI_OBJ))
-build/m68030cv/src/rovl/head.o: XFLAGS += -DROVL_VERSION=\"$(VERSION_STR)\"
+build/m68030cv/src/rovl/head.o build/m68030cv/src/rovl/pens.o: XFLAGS += -Isrc/rovl -DROVL_VERSION=\"$(VERSION_STR)\"
 build/m68030ovl/libc.o: common/atari/libc.c $(HDRS)
 	@mkdir -p $(dir $@)
 	$(XCC) $(XFLAGS) -DLIBC_NO_HEAP -c -o $@ $<
@@ -390,7 +394,7 @@ build/m68000/version.c: FORCE | build/m68000
 	@if cmp -s $@.new $@; then rm $@.new; else mv $@.new $@; fi
 FORCE:
 .PHONY: FORCE
-GEM_SRC = src/gem/epdf.c src/gem/doc.c src/gem/textwin.c src/gem/badge.c src/gem/find.c src/gem/font.c src/gem/pics.c src/gem/gemui.c src/gem/menu.c src/gem/about.c \
+GEM_SRC = src/gem/epdf.c src/gem/doc.c src/gem/rdraw.c common/src/ovl.c src/gem/textwin.c src/gem/badge.c src/gem/find.c src/gem/font.c src/gem/pics.c src/gem/gemui.c src/gem/menu.c src/gem/about.c \
           src/view/textview.c src/view/docview.c src/view/tstore.c src/view/inf.c src/view/search.c common/ui/bgwork.c common/ui/twin.c \
           src/pdfimg.c src/ccitt.c src/rscale.c $(PIC_SRC) \
           common/atari/gem.c common/atari/crash.c common/ui/mbar.c common/ui/aboutbox.c common/ui/aboutline.c \
@@ -401,7 +405,7 @@ GEM_SRC = src/gem/epdf.c src/gem/doc.c src/gem/textwin.c src/gem/badge.c src/gem
 GEM_OBJ = $(patsubst %.c,build/m68000/%.o,$(GEM_SRC)) build/m68000/version.o build/m68000/sting_s.o
 build/m68000/sting_s.o: common/atari/sting.S | build/m68000
 	$(XCC) -m68000 -c -o $@ $<
-$(patsubst %.c,build/m68000/%.o,$(GEM_SRC)): XFLAGS += -Isrc/gem -Isrc/view -Icommon/ui -I$(T)/tjpgd -I$(T)/nsgif/include -I$(T)/nsgif/src
+$(patsubst %.c,build/m68000/%.o,$(GEM_SRC)): XFLAGS += -Isrc/gem -Isrc/rovl -Isrc/view -Icommon/ui -I$(T)/tjpgd -I$(T)/nsgif/include -I$(T)/nsgif/src
 # the Falcon's DSP for JPEGs, from pic.c's own header reader (one 68000
 # program for every Atari, guideline 7.4); no PNG or GIF decoder (a PDF's
 # pictures are JPEG or its own streams: 20 KB of the resident size, the
@@ -467,7 +471,7 @@ binary/EPDF.HYP: docs/GUIDE.md tools/mkhelp.py VERSION docs/front.json docs/help
 # what a user needs, by name: the program, its guide, the licences and the icons.
 # Every file a release carries, and every folder in its zip, is named in
 # lowercase (guidelines 6.6: on MiNT's ext2 EPDF.INF and epdf.inf are two files)
-DIST  := binary/EPDF.PRG binary/EPDF.HYP binary/EPDF.REF NOTICES.TXT
+DIST  := binary/EPDF.PRG binary/render.ovl binary/EPDF.HYP binary/EPDF.REF NOTICES.TXT
 ICONS := icons/EPDF.RSC icons/EPDFNV.RSC icons/EPDF.ICN icons/EPDFMK.ICN icons/EPDFDOC.RSC icons/EPDFDNV.RSC \
          icons/ECONVERT.RSC icons/ECONVNV.RSC icons/ECONVERT.ICN icons/ECONVMK.ICN
 lc = $(shell echo '$(notdir $(1))' | tr A-Z a-z)
@@ -475,7 +479,7 @@ lc = $(shell echo '$(notdir $(1))' | tr A-Z a-z)
 # (third_party/liberation, the OFL's text beside them), in the zip's econvert folder
 EC_DIST    := binary/ECONVERT.PRG
 EC_FONTS   := $(wildcard third_party/liberation/fonts/*.ttf) third_party/liberation/OFL.txt
-dist: binary/EPDF.PRG binary/ECONVERT.PRG help
+dist: binary/EPDF.PRG binary/render.ovl binary/ECONVERT.PRG help
 	rm -rf dist
 	mkdir -p dist/zip/icons dist/zip/econvert/fonts
 	$(foreach f,$(DIST),cp $(f) dist/$(call lc,$(f)) && cp $(f) dist/zip/$(call lc,$(f)) &&) true
@@ -530,7 +534,7 @@ build/aprof/EPDF.PRG: binary/EPDF.PRG build/aprof/gem.o
 # the same with textwin.c's marks ("EPDF t copy 35", "t rows 15"...), for a breakdown
 build/times/textwin.o: src/gem/textwin.c $(HDRS) | build
 	mkdir -p build/times
-	$(XCC) $(XFLAGS) -m68000 -mstrict-align -fdisable-tree-bswap -Isrc/gem -Isrc/view -Icommon/ui -DEPDF_TIMES -c -o $@ $<
+	$(XCC) $(XFLAGS) -m68000 -mstrict-align -fdisable-tree-bswap -Isrc/gem -Isrc/rovl -Isrc/view -Icommon/ui -DEPDF_TIMES -c -o $@ $<
 build/times/EPDF.PRG: binary/EPDF.PRG build/aprof/gem.o build/times/textwin.o
 	$(AES_LINK) -o build/times/epdf.elf \
 	  build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o \
@@ -558,7 +562,7 @@ econv-speed-test: build/aprof/ECONVERT.PRG binary/LAUNCH.PRG
 # every 25 pages and at the end, for sizing READ_STACK and PIC_STACK
 build/stk/doc.o: src/gem/doc.c $(HDRS) | build
 	mkdir -p build/stk
-	$(XCC) $(XFLAGS) -m68000 -mstrict-align -fdisable-tree-bswap -Isrc/gem -Isrc/view -Icommon/ui -I$(T)/tjpgd \
+	$(XCC) $(XFLAGS) -m68000 -mstrict-align -fdisable-tree-bswap -Isrc/gem -Isrc/rovl -Isrc/view -Icommon/ui -I$(T)/tjpgd \
 	  -DEPDF_STACKS -c -o $@ $<
 build/stk/EPDF.PRG: binary/EPDF.PRG build/stk/doc.o
 	$(XCC) -m68000 -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
