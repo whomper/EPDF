@@ -131,10 +131,11 @@ def run(work, machine, port, there=True):
     return bad
 
 
-def direct_same(src, sizes, got, work):
-    """got is byte for byte build/econvert's own conversion of src with sizes"""
+def direct_same(src, sizes, got, work, pages="mono"):
+    """got is byte for byte build/econvert's own conversion of src with sizes
+    (pages: EPDF asks for colour on a screen of 16 colours or more)"""
     want = os.path.join(work, "direct-" + os.path.basename(src))
-    subprocess.run([os.path.join(TOP, "build", "econvert"), "--fonts", FONTS, "--pages", "mono",
+    subprocess.run([os.path.join(TOP, "build", "econvert"), "--fonts", FONTS, "--pages", pages,
                     "--photos", "indexed", "--pictures", "screen", "--page-width", sizes[0],
                     "--picture-width", sizes[1], src, want], check=True, stdout=subprocess.DEVNULL)
     return os.path.exists(got) and open(got, "rb").read() == open(want, "rb").read()
@@ -179,7 +180,8 @@ def run_epdf(work, machine, port, there=True):
                 bad.append("not converted")
             elif not sizes:
                 bad.append("no sizes logged")
-            elif not direct_same(src, sizes[0], os.path.join(r.hd, "DOCS", "atari", "BOOK.PDF"), r.work):
+            elif not direct_same(src, sizes[0], os.path.join(r.hd, "DOCS", "atari", "BOOK.PDF"), r.work,
+                                 "colour" if machine.split(":")[-1] in ("16", "256") else "mono"):
                 bad.append("the copy in atari isn't the direct conversion")
             if con.count("EPDF opening") < 2:
                 bad.append("the copy wasn't opened after")
