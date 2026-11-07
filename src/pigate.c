@@ -128,8 +128,10 @@ int pg_convert(const char *host, unsigned short port, const PGOPT *o, const char
 		goto done;
 	}
 	c = conn_open("PDF", host, port, PIECE, SEC_PLAIN, err, errlen);
-	if (!c)
+	if (!c) {
+		rc = conn_stop ? -2 : -3;	/* (no Gateway there: the batch can't go on) */
 		goto done;
+	}
 	snprintf(line, sizeof line, "POST /convert%s HTTP/1.1\r\nHost: %s\r\nContent-Type: application/pdf\r\n"
 		 "Content-Length: %ld\r\nConnection: close\r\n\r\n", q, host, size);
 	if (!conn_write(c, line, (long)strlen(line)))

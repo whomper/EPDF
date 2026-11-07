@@ -163,7 +163,7 @@ int main(int argc, char **argv)
 	}
 	/* a Pi that isn't there: said so, nothing written */
 	rc = pg_convert("127.0.0.1", 1, &o, argv[2], "/nonexistent/x.pdf", NULL, NULL, err, sizeof err);
-	if (rc != -1 || !strstr(err, "can't reach")) {
+	if (rc != -3 || !strstr(err, "can't reach")) {
 		printf("FAIL no Pi: rc %d err \"%s\"\n", rc, err);
 		fails++;
 	}

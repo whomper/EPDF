@@ -55,8 +55,8 @@ def run(work, machine):
         r.still()
         # the window centred on a 640 x 480 screen (as econv.py's shots show
         # it): "None" of the whole pages at 247,228, "Mono" at 327,228
-        r.act("a setting clicked", speed.KEY, lambda: r.click(247, 228))
-        r.act("its tick back", speed.KEY, lambda: r.click(327, 228))
+        r.act("a setting clicked", speed.KEY, lambda: r.click(247, 212))
+        r.act("its tick back", speed.KEY, lambda: r.click(327, 212))
         r.act("About box", r.about, lambda: r.menu(40, 28))
         r.act("About box closed", speed.WINDOW, lambda: r.key("Escape"))
         # (not the file selector: its time open is the AES's and the user's,

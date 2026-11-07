@@ -11,7 +11,8 @@ batch), writes to C:\\OUT (econvert.inf), Return converts. Checked: the
 batch done ("batch-done done"), the converted file there and a converted
 PDF (its catalog's /AERA), Stop (Esc) while a second batch works leaving no
 file behind. Shots: the window before, during (the bars) and after.
-An ST is told EConvert needs a 68030: econv.py WORK ST:mono checks the alert.
+On an ST EConvert starts with This Atari greyed (Gateway only): econv.py WORK ST:mono
+checks it starts; tests/hatari/gateway.py converts there.
 """
 import os
 import shutil
@@ -38,7 +39,8 @@ def run(work, machine, src):
     try:
         os.makedirs(os.path.join(r.hd, "ECONV", "FONTS"))
         os.makedirs(os.path.join(r.hd, "OUT"))
-        shutil.copy(os.path.join(TOP, "binary", "ECONVERT.PRG"), os.path.join(r.hd, "ECONV", "ECONVERT.PRG"))
+        shutil.copy(os.environ.get("ECONVERT_PRG") or os.path.join(TOP, "binary", "ECONVERT.PRG"),
+                    os.path.join(r.hd, "ECONV", "ECONVERT.PRG"))
         for k, v in SHORT.items():
             p = os.path.join(FONTS, v + ".ttf")
             if os.path.exists(p):
@@ -53,14 +55,17 @@ def run(work, machine, src):
         r.write("LAUNCH.TXT", "C:\\ECONV\\ECONVERT.PRG\nC:\\IN.PDF C:\\IN2.PDF\n")
         r.start("C:\\LAUNCH.PRG")
         end = time.time() + 120
-        while time.time() < end and "ECONVERT started" not in r.console() and "needs a Falcon" not in r.console():
+        while time.time() < end and "ECONVERT started" not in r.console():
             time.sleep(1)
         time.sleep(4)
         r.still()
         r.shot("before")
         if machine.startswith("ST"):
-            print("%s: %s" % (r.describe(), "the alert shown" if "ECONVERT started" not in r.console() else "STARTED ON AN ST"))
-            return [] if "ECONVERT started" not in r.console() else ["started on an ST"]
+            # (an ST converts only through the Gateway, Erez 7 Nov 2026: it
+            # starts, This Atari greyed, Gateway chosen: tests/hatari/gateway.py)
+            ok = "ECONVERT started" in r.console()
+            print("%s: %s" % (r.describe(), "started, Gateway only (shot)" if ok else "DIDN'T START ON AN ST"))
+            return [] if ok else ["didn't start on an ST"]
         r.key("Return")
         time.sleep(15)
         r.shot("during")
