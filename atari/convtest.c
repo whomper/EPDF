@@ -15,8 +15,12 @@
 #include "conv.h"
 #include "pdf.h"
 #include "render.h"
+#include "cvjpeg.h"
+#include "pic.h"
+#include "dspjpeg.h"
 
 long pdf_ms(void);
+static unsigned long ms_clock(void) { return (unsigned long)pdf_ms(); }
 extern long heap_peak;
 
 static long last, t0;
@@ -65,6 +69,14 @@ int main(void)
 		long pg;
 
 		render_font_budget = (long)Malloc(-1L) / 4;
+		render_clock = ms_clock;
+		/* "dsp": the JPEGs through pic.c, on the DSP where there is one
+		   (the page EPDF draws, stage 2) */
+		if (strstr(cfg, "dsp")) {
+			cv_jpeg_pic = 1;
+			if (dspjpeg_present())
+				pic_dsp = &dspjpeg_port_jpeg;
+		}
 		if (pdf_open(&d, "C:\\IN.PDF") || render_init(&r, &d, "C:\\FONTS")) {
 			nf_debug("{\"failed\":\"open\"}\nCONVTEST done\n");
 			return 1;
@@ -73,8 +85,8 @@ int main(void)
 			long t = pdf_ms();
 			int rc = render_page(&r, pg, 600);
 
-			snprintf(b, sizeof b, "{\"page\":%ld,\"render_ms\":%ld,\"rc\":%d,\"glyphs\":%ld,\"images\":%ld}\n",
-				 pg + 1, pdf_ms() - t, rc, r.glyphs, r.images);
+			snprintf(b, sizeof b, "{\"page\":%ld,\"render_ms\":%ld,\"image_ms\":%ld,\"rc\":%d,\"glyphs\":%ld,\"images\":%ld,\"dsp\":\"%s\"}\n",
+				 pg + 1, pdf_ms() - t, r.image_ms, rc, r.glyphs, r.images, pic_dsp_state());
 			nf_debug(b);
 		}
 		nf_debug("CONVTEST done\n");

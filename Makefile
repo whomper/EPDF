@@ -300,7 +300,7 @@ fttest: binary/FTTEST.PRG binary/FTTEST30.PRG
 # its drawing hooks, the renderer, FreeType, libjpeg-turbo, all soft-float
 CV_ATARI_SRC = $(CONV_SRC) src/conv/cvio_tos.c src/pdfio_tos.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) \
                src/pdfimg.c src/ccitt.c src/rscale.c common/src/pic.c common/src/png.c common/src/pic_lj8.c \
-               $(T)/nsgif/src/gif.c $(T)/nsgif/src/lzw.c $(LJ_SRC) $(RT_C)
+               $(T)/nsgif/src/gif.c $(T)/nsgif/src/lzw.c common/atari/dspjpeg.c $(LJ_SRC) $(RT_C)
 build/m68030cv/%.o: XFLAGS += -DPDF_DRAW -DPIC_LIBJPEG -DNO_GETENV -DNO_PUTENV -DAERA_NO_FLOAT -fwrapv -I$(LJ)/src -I$(LJ)/config \
                               -I$(T)/nsgif/include -I$(T)/nsgif/src -Isrc/conv $(FT_INC) '-DFT_CONFIG_OPTIONS_H="epdf/ftoption.h"' \
                               '-DFT_CONFIG_MODULES_H="epdf/ftmodule.h"'

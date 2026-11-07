@@ -123,6 +123,7 @@ struct RFONTS {
 
 /* the font programs' bytes kept at most (render_font_budget; 0: any) */
 long render_font_budget;
+unsigned long (*render_clock)(void);
 
 typedef struct {
 	RPAGE *r;
@@ -1075,6 +1076,7 @@ static void image_hook(void *u, long obj, const fx *ctm)
 	fx m[6];
 	int why = 0, mask;
 	PIC *p;
+	unsigned long t0;
 
 	if (!o || o->t != PO_DICT)
 		return;
@@ -1106,7 +1108,10 @@ static void image_hook(void *u, long obj, const fx *ctm)
 	if (h > 2048) h = 2048;
 	if (cv_turn)
 		cv_turn();
+	t0 = render_clock ? render_clock() : 0;
 	p = cv_image(r->d, obj, (int)w, (int)h, &why);
+	if (render_clock)
+		r->image_ms += (long)(render_clock() - t0);
 	if (cv_turn)
 		cv_turn();
 	if (!p) {
@@ -1244,6 +1249,7 @@ int render_page_from(RPAGE *r, long n, int width, int y0)
 	r->width = width;
 	r->narea = 0;
 	r->glyphs = r->glyphs_missed = r->images = r->images_missed = 0;
+	r->image_ms = 0;
 	st = calloc(1, sizeof *st);
 	if (!st)
 		return -1;
