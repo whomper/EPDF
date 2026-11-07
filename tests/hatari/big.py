@@ -42,7 +42,7 @@ _spec.loader.exec_module(speed)
 PAGE = re.compile(r"EPDF page (\d+) (\d+) peak (\d+) heap (\d+) oom (\d+)( failed)?")
 
 
-def one(work, machine, pdf, seconds, display):
+def one(work, machine, pdf, seconds, display, key="ctrl+Right", every=20):
     name = os.path.splitext(os.path.basename(pdf))[0]
     r = speed.Rig(os.path.join(work, name), machine, display=display)
     res = {"name": name, "opened": False}
@@ -54,12 +54,12 @@ def one(work, machine, pdf, seconds, display):
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\DOC.PDF\n")
         r.start("C:\\LAUNCH.PRG", ready="EPDF started", boot=120)
         end = time.time() + seconds
-        nxt = time.time() + 20
+        nxt = time.time() + every
         while time.time() < end:
-            time.sleep(2)
+            time.sleep(1)
             if time.time() >= nxt:
-                r.key("ctrl+Right")
-                nxt = time.time() + 20
+                r.key(key)          # (the next page; lowmem.py: a window's height, so its pictures show)
+                nxt = time.time() + every
         con = r.console()
     finally:
         r.stop()

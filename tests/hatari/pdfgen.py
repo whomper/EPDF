@@ -21,10 +21,11 @@ def jpeg(w, h):
     return b.getvalue()
 
 
-def make_pdf(path, pages, size=11, lead=13.5, pictures=None):
+def make_pdf(path, pages, size=11, lead=13.5, pictures=None, drawings=None):
     """a PDF of Helvetica text, one list of lines a page; pictures: {page
     index: (JPEG bytes, its width and height in pixels, shown at w x h
-    points)}, drawn under the page's lines"""
+    points)}, drawn under the page's lines; drawings: {page index: content
+    operators} (paths, fills, their labels in /F1), added to the page"""
     objs = []
     streams = {}
     pictures = pictures or {}
@@ -48,6 +49,8 @@ def make_pdf(path, pages, size=11, lead=13.5, pictures=None):
         if pic:
             y = 740 - lead * (len(lines) + 1) - pic[4]
             content += " q %g 0 0 %g 72 %g cm /Im1 Do Q" % (pic[3], pic[4], y)
+        if drawings and i in drawings:
+            content += " " + drawings[i]
         add("<< /Length %d >>\nstream\n%s\nendstream" % (len(content), content))
         if pic:
             add("<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB /BitsPerComponent 8"
@@ -102,3 +105,39 @@ def book(npages, lines=50, width=88):
             page += para
         pages.append(page[:lines])
     return pages
+
+
+def chart(seed, n=400):
+    """a chart's operators: an axis, n bars filled in greys, a curve of n
+    points through them, a dashed grid and labels, in the page's foot
+    (y 60-230, clear of the photo above it): a page's drawing, as a
+    report's or a datasheet's"""
+    ops = ["q 0 G 1 w 72 60 m 540 60 l S 72 60 m 72 230 l S"]
+    for k in range(10):
+        y = 60 + k * 17
+        ops.append("[3 2] 0 d 0.5 w 72 %d m 540 %d l S [] 0 d" % (y, y))
+    w = 468.0 / n
+    pts = []
+    for k in range(n):
+        h = 10 + ((seed * 131 + k * 37) % 140)
+        ops.append("%.3f g %.2f 60 %.2f %d re f" % (0.3 + (k % 7) / 10.0, 72 + k * w, w * 0.8, h))
+        pts.append((72 + k * w + w / 2, 60 + h + 8))
+    ops.append("0 0 1 RG 1.5 w %.2f %.2f m" % pts[0])
+    for k in range(1, n - 2, 3):
+        ops.append("%.2f %.2f %.2f %.2f %.2f %.2f c" % (pts[k] + pts[k + 1] + pts[k + 2]))
+    ops.append("S")
+    for k in range(0, 10, 2):
+        ops.append("BT /F1 8 Tf %d %d Td (%d) Tj ET" % (50, 57 + k * 17, k * 10))
+    ops.append("Q")
+    return " ".join(ops)
+
+
+def mixed(path, npages=12, lines=24, pic=(1600, 1200)):
+    """a mid-size PDF with all three on every page: text, a photo of
+    pic[0] x pic[1] pixels (a 1 MB ST's memory runs short decoding it) and
+    a chart of filled bars, a curve and a grid with labels (lowmem.py)"""
+    pages = book(npages, lines=lines)
+    j = jpeg(*pic)
+    pictures = {i: (j, pic[0], pic[1], 400, 150) for i in range(npages)}
+    drawings = {i: chart(i) for i in range(npages)}
+    make_pdf(path, pages, pictures=pictures, drawings=drawings)
