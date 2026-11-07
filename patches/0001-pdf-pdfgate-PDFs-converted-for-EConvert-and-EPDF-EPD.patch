@@ -1,0 +1,972 @@
+From 61cc0960815beb3ea7584dd6a2db40bce63a8f8f Mon Sep 17 00:00:00 2001
+From: AERA | Erez Yaary <yaary@me.com>
+Date: Sat, 7 Nov 2026 05:53:59 +0000
+Subject: [PATCH] pdf: pdfgate, PDFs converted for EConvert and EPDF (EPDF's
+ protocol)
+
+Erez, 7 Nov 2026: EConvert and EPDF convert either on the Atari or on
+the Pi. pdfgate (gateway/pdfgate.py, standard Python 3) takes POST
+/convert with EConvert's settings, answers 102 Processing with
+X-Progress while aerapdf works, and sends back the converted PDF: the
+same bytes EConvert writes on a Falcon (test_pdfgate's real case,
+EDOS_01.PDF, byte for byte). aerapdf is EPDF's tools/econvert.c and
+src/conv/ built on the Pi with cc and make only (pdf/Makefile), from
+EPDF's source copied into pdf/epdf by tools/sync-pdf.sh at a named EPDF
+commit, never edited here. One conversion at a time, 600 s and 768 MB at
+most, 64 MB of PDF; the log names the Atari and the bytes, never the
+file. GET /version answers which EPDF commit it is.
+
+aera-gateway: the pdf service (Pdf: port 8380, --allow, -v; aerapdf
+built in prepare(), kept when built from the same pdf/, its fonts and
+SOURCE in /opt/aera-gateway-pdf, removed with it); install all leaves it
+out unless it is installed (a build of minutes, for two apps only).
+Tests: test_pdfgate (13: options, refusals, limits, progress, nothing
+left on disk, the real aerapdf against its Direct output), test_installer
+(test_pdf, test_pdf_not_built). The protocol: EPDF's docs/PI-GATEWAY.md.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01SZeNoDLt48EM4msuao4J1n
+---
+ .gitignore                |   2 +
+ README.md                 |   2 +
+ gateway/README.md         |  29 ++++
+ gateway/aera-gateway      | 116 ++++++++++++-
+ gateway/pdfgate.py        | 335 ++++++++++++++++++++++++++++++++++++++
+ gateway/test_installer.py |  48 +++++-
+ gateway/test_pdfgate.py   | 213 ++++++++++++++++++++++++
+ pdf/Makefile              |  23 +++
+ tools/sync-pdf.sh         |  30 ++++
+ 9 files changed, 793 insertions(+), 5 deletions(-)
+ create mode 100644 gateway/pdfgate.py
+ create mode 100644 gateway/test_pdfgate.py
+ create mode 100644 pdf/Makefile
+ create mode 100755 tools/sync-pdf.sh
+
+diff --git a/.gitignore b/.gitignore
+index 74523af..68c01e4 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -6,3 +6,5 @@ pens/aerapens
+ pens/common/tools/pens/build/
+ jsc/aerajsc
+ jsc/eweb/tools/jsc/build/
++pdf/aerapdf
++pdf/epdf/build/
+diff --git a/README.md b/README.md
+index 22669df..29606dd 100644
+--- a/README.md
++++ b/README.md
+@@ -15,6 +15,7 @@ they are.
+ | `ftp`    | EFTP                | 2121, and 30000-30099 for data       | FTPS or SFTP to the server            |
+ | `web`    | EWeb                | 8280                                 | HTTP and HTTPS to any web server      |
+ | `claude` | ClaudeST            | 2323 (or a serial cable)             | HTTPS to claude.ai or the API         |
++| `pdf`    | EConvert and EPDF   | 8380                                 | converts PDFs for the Atari (nothing onwards) |
+ 
+ In the instructions, `PI_IP` is the Pi's address on your home network and
+ `ATARI_IP` the Atari's.
+@@ -54,6 +55,7 @@ into its Atari program:
+ | EFTP               | Options > Settings > Secure            | Pi gateway `PI_IP`, port 2121                 |
+ | EWeb               | Settings > Secure                      | Pi gateway `PI_IP`, port 8280                 |
+ | ClaudeST           | Options > Settings > Network           | `PI_IP`, port 2323                            |
++| EConvert, EPDF     | the Pi converter                       | Pi gateway `PI_IP`, port 8380                 |
+ 
+ Use the Pi's address, not its name: plain TOS with STinG can't always
+ look names up on the home network. On a Falcon or TT, EMail, ECal,
+diff --git a/gateway/README.md b/gateway/README.md
+index c72d74e..a3a93e1 100644
+--- a/gateway/README.md
++++ b/gateway/README.md
+@@ -53,6 +53,7 @@ sudo aera-gateway install dav --allow ATARI_IP
+ sudo aera-gateway install ftp --allow ATARI_IP
+ sudo aera-gateway install web --allow ATARI_IP
+ sudo aera-gateway install claude --network --atari ATARI_IP
++sudo aera-gateway install pdf --allow ATARI_IP
+ ```
+ 
+ `install all --allow ATARI_IP --mail IMAP SMTP[:587] [POP3] [--browser]`
+@@ -292,6 +293,34 @@ enable-linger webgate`). The profile is then in
+ `/var/lib/webgate/snap/chromium/common/browser`, and the snap's own
+ confinement is the browser's sandbox. The same command sets it all up.
+ 
++## pdf: EConvert's and EPDF's converter
++
++```
++sudo aera-gateway install pdf --allow ATARI_IP
++```
++
++EConvert and EPDF can have a PDF converted by the Pi instead of by the
++Atari: much faster than a Falcon (a page in a second or two rather than
++minutes), and on any Atari, an ST included. The Atari sends the PDF,
++pdfgate converts it with aerapdf and sends the converted PDF back: the
++same file, byte for byte, that EConvert writes on a Falcon with the same
++settings, because aerapdf is EConvert's own converter (EPDF's source,
++copied into `pdf/` by `tools/sync-pdf.sh` at a named EPDF commit) built
++for the Pi. `install pdf` builds it (a few minutes; it installs gcc and
++make if they aren't there) and puts its fonts beside it in
++`/opt/aera-gateway-pdf`. `install all` leaves it out: install it on its
++own.
++
++In EConvert and EPDF on the Atari, the Pi converter: Pi gateway = the
++Pi's IP address, port 8380. Check it from any browser on your network:
++`http://PI_IP:8380/version` answers "aerapdf" and the EPDF commit it was
++built from. The exchange is EPDF's (its `docs/PI-GATEWAY.md`).
++
++One PDF is converted at a time, each with at most 600 seconds and 768 MB;
++a PDF of more than 64 MB is refused. The PDF and the result are on the
++Pi's disk only while it converts. The log says which Atari converted how
++many bytes, never the file's name or what is in it.
++
+ ## claude: ClaudeST's bridge
+ 
+ The bridge is ClaudeST's own (it changes with `CLAUDEST.PRG`);
+diff --git a/gateway/aera-gateway b/gateway/aera-gateway
+index 92484ce..86a1828 100755
+--- a/gateway/aera-gateway
++++ b/gateway/aera-gateway
+@@ -55,7 +55,7 @@ PROG = sys.argv[0] if sys.argv[0].endswith("aera-gateway") else "aera-gateway"
+ OPT = "/opt/aera-gateway"                   # the gateways' code on the Pi
+ UNITS = "/etc/systemd/system"
+ OLD_BIN = "/usr/local/bin"                  # where the apps' own install.sh put them
+-FILES = ("aeragate.py", "emailgate.py", "ecalgate.py", "eftpgate.py", "webgate.py")
++FILES = ("aeragate.py", "emailgate.py", "ecalgate.py", "eftpgate.py", "webgate.py", "pdfgate.py")
+ EXT = "webgate-ext"                         # webgate's browser extension, a folder next to them
+ HOME_NETS = ("192.168.0.0/16", "172.16.0.0/12", "10.0.0.0/8")
+ CLAUDEST = "whomper/ClaudeST"
+@@ -1082,8 +1082,113 @@ class Web(Gateway):
+             "Check it from any browser on your network: http://%s:%s/" % (ip, ns.port)])
+ 
+ 
++class Pdf(Gateway):
++    """pdfgate: PDFs converted for EConvert and EPDF by aerapdf, EPDF's
++    converter, built here from this copy's pdf/ (EPDF's source at the
++    commit in pdf/EPDF, tools/sync-pdf.sh)"""
++    key, name, script = "pdf", "pdfgate", "pdfgate.py"
++    title = "PDF converter for EConvert and EPDF on the Atari"
++    removed = "pdfgate removed."
++    PDF_SRC = os.path.join(os.path.dirname(HERE), "pdf")
++    PDF_DIR = "/opt/aera-gateway-pdf"
++    built = None                            # this install's aerapdf, built in prepare() ("kept": as it is)
++    source = None                           # the sum of the pdf/ it is built from
++
++    def options(self, ap):
++        super().options(ap)
++        ap.add_argument("--port", type=int, help="the port on the Pi (8380 is the default)")
++        ap.add_argument("-v", "--verbose", action="store_true", default=None, help="log every request")
++        ap.add_argument("--no-verbose", dest="verbose", action="store_false")
++
++    def apply(self, ns, o):
++        super().apply(ns, o)
++        if o.port is not None:
++            ns.port = o.port
++        if o.verbose is not None:
++            ns.verbose = o.verbose
++
++    def check(self, ns):
++        if not os.path.isdir(os.path.join(self.PDF_SRC, "epdf")):
++            raise Failed("This copy has no pdf/ (EPDF's converter): install pdf from AERA-Gateway itself.")
++
++    def pdf_sum(self):
++        """a sum of this copy's pdf/: the same sum, the same aerapdf"""
++        h = hashlib.sha256()
++        for top, dirs, files in sorted(os.walk(self.PDF_SRC)):
++            dirs[:] = sorted(d for d in dirs if d != "build")
++            for f in sorted(files):
++                if f != "aerapdf":
++                    path = os.path.join(top, f)
++                    h.update(os.path.relpath(path, self.PDF_SRC).encode() + b"\0")
++                    with open(path, "rb") as fh:
++                        h.update(fh.read())
++        return h.hexdigest()
++
++    def prepare(self, pi, ns):
++        """aerapdf built from pdf/, unless the one there is from the same pdf/"""
++        self.built = None
++        self.source = self.pdf_sum()
++        if pi.exists(self.PDF_DIR + "/aerapdf") and \
++                (pi.read(self.PDF_DIR + "/BUILT") or "").strip() == self.source:
++            self.built = "kept"
++            return
++        need = [pkg for prog, pkg in (("cc", "gcc"), ("make", "make")) if not pi.which(prog)]
++        if need:
++            heading("Installing %s, to build aerapdf (EPDF's converter)" % " and ".join(need))
++            pi.run("apt-get", "update", "-qq")
++            pi.run("apt-get", "install", "-y", "-qq", *need)
++        heading("Building aerapdf: this takes a few minutes on a Pi")
++        tmp = tempfile.mkdtemp(prefix="aerapdf-")
++        shutil.copytree(self.PDF_SRC, os.path.join(tmp, "pdf"), ignore=shutil.ignore_patterns("aerapdf", "build"))
++        if pi.run("make", "-s", "-C", os.path.join(tmp, "pdf"), check=False).returncode != 0 or \
++                not os.path.isfile(os.path.join(tmp, "pdf", "aerapdf")):
++            shutil.rmtree(tmp, ignore_errors=True)
++            raise Failed("aerapdf didn't build (see above): pdfgate isn't installed.")
++        self.built = tmp
++
++    def before_start(self, pi):
++        """aerapdf, its fonts and which EPDF it is from, in place before
++        pdfgate starts"""
++        if not self.built or self.built == "kept":
++            self.built = None
++            return
++        try:
++            pdf = os.path.join(self.built, "pdf")
++            pi.rmtree(self.PDF_DIR + "/fonts")
++            pi.makedirs(self.PDF_DIR + "/fonts")
++            pi.copy(os.path.join(pdf, "aerapdf"), self.PDF_DIR + "/aerapdf", 0o755)
++            for f in sorted(glob.glob(os.path.join(pdf, "epdf", "third_party", "liberation", "fonts", "*.ttf"))):
++                pi.copy(f, "%s/fonts/%s" % (self.PDF_DIR, os.path.basename(f)), 0o644)
++            with open(os.path.join(pdf, "EPDF")) as fh:
++                pi.write(self.PDF_DIR + "/SOURCE", fh.read().strip() + "\n")
++            pi.write(self.PDF_DIR + "/BUILT", self.source + "\n")
++        finally:
++            shutil.rmtree(self.built, ignore_errors=True)
++            self.built = None
++
++    def after_remove(self, pi):
++        pi.rmtree(self.PDF_DIR)
++
++    def args(self, ns):
++        out = ["--port", str(ns.port)] + super().args(ns)
++        out += ["-v"] if ns.verbose else []
++        return out + ns.extra
++
++    def ports(self, ns):
++        return [str(ns.port)]
++
++    def tell(self, ns, ip):
++        return "\n".join([
++            "",
++            "pdfgate is running. In EConvert and EPDF on the Atari, the Pi converter:",
++            "   Pi gateway:  %s" % ip,
++            "   Port:        %s" % ns.port,
++            "",
++            "Check it from any browser on your network: http://%s:%s/version" % (ip, ns.port)])
++
++
+ MAIL = Mail()
+-GATEWAYS = [MAIL, Dav(), Ftp(), Web()]
++GATEWAYS = [MAIL, Dav(), Ftp(), Web(), Pdf()]
+ 
+ 
+ def put_files(pi, src):
+@@ -1433,7 +1538,8 @@ CLAUDE = Claude()
+ SERVICES = {g.key: g for g in GATEWAYS + [CLAUDE]}
+ NAMES = {"email": "mail", "emailgate": "mail", "cal": "dav", "ecal": "dav", "econtact": "dav",
+          "contacts": "dav", "ecalgate": "dav", "eftp": "ftp", "eftpgate": "ftp",
+-         "claudest": "claude", "claude-st": "claude", "eweb": "web", "webgate": "web"}
++         "claudest": "claude", "claude-st": "claude", "eweb": "web", "webgate": "web",
++         "epdf": "pdf", "econvert": "pdf", "pdfgate": "pdf"}
+ 
+ 
+ def service(name):
+@@ -1501,6 +1607,10 @@ def install_all(pi, o, src=HERE):
+         if svc is MAIL and not o.mail and not svc.installed(pi) and not pi.exists(Mail.STUNNEL):
+             skipped.append("mail (name your provider's servers: --mail IMAP SMTP[:587] [POP3])")
+             continue
++        if svc.key == "pdf" and not svc.installed(pi):
++            # (a converter built on the Pi: minutes, and only for EConvert and EPDF)
++            skipped.append("pdf (EConvert and EPDF's converter: sudo %s install pdf --allow ATARI_IP)" % PROG)
++            continue
+         if svc is CLAUDE:
+             argv = ["--from", o.source] if o.source else []
+             serial = svc.installed(pi) and "--serial" in CLAUDE.get_var(pi, "CLAUDE_ST_ARGS")
+diff --git a/gateway/pdfgate.py b/gateway/pdfgate.py
+new file mode 100644
+index 0000000..58ddcd5
+--- /dev/null
++++ b/gateway/pdfgate.py
+@@ -0,0 +1,335 @@
++#!/usr/bin/env python3
++# SPDX-License-Identifier: GPL-2.0-or-later
++# Copyright (C) 2026 AERA | Erez Yaary
++"""pdfgate - PDFs converted for the Atari, for EConvert and EPDF.
++
++The Atari sends a PDF; the Pi converts it with aerapdf (EPDF's converter,
++the same C code EConvert runs on a Falcon, built here from pdf/) and sends
++back the converted PDF, the same file EConvert would have written
++(EPDF's docs/CONVERTED-PDF.md). The protocol is EPDF's
++(docs/PI-GATEWAY.md there):
++
++    POST /convert?pages=mono&photos=indexed&pictures=screen&page_width=640
++                  &picture_width=640&double=1&name=REPORT.PDF HTTP/1.1
++    Content-Length: N                   (the PDF's bytes follow)
++
++  answered, while aerapdf works, by
++
++    HTTP/1.1 102 Processing
++    X-Progress: DONE/TOTAL              (thousandths of the file's pages)
++
++  and then by 200 with the converted PDF (Content-Length), or by an error
++  with one line "pdfgate: why". The options are all optional (name: the
++  PDF's own name, as the result records it; "in.pdf"); anything else is
++  refused (400).
++
++    GET /version   ->  "aerapdf EPDF-COMMIT"   (which converter answers)
++
++The rules are aeragate's: the home network only, or --allow; the log says
++who converted how much, never the file's name or what is in it. One
++conversion at a time (--jobs), each with its own time (--time) and memory
++(--memory); the PDF and the result are kept on disk only while it runs.
++
++Standard Python 3 only.
++"""
++
++import argparse
++import os
++import re
++import resource
++import shutil
++import subprocess
++import sys
++import tempfile
++import threading
++import time
++from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
++from urllib.parse import parse_qsl, urlsplit
++
++sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
++import aeragate  # noqa: E402
++
++VERSION = "1.0"
++PIECE = 65536
++
++
++class Config:
++    allow = []
++    aerapdf = "/opt/aera-gateway-pdf/aerapdf"
++    fonts = "/opt/aera-gateway-pdf/fonts"
++    source = "/opt/aera-gateway-pdf/SOURCE"
++    max_bytes = 64 << 20
++    seconds = 600
++    memory = 768 << 20
++    jobs = threading.BoundedSemaphore(1)
++    tmp = None
++    verbose = False
++
++
++# the options EConvert has, each as aerapdf's flag; values checked
++OPTIONS = {
++    "pages": ("--pages", ("none", "mono", "colour")),
++    "photos": ("--photos", ("indexed", "jpeg")),
++    "pictures": ("--pictures", ("page", "screen")),
++    "page_width": ("--page-width", (160, 4096)),
++    "picture_width": ("--picture-width", (64, 4096)),
++    "double": (None, ("0", "1")),
++    "name": (None, None),               # the PDF's own name, kept in the result's AERA entry
++}
++NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_. -]{0,63}")
++
++
++def flags(query):
++    """aerapdf's flags for the query, or None (with why) if anything in it
++    isn't one of OPTIONS with a value it may have"""
++    out = []
++    seen = set()
++    name = "in.pdf"
++    for k, v in parse_qsl(query, keep_blank_values=True, strict_parsing=False):
++        if k not in OPTIONS or k in seen:
++            return None, "no option %s" % k[:20]
++        seen.add(k)
++        flag, ok = OPTIONS[k]
++        if k == "name":
++            if not NAME.fullmatch(v):
++                return None, "name?"
++            name = v
++            continue
++        if isinstance(ok[0], int):
++            if not re.fullmatch(r"[0-9]{1,5}", v) or not ok[0] <= int(v) <= ok[1]:
++                return None, "%s %s?" % (k, v[:10])
++        elif v not in ok:
++            return None, "%s %s?" % (k, v[:10])
++        if k == "double":
++            if v == "0":
++                out.append("--normal-pages")
++        else:
++            out += [flag, v]
++    return (out, name), None
++
++
++def which():
++    """the converter that answers: "aerapdf COMMIT", or None"""
++    if not os.access(Config.aerapdf, os.X_OK):
++        return None
++    try:
++        with open(Config.source) as f:
++            return "aerapdf " + (f.read().strip() or "?")[:64]
++    except OSError:
++        return "aerapdf ?"
++
++
++def limits():
++    """aerapdf's: its memory, its CPU time (a little over the wall's), no core"""
++    resource.setrlimit(resource.RLIMIT_AS, (Config.memory, Config.memory))
++    resource.setrlimit(resource.RLIMIT_CPU, (Config.seconds + 5, Config.seconds + 10))
++    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
++
++
++class Handler(BaseHTTPRequestHandler):
++    protocol_version = "HTTP/1.1"
++    server_version = "pdfgate/" + VERSION
++    timeout = 120                       # a connection silent this long is closed
++
++    def log_message(self, fmt, *args):  # (the note() lines only)
++        if Config.verbose:
++            aeragate.say("pdfgate: " + fmt % args)
++
++    def note(self, status, n_in, n_out, more=""):
++        aeragate.say("pdfgate: %s %d, %d bytes in, %d out%s" %
++                     (self.client_address[0], status, n_in, n_out, more))
++
++    def reply(self, status, text, n_in=0):
++        body = text.encode("utf-8", "replace")
++        self.close_connection = True
++        try:
++            self.send_response(status)
++            self.send_header("Content-Type", "text/plain")
++            self.send_header("Content-Length", str(len(body)))
++            self.send_header("Connection", "close")
++            self.end_headers()
++            self.wfile.write(body)
++        except OSError:
++            pass
++        self.note(status, n_in, 0, " (%s)" % text.strip())
++
++    def allowed(self):
++        if aeragate.client_ok(self.client_address[0], Config.allow):
++            return True
++        self.reply(403, "pdfgate: not from this computer\n")
++        return False
++
++    def do_GET(self):
++        if not self.allowed():
++            return
++        if urlsplit(self.path).path != "/version":
++            self.reply(404, "pdfgate: no such page\n")
++            return
++        w = which()
++        if not w:
++            self.reply(503, "pdfgate: no aerapdf\n")
++            return
++        body = (w + "\n").encode()
++        self.send_response(200)
++        self.send_header("Content-Type", "text/plain")
++        self.send_header("Content-Length", str(len(body)))
++        self.end_headers()
++        self.wfile.write(body)
++
++    def do_POST(self):
++        if not self.allowed():
++            return
++        url = urlsplit(self.path)
++        if url.path != "/convert":
++            self.reply(404, "pdfgate: no such page\n")
++            return
++        got, why = flags(url.query)
++        if got is None:
++            self.reply(400, "pdfgate: %s\n" % why)
++            return
++        size = self.headers.get("Content-Length", "")
++        if not size.isdigit():
++            self.reply(411, "pdfgate: no length\n")
++            return
++        size = int(size)
++        if size > Config.max_bytes:
++            self.reply(413, "pdfgate: the PDF is over %d MB\n" % (Config.max_bytes >> 20))
++            return
++        if not which():
++            self.reply(503, "pdfgate: no aerapdf\n")
++            return
++        work = tempfile.mkdtemp(prefix="pdfgate-", dir=Config.tmp)
++        try:
++            self.convert(work, size, *got)
++        finally:
++            shutil.rmtree(work, ignore_errors=True)
++
++    def convert(self, work, size, args, name):
++        # the PDF under its own name (the result's AERA entry names it); the
++        # result in a folder of its own, so the names can't meet
++        os.mkdir(os.path.join(work, "out"))
++        src, dst = os.path.join(work, name), os.path.join(work, "out", "out.pdf")
++        got = 0
++        with open(src, "wb") as f:
++            while got < size:
++                b = self.rfile.read(min(PIECE, size - got))
++                if not b:
++                    break
++                f.write(b)
++                got += len(b)
++        if got < size:
++            self.close_connection = True
++            self.note(400, got, 0, " (cut off)")
++            return
++        with open(src, "rb") as f:
++            if not f.read(1024).lstrip(b"\x00\t\n\r ").startswith(b"%PDF-"):
++                self.reply(415, "pdfgate: not a PDF\n", got)
++                return
++        t0 = time.monotonic()
++        with Config.jobs:
++            status, text = self.run(args, src, dst, t0)
++        if status == 499:
++            self.close_connection = True
++            self.note(499, got, 0, " (the Atari went away)")
++            return
++        if status != 200:
++            self.reply(status, text, got)
++            return
++        n = os.path.getsize(dst)
++        self.close_connection = True
++        try:
++            self.send_response(200)
++            self.send_header("Content-Type", "application/pdf")
++            self.send_header("Content-Length", str(n))
++            self.send_header("Connection", "close")
++            self.end_headers()
++            with open(dst, "rb") as f:
++                shutil.copyfileobj(f, self.wfile, PIECE)
++        except OSError:
++            self.note(200, got, 0, " (the Atari went away)")
++            return
++        self.note(200, got, n, " in %.1f s" % (time.monotonic() - t0))
++
++    def run(self, args, src, dst, t0):
++        """aerapdf on src: (200, None), or (status, "pdfgate: why")"""
++        cmd = [Config.aerapdf, "--progress", "--fonts", Config.fonts] + args + [src, dst]
++        try:
++            p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
++                                 stderr=subprocess.PIPE, preexec_fn=limits, cwd=os.path.dirname(src))
++        except OSError:
++            return 503, "pdfgate: no aerapdf\n"
++        timer = threading.Timer(Config.seconds, p.kill)
++        timer.start()
++        last, said = 0.0, ""
++        try:
++            for line in p.stderr:
++                line = line.decode("utf-8", "replace").strip()
++                m = re.fullmatch(r"progress (\d+) (\d+)", line)
++                if m:
++                    now = time.monotonic()
++                    if now - last >= 0.5:
++                        last = now
++                        self.wfile.write(("HTTP/1.1 102 Processing\r\nX-Progress: %s/%s\r\n\r\n" %
++                                          m.groups()).encode())
++                        self.wfile.flush()
++                elif line:
++                    said = line
++            p.wait()
++        except OSError:
++            p.kill()
++            p.wait()
++            return 499, "pdfgate: the Atari went away\n"
++        finally:
++            timer.cancel()
++        if p.returncode == 0 and os.path.exists(dst):
++            return 200, None
++        if time.monotonic() - t0 >= Config.seconds or p.returncode in (-9, -24):
++            return 504, "pdfgate: the PDF took over %d s\n" % Config.seconds
++        # aerapdf's last line, its own words, without the Pi's paths
++        said = said.replace(src, "the PDF").replace(dst, "the result")
++        said = re.sub(r"^econvert: ", "", said)[:200] or "it couldn't be converted"
++        return 422, "pdfgate: %s\n" % said
++
++
++def parser():
++    """the command line (aera-gateway reads a service's settings with it)"""
++    ap = argparse.ArgumentParser(description="PDFs converted for EConvert and EPDF on the Atari")
++    ap.add_argument("--port", type=int, default=8380)
++    ap.add_argument("--bind", default="0.0.0.0")
++    ap.add_argument("--allow", action="append", default=[],
++                    help="only this Atari's address may use the gateway (may repeat)")
++    ap.add_argument("--aerapdf", default=Config.aerapdf, help="the converter")
++    ap.add_argument("--fonts", default=Config.fonts, help="the standard fonts' files (Liberation*.ttf)")
++    ap.add_argument("--source", default=Config.source, help="the file naming the EPDF commit aerapdf is from")
++    ap.add_argument("--max-mb", type=int, default=64, help="the biggest PDF taken")
++    ap.add_argument("--time", type=int, default=600, help="seconds a conversion may take")
++    ap.add_argument("--memory-mb", type=int, default=768, help="the memory a conversion may take")
++    ap.add_argument("--jobs", type=int, default=1, help="conversions at once")
++    ap.add_argument("--tmp", help="where the PDFs are kept while they are converted")
++    ap.add_argument("-v", "--verbose", action="store_true")
++    return ap
++
++
++def main(argv=None):
++    a = parser().parse_args(argv)
++    Config.allow = a.allow
++    Config.aerapdf, Config.fonts, Config.source = (os.path.abspath(x) for x in (a.aerapdf, a.fonts, a.source))
++    Config.max_bytes = a.max_mb << 20
++    Config.seconds = a.time
++    Config.memory = a.memory_mb << 20
++    Config.jobs = threading.BoundedSemaphore(max(1, a.jobs))
++    Config.tmp = a.tmp
++    Config.verbose = a.verbose
++    srv = ThreadingHTTPServer((a.bind, a.port), Handler)
++    srv.daemon_threads = True
++    aeragate.say("pdfgate %s listening on %s:%d" % (VERSION, a.bind, a.port))
++    w = which()
++    aeragate.say("pdfgate: converting with %s" % w if w else "pdfgate: no converter at %s" % Config.aerapdf)
++    try:
++        srv.serve_forever()
++    except KeyboardInterrupt:
++        pass
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/gateway/test_installer.py b/gateway/test_installer.py
+index 5d588ce..b749d69 100644
+--- a/gateway/test_installer.py
++++ b/gateway/test_installer.py
+@@ -44,6 +44,7 @@ class FakePi(ag.Pi):
+         self.homes = {}             # users' homes
+         self.homedirs = ""          # snapd's homedirs setting
+         self.no_modules = set()     # Python modules that aren't there
++        self.broken_build = False   # make fails (aerapdf's build)
+ 
+     def have(self, prog):
+         return prog == "python3" or (prog == "ufw" and self.ufw is not None)
+@@ -130,9 +131,15 @@ class FakePi(ag.Pi):
+             os.chmod(os.path.join(c[3], "bin", "python"), 0o755)
+         elif c[0] == "ls":
+             rc = 2
+-        elif c[0] == "make":            # aerapens' or aerajsc's build: a stand-in for what it makes
++        elif c[0] == "make":            # aerapens', aerajsc's or aerapdf's build: a stand-in for what it makes
+             where = c[c.index("-C") + 1]
+-            with open(os.path.join(where, "aerajsc" if os.path.basename(where) == "jsc" else "aerapens"), "wb") as f:
++            if self.broken_build:
++                rc = 2
++                if check:
++                    raise ag.Failed("%s failed" % " ".join(cmd))
++                return subprocess.CompletedProcess(cmd, rc, "", "")
++            made = {"jsc": "aerajsc", "pdf": "aerapdf"}.get(os.path.basename(where), "aerapens")
++            with open(os.path.join(where, made), "wb") as f:
+                 f.write(b"\x7fELF\x02\x01\x01\0" + bytes(range(256)))       # a program's bytes, not text
+         elif c[:2] == ["python3", "-c"] and c[2].startswith("import "):
+             rc = 1 if c[2][7:] in self.no_modules else 0
+@@ -665,6 +672,43 @@ class DavFtpTest(Base):
+         self.assertIsNone(self.pi.read("/etc/systemd/system/webgate-js.socket"))
+         self.assertFalse(self.pi.exists("/opt/aera-gateway-jsc"))
+ 
++    @unittest.skipUnless(os.path.isdir(os.path.join(ag.Pdf.PDF_SRC, "epdf")),
++                         "needs AERA-Gateway's pdf/ (an app's copy of gateway/ has none)")
++    def test_pdf(self):
++        self.pi.ufw = True
++        self.assertEqual(self.run_ag("install", "epdf", "--allow", "192.168.1.50"), 0, self.err)
++        self.assertEqual(self.execstart("pdfgate"), "ExecStart=/usr/bin/python3 /opt/aera-gateway/pdfgate.py "
++                                                    "--port 8380 --allow 192.168.1.50")
++        self.assertEqual(self.pi.rules, [("192.168.1.50", "8380")])
++        self.assertIn("Pi gateway:  192.168.1.10", self.out)
++        self.assertIn("Port:        8380", self.out)
++        make = [c for c in self.pi.cmds if c[0] == "make" and os.path.basename(c[3]) == "pdf"][-1]
++        self.assertFalse(make[3].startswith(os.path.dirname(ag.HERE)))      # never in the copy itself
++        self.assertTrue(self.pi.exists("/opt/aera-gateway-pdf/aerapdf"))
++        self.assertTrue(self.pi.exists("/opt/aera-gateway-pdf/fonts/sans.ttf"))
++        with open(os.path.join(ag.Pdf.PDF_SRC, "EPDF")) as f:
++            self.assertEqual(self.pi.read("/opt/aera-gateway-pdf/SOURCE"), f.read().strip() + "\n")
++        # built from the same pdf/: kept, not built again; another: built
++        builds = lambda: len([c for c in self.pi.cmds if c[0] == "make" and os.path.basename(c[3]) == "pdf"])
++        n = builds()
++        self.assertEqual(self.run_ag("install", "pdf", "-v"), 0, self.err)
++        self.assertEqual(builds(), n)
++        self.assertIn("--port 8380 --allow 192.168.1.50 -v", self.execstart("pdfgate"))
++        self.pi.write("/opt/aera-gateway-pdf/BUILT", "another\n")
++        self.assertEqual(self.run_ag("install", "pdf"), 0, self.err)
++        self.assertEqual(builds(), n + 1)
++        self.assertEqual(self.run_ag("remove", "pdf"), 0, self.err)
++        self.assertIsNone(self.unit("pdfgate"))
++        self.assertFalse(self.pi.exists("/opt/aera-gateway-pdf"))
++
++    @unittest.skipUnless(os.path.isdir(os.path.join(ag.Pdf.PDF_SRC, "epdf")),
++                         "needs AERA-Gateway's pdf/ (an app's copy of gateway/ has none)")
++    def test_pdf_not_built(self):
++        self.pi.broken_build = True
++        self.assertEqual(self.run_ag("install", "pdf"), 1)
++        self.assertIn("aerapdf didn't build", self.err)
++        self.assertIsNone(self.unit("pdfgate"))
++
+     def test_web_browser_needs_memory(self):
+         self.pi.write("/proc/meminfo", "MemTotal:         948304 kB\n")
+         self.assertEqual(self.run_ag("install", "web", "--browser"), 1)
+diff --git a/gateway/test_pdfgate.py b/gateway/test_pdfgate.py
+new file mode 100644
+index 0000000..b05bdd5
+--- /dev/null
++++ b/gateway/test_pdfgate.py
+@@ -0,0 +1,213 @@
++# SPDX-License-Identifier: GPL-2.0-or-later
++# Copyright (C) 2026 AERA | Erez Yaary
++"""Tests for pdfgate: a PDF sent as EConvert and EPDF send it.
++
++The converter is a stand-in (a small script that answers as aerapdf
++does) unless AERAPDF names a real one (EPDF's build/econvert, or the
++Pi's /opt/aera-gateway-pdf/aerapdf) with AERAPDF_FONTS its fonts: then a
++real PDF goes through it too, and its answer is checked byte for byte
++against what aerapdf writes on its own (Direct against Pi).
++"""
++
++import http.client
++import os
++import shutil
++import socket
++import stat
++import subprocess
++import sys
++import tempfile
++import threading
++import unittest
++from http.server import ThreadingHTTPServer
++
++sys.path.insert(0, os.path.dirname(__file__))
++import pdfgate  # noqa: E402
++
++PDF = (b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
++       b"2 0 obj<</Type/Pages/Kids[]/Count 0>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n")
++
++# answers as aerapdf does: progress on stderr, the result written; an input
++# holding FAIL fails, SLOW never ends, and the flags it got are the result
++FAKE = r'''#!/usr/bin/env python3
++import sys, time
++a = sys.argv[1:]
++src, dst = a[-2], a[-1]
++data = open(src, "rb").read()
++if b"FAIL" in data:
++    print("econvert: %s: no pages" % src, file=sys.stderr)
++    sys.exit(1)
++if b"SLOW" in data:
++    time.sleep(60)
++for i in range(0, 1001, 250):
++    print("progress %d 1000" % i, file=sys.stderr, flush=True)
++    time.sleep(0.6)
++open(dst, "wb").write(b"%PDF-converted " + " ".join(a[:-2]).encode())
++'''
++
++
++def raw(port, request, body=b""):
++    """the whole answer to request (bytes), the connection read to its end"""
++    s = socket.create_connection(("127.0.0.1", port), timeout=30)
++    s.sendall(request + body)
++    out = b""
++    while True:
++        b = s.recv(65536)
++        if not b:
++            break
++        out += b
++    s.close()
++    return out
++
++
++def post(port, query, body):
++    head = ("POST /convert%s HTTP/1.1\r\nHost: pi\r\nContent-Length: %d\r\n\r\n" %
++            (query, len(body))).encode()
++    return raw(port, head, body)
++
++
++def final(answer):
++    """the last answer's status, headers' text and body (after any 102s)"""
++    while answer.startswith(b"HTTP/1.1 102"):
++        answer = answer.split(b"\r\n\r\n", 1)[1]
++    head, body = answer.split(b"\r\n\r\n", 1)
++    return int(head.split()[1]), head.decode(), body
++
++
++class Gate(unittest.TestCase):
++    real = None
++
++    @classmethod
++    def setUpClass(cls):
++        cls.dir = tempfile.mkdtemp(prefix="test-pdfgate-")
++        fake = os.path.join(cls.dir, "aerapdf")
++        with open(fake, "w") as f:
++            f.write(FAKE)
++        os.chmod(fake, os.stat(fake).st_mode | stat.S_IEXEC)
++        with open(os.path.join(cls.dir, "SOURCE"), "w") as f:
++            f.write("0123abc\n")
++        pdfgate.Config.aerapdf = fake
++        pdfgate.Config.source = os.path.join(cls.dir, "SOURCE")
++        pdfgate.Config.fonts = cls.dir
++        pdfgate.Config.seconds = 5
++        pdfgate.Config.allow = []
++        cls.srv = ThreadingHTTPServer(("127.0.0.1", 0), pdfgate.Handler)
++        cls.srv.daemon_threads = True
++        cls.port = cls.srv.server_address[1]
++        threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
++
++    @classmethod
++    def tearDownClass(cls):
++        cls.srv.shutdown()
++        shutil.rmtree(cls.dir, ignore_errors=True)
++
++    def setUp(self):
++        pdfgate.Config.aerapdf = os.path.join(self.dir, "aerapdf")
++        pdfgate.Config.fonts = self.dir
++        pdfgate.Config.allow = []
++
++    def test_version(self):
++        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
++        c.request("GET", "/version")
++        r = c.getresponse()
++        self.assertEqual((r.status, r.read()), (200, b"aerapdf 0123abc\n"))
++
++    def test_converted_with_progress(self):
++        a = post(self.port, "?pages=mono&page_width=1280&double=0", PDF)
++        self.assertTrue(a.startswith(b"HTTP/1.1 102 Processing\r\nX-Progress: "), a[:80])
++        self.assertIn(b"X-Progress: 250/1000", a)
++        status, head, body = final(a)
++        self.assertEqual(status, 200)
++        self.assertIn("Content-Type: application/pdf", head)
++        self.assertIn("Content-Length: %d" % len(body), head)
++        self.assertEqual(body, b"%PDF-converted --progress --fonts " + self.dir.encode() +
++                         b" --pages mono --page-width 1280 --normal-pages")
++
++    def test_options_checked(self):
++        for q in ("?pages=all", "?page_width=99999", "?page_width=12a", "?color=1",
++                  "?pages=mono&pages=none", "?double=2", "?picture_width=8",
++                  "?name=../x.pdf", "?name=.hidden", "?name=a/b", "?name=" + "x" * 70):
++            status, _, body = final(post(self.port, q, PDF))
++            self.assertEqual(status, 400, q)
++            self.assertTrue(body.startswith(b"pdfgate: "), body)
++
++    def test_not_a_pdf(self):
++        status, _, body = final(post(self.port, "", b"GIF89a" + b"x" * 100))
++        self.assertEqual((status, body), (415, b"pdfgate: not a PDF\n"))
++
++    def test_too_big(self):
++        old = pdfgate.Config.max_bytes
++        pdfgate.Config.max_bytes = 1000
++        try:
++            a = raw(self.port, b"POST /convert HTTP/1.1\r\nContent-Length: 2000\r\n\r\n")
++        finally:
++            pdfgate.Config.max_bytes = old
++        self.assertEqual(final(a)[0], 413)
++
++    def test_no_length(self):
++        a = raw(self.port, b"POST /convert HTTP/1.1\r\n\r\n")
++        self.assertEqual(final(a)[0], 411)
++
++    def test_failed_says_why_without_paths(self):
++        status, _, body = final(post(self.port, "", PDF + b"FAIL"))
++        self.assertEqual((status, body), (422, b"pdfgate: the PDF: no pages\n"))
++        status, _, body = final(post(self.port, "?name=REPORT.PDF", PDF + b"FAIL"))
++        self.assertEqual((status, body), (422, b"pdfgate: the PDF: no pages\n"))
++
++    def test_too_long(self):
++        status, _, body = final(post(self.port, "", PDF + b"SLOW"))
++        self.assertEqual(status, 504)
++        self.assertIn(b"over 5 s", body)
++
++    def test_no_converter(self):
++        pdfgate.Config.aerapdf = os.path.join(self.dir, "none")
++        self.assertEqual(final(post(self.port, "", PDF))[0], 503)
++
++    def test_only_allowed(self):
++        pdfgate.Config.allow = ["192.168.1.99"]
++        self.assertEqual(final(post(self.port, "", PDF))[0], 403)
++
++    def test_wrong_page(self):
++        status, _, _ = final(raw(self.port, b"GET /etc/passwd HTTP/1.1\r\n\r\n"))
++        self.assertEqual(status, 404)
++
++    def test_nothing_left_behind(self):
++        tmp = tempfile.mkdtemp(prefix="test-pdfgate-tmp-")
++        pdfgate.Config.tmp = tmp
++        try:
++            final(post(self.port, "", PDF))
++            final(post(self.port, "", PDF + b"FAIL"))
++            self.assertEqual(os.listdir(tmp), [])
++        finally:
++            pdfgate.Config.tmp = None
++            shutil.rmtree(tmp, ignore_errors=True)
++
++    @unittest.skipUnless(os.environ.get("AERAPDF"), "AERAPDF names no real aerapdf")
++    def test_real_same_as_direct(self):
++        """a real PDF through the real aerapdf: the same bytes as aerapdf
++        writes on its own (EPDF's Direct mode against the Pi's)"""
++        real = os.path.abspath(os.environ["AERAPDF"])
++        fonts = os.path.abspath(os.environ.get("AERAPDF_FONTS", "/usr/share/fonts/truetype/liberation"))
++        src = os.environ.get("AERAPDF_PDF")
++        if not src:
++            self.skipTest("AERAPDF_PDF names no PDF")
++        pdfgate.Config.aerapdf, pdfgate.Config.fonts = real, fonts
++        old = pdfgate.Config.seconds
++        pdfgate.Config.seconds = 300
++        try:
++            with open(src, "rb") as f:
++                body = f.read()
++            status, _, got = final(post(self.port, "?pages=mono&page_width=640&picture_width=640&name=" +
++                                         os.path.basename(src), body))
++        finally:
++            pdfgate.Config.seconds = old
++        self.assertEqual(status, 200)
++        out = os.path.join(self.dir, "direct.pdf")
++        subprocess.run([real, "--fonts", fonts, "--pages", "mono", "--page-width", "640",
++                        "--picture-width", "640", src, out], check=True, stdout=subprocess.DEVNULL)
++        with open(out, "rb") as f:
++            self.assertEqual(got, f.read())
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/pdf/Makefile b/pdf/Makefile
+new file mode 100644
+index 0000000..7c2d6d2
+--- /dev/null
++++ b/pdf/Makefile
+@@ -0,0 +1,23 @@
++# SPDX-License-Identifier: GPL-2.0-or-later
++# Copyright (C) 2026 AERA | Erez Yaary
++# aerapdf, pdfgate's converter for EConvert and EPDF (EPDF's protocol):
++# built on the Pi when pdf is installed, with cc and make only:
++#
++#   make -C pdf                      pdf/aerapdf
++#
++# Its source is EPDF's converter (src/, the reader and src/conv/; its
++# FreeType, libjpeg, BearSSL and nsgif copies; the Liberation fonts) at
++# the commit in EPDF, copied into epdf/ by tools/sync-pdf.sh and never
++# edited here: what it writes is what EConvert writes on a Falcon, byte
++# for byte. pdfgate runs one a conversion, as its own user, with little
++# memory and time.
++CC  ?= cc
++SRC := $(shell find epdf -name '*.[chS]' -o -name Makefile)
++
++all: aerapdf
++aerapdf: EPDF $(SRC)
++	$(MAKE) -C epdf CC="$(CC)" build/econvert
++	cp epdf/build/econvert $@
++clean:
++	rm -rf aerapdf epdf/build
++.PHONY: all clean
+diff --git a/tools/sync-pdf.sh b/tools/sync-pdf.sh
+new file mode 100755
+index 0000000..c1daa24
+--- /dev/null
++++ b/tools/sync-pdf.sh
+@@ -0,0 +1,30 @@
++#!/bin/sh
++# SPDX-License-Identifier: GPL-2.0-or-later
++# Copyright (C) 2026 AERA | Erez Yaary
++# pdf/epdf/ from EPDF (github.com/whomper/EPDF): what aerapdf, pdfgate's
++# converter, is built from (EPDF's converter and the reader under it, the
++# third-party code it builds with and the Liberation fonts), at COMMIT
++# (default: EPDF's main), and pdf/EPDF that commit. Change those files in
++# EPDF, never here: a change made only in this copy is lost at the next
++# sync, and the Pi's converted PDFs would no longer be EConvert's. Sync at
++# each EPDF release whose converter changed.
++#
++#   tools/sync-pdf.sh [COMMIT]
++set -e
++cd "$(dirname "$0")/.."
++ref=${1:-main}
++tmp=$(mktemp -d)
++trap 'rm -rf "$tmp"' EXIT
++git clone -q --filter=blob:none --no-checkout https://github.com/whomper/EPDF "$tmp/e"
++git -C "$tmp/e" sparse-checkout set --no-cone /Makefile /VERSION /COPYING /src /tools/econvert.c \
++    /common/src /common/third_party/bearssl /common/third_party/libjpeg-turbo /common/third_party/nsgif \
++    /third_party/freetype /third_party/liberation
++git -C "$tmp/e" -c advice.detachedHead=false checkout -q "$ref"
++rm -rf pdf/epdf
++mkdir -p pdf/epdf
++for p in Makefile VERSION COPYING src tools common third_party; do
++	cp -R "$tmp/e/$p" pdf/epdf/
++done
++rm -rf pdf/epdf/build
++git -C "$tmp/e" rev-parse HEAD > pdf/EPDF
++echo "pdf/epdf: EPDF $(cat pdf/EPDF)"
+-- 
+2.43.0
+
