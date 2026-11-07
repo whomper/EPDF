@@ -62,7 +62,14 @@ def run(work, machine):
         park(r)
         r.still()
         text = r.shot("text")
-        r.menu(184, 76)                         # View > Pages
+        # View > Pages, the menu's drop-down checked between its two clicks
+        # (guideline 1.2: a missed click is a FAIL, never a pass)
+        r.click(184, 8)
+        time.sleep(1.5)
+        dropped = r.shot("view-menu")
+        if differ(text, dropped) < 500:
+            bad.append("the View menu didn't drop (%d pixels changed)" % differ(text, dropped))
+        r.click(204, 76)
         t0 = time.time()
         if st:
             time.sleep(4)

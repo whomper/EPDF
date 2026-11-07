@@ -55,12 +55,15 @@ def main(argv):
                     os.path.join(TOP, "third_party", "liberation", "fonts"), plain, conv],
                    check=True, stdout=subprocess.DEVNULL)
     docs = [(plain, "pics", 0), (conv, "pics", 0)]
+    skipped = 0
     for name, (need, secs) in CORPUS.items():
         p = os.path.join(TOP, "build", "pdfs", name + ".pdf")
         if os.path.exists(p):
             docs.append((p, need, secs))
         else:
-            print("  %s: not in build/pdfs (tools/fetch-corpus.py)" % name)
+            # (guideline 1.2: a step not run is said so, never a pass)
+            print("  %s: SKIPPED: not in build/pdfs (tools/fetch-corpus.py)" % name)
+            skipped += 1
     bad = 0
     print("EPDF on %s, %d s a document" % (a.machine, a.seconds))
     for pdf, need, secs in docs:
@@ -79,6 +82,7 @@ def main(argv):
             os.path.splitext(os.path.basename(pdf))[0], res["read"], res["peak"], res["heap"], res["oom"],
             res["pics"], "ok" if not why else "; ".join(why)))
         bad += bool(why)
+    print("lowmem: %s" % ("FAILED, %d" % bad if bad else "passed") + (", %d skipped" % skipped if skipped else ""))
     return 1 if bad else 0
 
 

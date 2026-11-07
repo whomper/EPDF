@@ -24,7 +24,9 @@ def text(exe, path):
 
 def main():
     if not shutil.which("qpdf"):
-        print("crypt: skipped (no qpdf here)")
+        # (guideline 1.2: a step not run is said so, never a pass)
+        print("crypt: SKIPPED: no qpdf on this machine, the encrypted PDFs can't be made")
+        print("crypt: passed, 1 skipped")
         return 0
     exe = os.path.join(TOP, "build", "pdftext")
     bad = 0

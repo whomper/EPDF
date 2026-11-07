@@ -102,6 +102,9 @@ def menu_bar(r, shot, font):
     return differ(bar, ref) if os.path.exists(ref) else None
 
 
+skipped = []           # the steps not run, said in the summary (guideline 1.2)
+
+
 def menu_act(r, what, budget, title_x, row_y):
     """a menu command as an action; gives (what, pixels the screen changed
     by): under MENU_CHANGED is a menu that didn't open or a click that
@@ -200,7 +203,9 @@ def run(work, machine):
         bar = menu_bar(r, first, font)
         if font:
             if bar is None:
-                print("  the menu bar with %s: not compared (no system-font run in this WORK)" % font)
+                # (guideline 1.2: a step not run is said so, never a pass)
+                print("  the menu bar with %s: SKIPPED: no system-font run in this WORK to compare with" % font)
+                skipped.append("menu bar")
             else:
                 print("  the menu bar with %s against the system font's: %d pixels differ  %s"
                       % (font, bar, "ok" if bar == 0 else "NOT THE SAME"))
@@ -251,6 +256,8 @@ def main(argv):
         bad |= b
         if row != "in the shot":
             print("the status bar's job on a book of 400 pages: %s  (%s)" % bar_shot(work, m))
+    print("speed: %s%s" % ("FAILED" if bad else "passed", ", %d skipped (%s)" % (len(skipped), ", ".join(skipped))
+                                                         if skipped else ""))
     return bad
 
 

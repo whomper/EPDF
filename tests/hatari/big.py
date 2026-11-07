@@ -134,7 +134,11 @@ def main(argv):
         bad += not ok
         print("  %-26s %5d %6d %6d %4d %6d %4d %5d %s%s" % (res["name"], res["read"], res["peak"], res["heap"], res["oom"],
               res["failed"], res["lost"], res["pics"], "" if ok else "FAIL ", ", ".join(notes)), flush=True)
-    print("all passed" if not bad else "%d didn't" % bad)
+    # (guideline 1.2: no "passed" over nothing run)
+    if not results:
+        print("FAIL no document was run (build/pdfs: tools/fetch-corpus.py)")
+        return 1
+    print("passed, %d documents" % len(results) if not bad else "%d of %d didn't" % (bad, len(results)))
     return 1 if bad else 0
 
 
