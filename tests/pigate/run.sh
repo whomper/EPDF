@@ -20,8 +20,8 @@ if [ -z "$in" ]; then
 	python3 -c 'import sys; sys.path.insert(0, "tests/hatari"); from pdfgen import make_pdf, book; make_pdf(sys.argv[1], book(6))' "$in"
 fi
 make -s build/econvert
-cc -O1 -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare -fsanitize=address,undefined \
-   -Itests/pigate/stub -Icommon/src -Isrc -o "$w/test_pigate" tests/pigate/test_pigate.c src/pigate.c \
+cc -O1 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-sign-compare -fsanitize=address,undefined \
+   -Isrc -Icommon/src -o "$w/test_pigate" tests/pigate/test_pigate.c src/pigate.c \
    common/src/conn.c common/src/tls_none.c common/src/util.c src/pdfio_host.c src/conv/cvio_host.c
 echo "aerapdf test" > "$w/SOURCE"
 port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
