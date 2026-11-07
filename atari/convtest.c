@@ -5,12 +5,16 @@
  * C:\IN.PDF converted to C:\OUT.PDF with the fonts in C:\FONTS and the
  * settings in C:\CONVTEST.CFG ("pages none|mono|colour photos
  * indexed|jpeg"), a JSON line through NatFeats for each page (its time)
- * and one for the file (tests/hatari/convtest.py).
+ * and one for the file (tests/hatari/convtest.py). "render" in the
+ * settings: each page only drawn, at 600 pixels (what EPDF's stage 2
+ * would draw for a window), its time a line: no conversion.
  */
 #include <stdio.h>
 #include <string.h>
 #include "tos.h"
 #include "conv.h"
+#include "pdf.h"
+#include "render.h"
 
 long pdf_ms(void);
 extern long heap_peak;
@@ -54,6 +58,27 @@ int main(void)
 			o.pages = CV_PAGES_COLOUR;
 		if (strstr(cfg, "photos jpeg"))
 			o.photos = CV_PHOTOS_JPEG;
+	}
+	if (strstr(cfg, "render")) {
+		static PDOC d;
+		static RPAGE r;
+		long pg;
+
+		render_font_budget = (long)Malloc(-1L) / 4;
+		if (pdf_open(&d, "C:\\IN.PDF") || render_init(&r, &d, "C:\\FONTS")) {
+			nf_debug("{\"failed\":\"open\"}\nCONVTEST done\n");
+			return 1;
+		}
+		for (pg = 0; pg < pdf_pages(&d); pg++) {
+			long t = pdf_ms();
+			int rc = render_page(&r, pg, 600);
+
+			snprintf(b, sizeof b, "{\"page\":%ld,\"render_ms\":%ld,\"rc\":%d,\"glyphs\":%ld,\"images\":%ld}\n",
+				 pg + 1, pdf_ms() - t, rc, r.glyphs, r.images);
+			nf_debug(b);
+		}
+		nf_debug("CONVTEST done\n");
+		return 0;
 	}
 	t0 = last = pdf_ms();
 	if (cv_convert("C:\\IN.PDF", "C:\\OUT.PDF", &o, &st, err, sizeof err))
