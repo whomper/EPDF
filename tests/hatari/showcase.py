@@ -193,8 +193,10 @@ def truetype(doc, text):
     """Liberation Sans subset to text's letters, as a Type0 font
     (Identity-H): the font object, and how to encode a string in it"""
     import os
+    import logging
     from fontTools import subset
     from fontTools.ttLib import TTFont
+    logging.getLogger("fontTools").setLevel(logging.ERROR)    # ("FFTM NOT subset": nothing of ours)
     here = os.path.dirname(os.path.abspath(__file__))
     src = os.path.join(here, "..", "..", "third_party", "liberation", "fonts", "sans.ttf")
     opts = subset.Options()
