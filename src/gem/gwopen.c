@@ -30,8 +30,8 @@ void log_event(const char *what, const char *a, const char *b);	/* (epdf.c's, th
 
 static CORO main_co, job_co;
 static char *stack;
-static int started, busy, finished, rc, waiting, net_ready;
-static long done, total;
+static int started, busy, finished, rc, waiting, net_ready, phase;
+static long done, total, part, whole;	/* (part, whole: the phase's bytes) */
 static unsigned long slice_end;
 static char in_path[256], out_path[256], host[64], err[120];
 static unsigned short port;
@@ -42,14 +42,19 @@ static void idle(void)
 		coro_switch(&job_co, &main_co);
 }
 
-static int progress(void *u, int phase, long d, long t)
+static int progress(void *u, int ph, long d, long t)
 {
 	(void)u;
 	if (t <= 0)
 		t = 1;
-	waiting = phase == PG_WORK && d == 0;
+	waiting = ph == PG_WORK && d == 0;
+	phase = ph;
+	if (ph != PG_WORK) {
+		part = d;
+		whole = t;
+	}
 	total = 1000;
-	done = phase == PG_SEND ? d * 100 / t : phase == PG_WORK ? 100 + d * 800 / t : 900 + d * 100 / t;
+	done = ph == PG_SEND ? d * 100 / t : ph == PG_WORK ? 100 + d * 800 / t : 900 + d * 100 / t;
 	idle();
 	return 0;
 }
@@ -166,6 +171,8 @@ int gw_start(const char *pdf, const char *h, unsigned short p)
 	port = p;
 	busy = 1;
 	finished = waiting = 0;
+	phase = PG_SEND;
+	part = whole = 0;
 	done = 0;
 	total = 1000;
 	conn_stop = 0;
@@ -199,6 +206,24 @@ int gw_progress(long *d, long *t)
 	*d = done;
 	*t = total;
 	return waiting;
+}
+
+/* the status line's words for where it is (guideline 7.3, Erez 7 Nov
+   2026: the three phases): "Sending to the Gateway... 12 KB", "The
+   Gateway is converting...", "Receiving from the Gateway... 40 KB"; the
+   bytes of the phase in *d of *t (0 of 0 while it converts) */
+const char *gw_words(char *w, int n, long *d, long *t)
+{
+	if (phase == PG_SEND || phase == PG_RECV) {
+		snprintf(w, (size_t)n, "%s the Gateway... %ld KB", phase == PG_SEND ? "Sending to" : "Receiving from",
+			 (part + 1023) / 1024);
+		*d = part;
+		*t = whole;
+	} else {
+		snprintf(w, (size_t)n, waiting ? "Waiting for the Gateway" : "The Gateway is converting...");
+		*d = *t = 0;
+	}
+	return w;
 }
 
 int gw_result(char *copy, int ncopy, char *why, int nwhy)

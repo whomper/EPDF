@@ -19,6 +19,8 @@ int gw_slice(int ms);
 void gw_stop(void);
 /* how far (thousandths); 1 while the Gateway hasn't begun it */
 int gw_progress(long *done, long *total);
+/* the status line's words for where it is, and the phase's bytes */
+const char *gw_words(char *w, int n, long *done, long *total);
 /* how it ended: pg_convert's 0, -1 (why), -2 stopped, -3 no answer; the copy */
 int gw_result(char *copy, int ncopy, char *why, int nwhy);
 const char *gw_host(void);

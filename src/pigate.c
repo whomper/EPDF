@@ -134,6 +134,8 @@ int pg_convert(const char *host, unsigned short port, const PGOPT *o, const char
 	}
 	snprintf(line, sizeof line, "POST /convert%s HTTP/1.1\r\nHost: %s\r\nContent-Type: application/pdf\r\n"
 		 "Content-Length: %ld\r\nConnection: close\r\n\r\n", q, host, size);
+	if (conn_phase)
+		conn_phase(GATE_SEND, (long)strlen(line) + size);	/* (guideline 7.3: the three phases) */
 	if (!conn_write(c, line, (long)strlen(line)))
 		goto lost;
 	for (off = 0; off < size; off += PIECE) {
@@ -152,7 +154,10 @@ int pg_convert(const char *host, unsigned short port, const PGOPT *o, const char
 	}
 	pdf_os_close(src);
 	src = NULL;
-	/* the Pi's answers: 102s while it works, then the last one */
+	if (conn_phase)
+		conn_phase(GATE_WAIT, 0);
+	/* the Gateway's answers: 102s while it works (still GATE_WAIT: they are
+	   no part of the answer), then the last one, after the work */
 	c->timeout_ms = WORK_MS;
 	for (;;) {
 		status = head(c, &b, &length, &done, &total);
@@ -191,6 +196,8 @@ int pg_convert(const char *host, unsigned short port, const PGOPT *o, const char
 		say(err, errlen, "the Pi sent nothing");
 		goto done;
 	}
+	if (conn_phase)
+		conn_phase(GATE_RECEIVE, length);
 	dst = cv_create(out);
 	if (!dst) {
 		say(err, errlen, "cannot write the converted file");
@@ -228,6 +235,8 @@ lost:
 	else if (!err[0])
 		say(err, errlen, "the connection to the Pi was lost");
 done:
+	if (conn_phase)
+		conn_phase(GATE_DONE, 0);
 	if (c)
 		conn_close(c);
 	if (src)

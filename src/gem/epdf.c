@@ -963,10 +963,8 @@ static void progress(void)
 	} else if (gw_busy()) {
 		long d, t;
 
-		if (gw_progress(&d, &t))
-			win_progress(6, "Waiting for the Gateway", 0, 0);
-		else
-			win_progress(6, "Converting on the Gateway", d, t);
+		gw_words(w, sizeof w, &d, &t);	/* (the three phases: guideline 7.3) */
+		win_progress(6, w, d, t);
 	} else if (rp >= 0 && (!pic || (rp >= p0 && rp <= p1))) {
 		snprintf(w, sizeof w, "Reading page %ld of %ld", rp + 1, n);
 		win_progress(1, w, doc_read() * 1000L + pm, n * 1000L);

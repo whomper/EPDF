@@ -375,6 +375,8 @@ static void out_path(const char *in, char *out, long n)
    (sending its first tenth, the Gateway's work the next eight, the
    converted PDF the last), conn.c's waits a turn each (pf_idle) */
 static int gate_waiting;		/* the Gateway hasn't begun this one yet */
+static int gate_phase = -1;		/* PG_SEND, PG_WORK, PG_RECV; -1 none */
+static long gate_part;			/* the bytes of the phase so far */
 static int net_ready;
 
 static void gate_idle(void)
@@ -389,6 +391,9 @@ static int gate_progress(void *u, int phase, long done, long total)
 	if (total <= 0)
 		total = 1;
 	gate_waiting = phase == PG_WORK && done == 0;
+	gate_phase = phase;
+	if (phase != PG_WORK)
+		gate_part = done;
 	cur_total = 1000;
 	cur_done = phase == PG_SEND ? done * 100 / total : phase == PG_WORK ? 100 + done * 800 / total :
 		   900 + done * 100 / total;
@@ -423,6 +428,7 @@ static int on_the_gateway(const char *in, const char *out, char *err, int errlen
 	r = pg_convert(gate_host, gate_port, &po, in, out, gate_progress, NULL, err, errlen);
 	pf_idle = NULL;
 	gate_waiting = 0;
+	gate_phase = -1;
 	if (r == -3) {
 		gate_off = 1;
 		snprintf(gate_why, sizeof gate_why, "%s", err);
@@ -569,9 +575,16 @@ static void progress_texts(void)
 	if (!working)
 		return;
 	left(a, sizeof a, share_file(), t_file);
-	if (gate_waiting)
-		snprintf(a, sizeof a, "waiting for the Gateway");
-	snprintf(s_file, sizeof s_file, "File %d of %d: %.24s  %s", cur + 1, nfiles, base_of(files[cur].path), a);
+	/* the three phases (guideline 7.3, Erez 7 Nov 2026) */
+	if (gate_phase == PG_SEND || gate_phase == PG_RECV)
+		snprintf(a, sizeof a, "%s the Gateway... %ld KB", gate_phase == PG_SEND ? "Sending to" : "Receiving from",
+			 (gate_part + 1023) / 1024);
+	else if (gate_phase == PG_WORK)
+		snprintf(a, sizeof a, gate_waiting ? "Waiting for the Gateway" : "The Gateway is converting...");
+	if (gate_phase >= 0)	/* (the phase's words take the name's room) */
+		snprintf(s_file, sizeof s_file, "File %d of %d: %s", cur + 1, nfiles, a);
+	else
+		snprintf(s_file, sizeof s_file, "File %d of %d: %.24s  %s", cur + 1, nfiles, base_of(files[cur].path), a);
 	left(a, sizeof a, share_batch(), t_batch);
 	snprintf(s_batch, sizeof s_batch, "The batch: %s", a);
 }
