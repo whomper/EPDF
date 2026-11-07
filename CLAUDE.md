@@ -24,6 +24,7 @@ These come from AERA-Atari's repo template and are the same in every app's CLAUD
   drawing, a loop over the data or the start gives its `AESGAP` stretches on `ST` and `Falcon-4`,
   before and after, in its commit message. A GEM release passes the speed rig within the
   guidelines' times.
+- **A new capability goes to the hub first** (Erez, 5 Nov 2026; guidelines 1.2): before building anything the family might share (a keyboard, a dialog, a format, a protocol, a helper, a setting), ask the hub whether `common/` has it or should get it. Never write your own copy.
 - **Shared code lives in [AERA-Atari](https://github.com/whomper/AERA-Atari).** Files under `common/` come from it. Change them
   there, not here, and pull them in with `tools/sync-common.sh`. A fix made only in this repo will drift
   again.
@@ -38,17 +39,17 @@ These come from AERA-Atari's repo template and are the same in every app's CLAUD
   commit built programs, help files or certificates (`binary/`, `dist/`). Never reuse a number.
 - **Only formal releases leave the build machine.** Erez gets vX.Y releases made by the Release workflow from
   `main`, nothing else: no test builds, no CI artifacts, no builds from a branch.
-  Work lands on `main`; to try a fix on real hardware, release it. If a release doesn't work, roll back
-  with a release: revert on `main`, release the next number, and run the Withdraw workflow
-  (`.github/workflows/withdraw.yml`) on the bad one: it puts "Withdrawn: use vX.Y" at the top of its notes.
+  Work lands on `main`; to try a fix on real hardware, release it. If a release doesn't work, fix
+  forward: a new release with the next number, before any other work; never a rollback (Erez, 7 Nov 2026).
 - **Releases go out without asking Erez** (his decision, 23 Oct 2026; guidelines 1.2). Release when
   work on `main` is ready:
   - this repo's checks pass;
-  - the rigs on his TOS pass, where this file asks for them;
-  - the hub's family checks pass.
+  - the rigs this file asks for pass (on EmuTOS where the session has nothing else).
 
-  Then give Erez the link in one line, with anything he has to do, and send the hub the link. Roll
-  back a bad release the same way.
+  Then give Erez the link in one line, with anything he has to do, and send the hub the link. The
+  hub's checks (Erez's TOS and NVDI, the configurations of AERA-Atari's standards/TEST-MATRIX.md) follow
+  the release; a fault they find is fixed forward by a new release that comes before any other work.
+  Decisions that are his still go to him first.
 - **Who decides what** (Erez, 31 Oct 2026; the guidelines' "Who decides what"). Erez's part, put
   to him before the work as a decision with a short context:
   - new programs and ideas, their core capabilities, and how they work with the other programs;
@@ -315,9 +316,12 @@ at first. This section is kept up to date: the build, the tests, what a release 
   The extractor marks a picture as a line "\x7F<object> <w>x<h>" in the page's text.
 - **Governance:** the hub owns AERA-Atari and `common/`. Never change `common/` here: pull it with
   `tools/sync-common.sh`; a needed change goes to the hub as a patch (`git format-patch`, plain text)
-  with its reason and tests. Before every release send the hub the candidate commit and the checks
-  (it runs `common/tests/family/acc_all.py` and the rest and answers "clear" or what failed); after
-  the release send it the link. Ask the hub before copying anything from another app.
+  with its reason and tests. A release goes out when this repo's checks and rigs pass (Erez, 7 Nov
+  2026: the hub's checks no longer hold it); then send the hub the commit and the link. Its checks on
+  Erez's TOS and NVDI follow, and a fault they find is fixed forward first. Gateway code (pdfgate,
+  aerapdf) reaches the Pi only through the AERA-Gateway session, and a release that needs it names the
+  Gateway version and goes out after it (guideline 7.3). Ask the hub before copying anything from
+  another app.
 - **Licences:** everything must be GPL-2.0-or-later compatible. No MuPDF (AGPL), nothing else
   incompatible. FreeType (FTL/GPLv2) is fine and works in fixed point. Third-party code lives in
   `third_party/<name>/` at a pinned version with its README and any patches as patch files (EWeb's
