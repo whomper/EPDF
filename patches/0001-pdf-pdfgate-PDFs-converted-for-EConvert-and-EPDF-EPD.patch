@@ -1,4 +1,4 @@
-From 2836d222655d6052242e47a8248f6a1b1dcf1128 Mon Sep 17 00:00:00 2001
+From 6547e24ff57ce3101a0aa11ce870344194501bd7 Mon Sep 17 00:00:00 2001
 From: AERA | Erez Yaary <yaary@me.com>
 Date: Sat, 7 Nov 2026 05:53:59 +0000
 Subject: [PATCH] pdf: pdfgate, PDFs converted for EConvert and EPDF (EPDF's
@@ -24,8 +24,9 @@ has no pdf/. Port 8380 and gcc and make on the Pi: Erez's OK, 7 Nov.
 Review (the Gateway session): the PDF and the result each in a folder of
 their own (name=out), a 422's words to the Atari and not to the log, an
 Atari waiting for its turn told so every 5 s (102, X-Progress: 0/1000),
-the limits set with prlimit once aerapdf runs (not preexec_fn).
-Tests: test_pdfgate (16: options, refusals, limits, progress, nothing
+the limits set with prlimit once aerapdf runs (not preexec_fn); -v logs
+each request's method and page without its query (the PDF's name).
+Tests: test_pdfgate (17: options, refusals, limits, progress, nothing
 left on disk, the real aerapdf against its Direct output), test_installer
 (test_pdf, test_pdf_not_built). The protocol: EPDF's docs/PI-GATEWAY.md.
 
@@ -36,12 +37,12 @@ Claude-Session: https://claude.ai/code/session_01SZeNoDLt48EM4msuao4J1n
  README.md                 |   2 +
  gateway/README.md         |  28 +++
  gateway/aera-gateway      | 115 +++++++++++-
- gateway/pdfgate.py        | 367 ++++++++++++++++++++++++++++++++++++++
+ gateway/pdfgate.py        | 370 ++++++++++++++++++++++++++++++++++++++
  gateway/test_installer.py |  51 +++++-
- gateway/test_pdfgate.py   | 246 +++++++++++++++++++++++++
+ gateway/test_pdfgate.py   | 260 +++++++++++++++++++++++++++
  pdf/Makefile              |  23 +++
  tools/sync-pdf.sh         |  30 ++++
- 9 files changed, 858 insertions(+), 6 deletions(-)
+ 9 files changed, 875 insertions(+), 6 deletions(-)
  create mode 100644 gateway/pdfgate.py
  create mode 100644 gateway/test_pdfgate.py
  create mode 100644 pdf/Makefile
@@ -273,10 +274,10 @@ index 92484ce..e5863ef 100755
              serial = svc.installed(pi) and "--serial" in CLAUDE.get_var(pi, "CLAUDE_ST_ARGS")
 diff --git a/gateway/pdfgate.py b/gateway/pdfgate.py
 new file mode 100644
-index 0000000..8346623
+index 0000000..95cf3e5
 --- /dev/null
 +++ b/gateway/pdfgate.py
-@@ -0,0 +1,367 @@
+@@ -0,0 +1,370 @@
 +#!/usr/bin/env python3
 +# SPDX-License-Identifier: GPL-2.0-or-later
 +# Copyright (C) 2026 AERA | Erez Yaary
@@ -415,9 +416,12 @@ index 0000000..8346623
 +    server_version = "pdfgate/" + VERSION
 +    timeout = 120                       # a connection silent this long is closed
 +
-+    def log_message(self, fmt, *args):  # (the note() lines only)
-+        if Config.verbose:
-+            aeragate.say("pdfgate: " + fmt % args)
++    def log_message(self, fmt, *args):
++        """-v: each request, its method and page only (the query names the
++        PDF: never in the log)"""
++        if Config.verbose and getattr(self, "command", None):
++            aeragate.say("pdfgate: %s %s %s" % (self.client_address[0], self.command,
++                                                 urlsplit(self.path).path[:40]))
 +
 +    def note(self, status, n_in, n_out, more=""):
 +        aeragate.say("pdfgate: %s %d, %d bytes in, %d out%s" %
@@ -730,10 +734,10 @@ index 5d588ce..4d1ec3e 100644
          self.assertIn("--allow 192.168.1.50", self.execstart("ecalgate"))
 diff --git a/gateway/test_pdfgate.py b/gateway/test_pdfgate.py
 new file mode 100644
-index 0000000..a4302be
+index 0000000..1bf9dba
 --- /dev/null
 +++ b/gateway/test_pdfgate.py
-@@ -0,0 +1,246 @@
+@@ -0,0 +1,260 @@
 +# SPDX-License-Identifier: GPL-2.0-or-later
 +# Copyright (C) 2026 AERA | Erez Yaary
 +"""Tests for pdfgate: a PDF sent as EConvert and EPDF send it.
@@ -906,6 +910,20 @@ index 0000000..a4302be
 +        self.assertEqual((status, body), (422, b"pdfgate: the PDF: no pages\n"))
 +        self.assertIn("422", err.getvalue())
 +        self.assertNotIn("no pages", err.getvalue())
++
++    def test_verbose_names_no_file(self):
++        """-v logs each request without its query (the PDF's name)"""
++        import contextlib
++        import io
++        err = io.StringIO()
++        pdfgate.Config.verbose = True
++        try:
++            with contextlib.redirect_stderr(err):
++                final(post(self.port, "?name=SECRET.PDF", PDF))
++        finally:
++            pdfgate.Config.verbose = False
++        self.assertIn("POST /convert", err.getvalue())
++        self.assertNotIn("SECRET", err.getvalue())
 +
 +    def test_waiting_told(self):
 +        """a second Atari, while the first converts, hears 0/1000 until its turn"""
