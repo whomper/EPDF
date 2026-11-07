@@ -1,4 +1,4 @@
-From 61cc0960815beb3ea7584dd6a2db40bce63a8f8f Mon Sep 17 00:00:00 2001
+From 4e89f951d714630099ebf0a99dbd91d3ca36fff0 Mon Sep 17 00:00:00 2001
 From: AERA | Erez Yaary <yaary@me.com>
 Date: Sat, 7 Nov 2026 05:53:59 +0000
 Subject: [PATCH] pdf: pdfgate, PDFs converted for EConvert and EPDF (EPDF's
@@ -18,8 +18,9 @@ file. GET /version answers which EPDF commit it is.
 
 aera-gateway: the pdf service (Pdf: port 8380, --allow, -v; aerapdf
 built in prepare(), kept when built from the same pdf/, its fonts and
-SOURCE in /opt/aera-gateway-pdf, removed with it); install all leaves it
-out unless it is installed (a build of minutes, for two apps only).
+SOURCE in /opt/aera-gateway-pdf, removed with it); install all includes
+it (Erez, 7 Nov), and skips it only in an app's copy of gateway/, which
+has no pdf/. Port 8380 and gcc and make on the Pi: Erez's OK, 7 Nov.
 Tests: test_pdfgate (13: options, refusals, limits, progress, nothing
 left on disk, the real aerapdf against its Direct output), test_installer
 (test_pdf, test_pdf_not_built). The protocol: EPDF's docs/PI-GATEWAY.md.
@@ -29,14 +30,14 @@ Claude-Session: https://claude.ai/code/session_01SZeNoDLt48EM4msuao4J1n
 ---
  .gitignore                |   2 +
  README.md                 |   2 +
- gateway/README.md         |  29 ++++
- gateway/aera-gateway      | 116 ++++++++++++-
+ gateway/README.md         |  28 ++++
+ gateway/aera-gateway      | 115 ++++++++++++-
  gateway/pdfgate.py        | 335 ++++++++++++++++++++++++++++++++++++++
- gateway/test_installer.py |  48 +++++-
+ gateway/test_installer.py |  51 +++++-
  gateway/test_pdfgate.py   | 213 ++++++++++++++++++++++++
  pdf/Makefile              |  23 +++
  tools/sync-pdf.sh         |  30 ++++
- 9 files changed, 793 insertions(+), 5 deletions(-)
+ 9 files changed, 793 insertions(+), 6 deletions(-)
  create mode 100644 gateway/pdfgate.py
  create mode 100644 gateway/test_pdfgate.py
  create mode 100644 pdf/Makefile
@@ -73,7 +74,7 @@ index 22669df..29606dd 100644
  Use the Pi's address, not its name: plain TOS with STinG can't always
  look names up on the home network. On a Falcon or TT, EMail, ECal,
 diff --git a/gateway/README.md b/gateway/README.md
-index c72d74e..a3a93e1 100644
+index c72d74e..91037b1 100644
 --- a/gateway/README.md
 +++ b/gateway/README.md
 @@ -53,6 +53,7 @@ sudo aera-gateway install dav --allow ATARI_IP
@@ -84,7 +85,7 @@ index c72d74e..a3a93e1 100644
  ```
  
  `install all --allow ATARI_IP --mail IMAP SMTP[:587] [POP3] [--browser]`
-@@ -292,6 +293,34 @@ enable-linger webgate`). The profile is then in
+@@ -292,6 +293,33 @@ enable-linger webgate`). The profile is then in
  `/var/lib/webgate/snap/chromium/common/browser`, and the snap's own
  confinement is the browser's sandbox. The same command sets it all up.
  
@@ -103,8 +104,7 @@ index c72d74e..a3a93e1 100644
 +copied into `pdf/` by `tools/sync-pdf.sh` at a named EPDF commit) built
 +for the Pi. `install pdf` builds it (a few minutes; it installs gcc and
 +make if they aren't there) and puts its fonts beside it in
-+`/opt/aera-gateway-pdf`. `install all` leaves it out: install it on its
-+own.
++`/opt/aera-gateway-pdf`. `install all` includes it.
 +
 +In EConvert and EPDF on the Atari, the Pi converter: Pi gateway = the
 +Pi's IP address, port 8380. Check it from any browser on your network:
@@ -120,7 +120,7 @@ index c72d74e..a3a93e1 100644
  
  The bridge is ClaudeST's own (it changes with `CLAUDEST.PRG`);
 diff --git a/gateway/aera-gateway b/gateway/aera-gateway
-index 92484ce..86a1828 100755
+index 92484ce..e5863ef 100755
 --- a/gateway/aera-gateway
 +++ b/gateway/aera-gateway
 @@ -55,7 +55,7 @@ PROG = sys.argv[0] if sys.argv[0].endswith("aera-gateway") else "aera-gateway"
@@ -257,13 +257,12 @@ index 92484ce..86a1828 100755
  
  
  def service(name):
-@@ -1501,6 +1607,10 @@ def install_all(pi, o, src=HERE):
+@@ -1501,6 +1607,9 @@ def install_all(pi, o, src=HERE):
          if svc is MAIL and not o.mail and not svc.installed(pi) and not pi.exists(Mail.STUNNEL):
              skipped.append("mail (name your provider's servers: --mail IMAP SMTP[:587] [POP3])")
              continue
-+        if svc.key == "pdf" and not svc.installed(pi):
-+            # (a converter built on the Pi: minutes, and only for EConvert and EPDF)
-+            skipped.append("pdf (EConvert and EPDF's converter: sudo %s install pdf --allow ATARI_IP)" % PROG)
++        if svc.key == "pdf" and not os.path.isdir(os.path.join(Pdf.PDF_SRC, "epdf")):
++            skipped.append("pdf (EPDF's converter comes only with AERA-Gateway itself, not an app's copy)")
 +            continue
          if svc is CLAUDE:
              argv = ["--from", o.source] if o.source else []
@@ -610,7 +609,7 @@ index 0000000..58ddcd5
 +if __name__ == "__main__":
 +    main()
 diff --git a/gateway/test_installer.py b/gateway/test_installer.py
-index 5d588ce..b749d69 100644
+index 5d588ce..4d1ec3e 100644
 --- a/gateway/test_installer.py
 +++ b/gateway/test_installer.py
 @@ -44,6 +44,7 @@ class FakePi(ag.Pi):
@@ -683,6 +682,16 @@ index 5d588ce..b749d69 100644
      def test_web_browser_needs_memory(self):
          self.pi.write("/proc/meminfo", "MemTotal:         948304 kB\n")
          self.assertEqual(self.run_ag("install", "web", "--browser"), 1)
+@@ -710,7 +754,8 @@ class ClaudeTest(Base):
+             self.assertIn("--allow 192.168.1.50", self.execstart(name), name)
+         self.assertIn("imap.mail.me.com smtp.mail.me.com:587", self.execstart("emailgate"))
+         self.assertIn("--tcp 0.0.0.0:2323 --allow 192.168.1.50", self.pi.read(self.conf))
+-        self.assertIn("Installed: mail, dav, ftp, web, claude", self.out)
++        self.assertIn("Installed: mail, dav, ftp, web, %sclaude" %
++                      ("pdf, " if os.path.isdir(os.path.join(ag.Pdf.PDF_SRC, "epdf")) else ""), self.out)
+         # again, without --mail or --allow: everything kept as it is
+         self.assertEqual(self.run_ag("install", "all", "--from", self.src), 0, self.err)
+         self.assertIn("--allow 192.168.1.50", self.execstart("ecalgate"))
 diff --git a/gateway/test_pdfgate.py b/gateway/test_pdfgate.py
 new file mode 100644
 index 0000000..b05bdd5
