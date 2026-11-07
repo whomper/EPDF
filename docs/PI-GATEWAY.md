@@ -1,20 +1,22 @@
-# The Pi converter (pdfgate)
+# Gateway mode: PDFs converted by the Gateway (pdfgate)
 
-EConvert and EPDF can have a PDF converted by the Raspberry Pi instead of
-by the Atari itself: the PDF goes to pdfgate, AERA-Gateway's `pdf`
+EConvert and EPDF can have a PDF converted by the Gateway (AERA-Gateway
+on a Raspberry Pi) instead of by the Atari itself: the PDF goes to pdfgate, AERA-Gateway's `pdf`
 service, and the converted PDF comes back. The converted file is the same,
 byte for byte, as EConvert writes on a Falcon with the same settings
-(`CONVERTED-PDF.md`): the Pi runs `aerapdf`, which is EPDF's own converter
+(`CONVERTED-PDF.md`): the Gateway runs `aerapdf`, which is EPDF's own converter
 (`tools/econvert.c` and `src/conv/`) built for Linux.
 
-The Pi's side lives in AERA-Gateway (`gateway/pdfgate.py`, `pdf/`), its
+The Gateway's side lives in AERA-Gateway (`gateway/pdfgate.py`, `pdf/`), its
 copy of the converter taken from this repository by its
 `tools/sync-pdf.sh` at a named commit. The protocol is EPDF's: a change to
-it is made here first, then in pdfgate.
+it is made here first, then in pdfgate. Everything the user sees says
+"Gateway" (guideline 7.3, Erez 7 Nov); "Raspberry Pi" only for the
+hardware and its install steps.
 
 ## The exchange
 
-HTTP/1.1 over a plain TCP connection to the Pi (port 8380 by default), one
+HTTP/1.1 over a plain TCP connection to the Gateway (port 8380 by default), one
 PDF per connection. EConvert and EPDF send:
 
     POST /convert?pages=mono&photos=indexed&pictures=screen&page_width=640&picture_width=640&double=1&name=REPORT.PDF HTTP/1.1
@@ -39,7 +41,7 @@ EConvert's settings:
 (`/Name`): letters, digits, `_`, `.`, `-` and spaces, at most 64, not
 starting with a dot. Anything else in the query is refused.
 
-While the Pi converts, it answers with interim responses, at most two a
+While the Gateway converts, it answers with interim responses, at most two a
 second:
 
     HTTP/1.1 102 Processing
@@ -58,32 +60,32 @@ them), and then one final response:
 | 400    | an option or value it doesn't take                    |
 | 403    | the Atari isn't on the home network, or not `--allow`ed |
 | 411    | no `Content-Length`                                   |
-| 413    | the PDF is bigger than the Pi takes (64 MB)           |
+| 413    | the PDF is bigger than the Gateway takes (64 MB)           |
 | 415    | the body isn't a PDF                                  |
 | 422    | the converter couldn't convert it (its reason)        |
-| 503    | no converter on the Pi                                |
+| 503    | no converter on the Gateway                               |
 | 504    | the conversion took too long (600 s)                  |
 
 The connection closes after the final response.
 
-`GET /version` answers `aerapdf COMMIT`: the EPDF commit the Pi's
+`GET /version` answers `aerapdf COMMIT`: the EPDF commit the Gateway's
 converter was built from.
 
 ## On the Atari
 
-- Through common's `net_tos.c` (STinG, MiNTnet, MagiC-Net); the Pi by its
+- Through common's `net_tos.c` (STinG, MiNTnet, MagiC-Net); the Gateway by its
   address (`PI_IP`), not its name.
 - The PDF is read from disk and the result written to disk a piece at a
   time: nothing is held whole, so an ST with 1 MB can do it.
 - Esc stops it; the window is answered between pieces, within the
   family's times.
-- With the Pi converter off, nothing of this runs and nothing is sent.
-- The log names the Pi and the bytes, never a file's name or contents.
+- With Gateway mode off, nothing of this runs and nothing is sent.
+- The log names the Gateway and the bytes, never a file's name or contents.
 
-## On the Pi
+## On the Gateway (the Raspberry Pi)
 
 `sudo aera-gateway install pdf --allow ATARI_IP` builds `aerapdf` (with
 `cc` and `make`) and starts pdfgate. One conversion at a time, each with
-600 s and 768 MB at most; the PDF and the result are on the Pi's disk
+600 s and 768 MB at most; the PDF and the result are on the Gateway's disk
 only while it runs. The log says who converted how many bytes, never the
 file's name or what is in it.
