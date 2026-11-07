@@ -15,6 +15,11 @@ starts with CONVERT=gateway and two PDFs; Return converts. Checked:
 - an ST shows This Atari disabled (shot), and converts nothing itself;
 - the Gateway's log names no file;
 - a Gateway that isn't there: the alert, and the files stay in the list.
+Then EPDF with Open on the Gateway ticked (GATEWAY=1): a book opened is
+shown, converted by the Gateway meanwhile into C:\\atari\\BOOK.PDF (byte
+for byte the direct conversion with EPDF's sizes) and opened in its place
+(the Optimised badge: a shot); opened again, the copy at once, nothing
+sent; no Gateway: the alert, the book stays shown.
 """
 import os
 import shutil
@@ -125,6 +130,58 @@ def run(work, machine, port, there=True):
     return bad
 
 
+def direct_same(src, sizes, got, work):
+    """got is byte for byte build/econvert's own conversion of src with sizes"""
+    want = os.path.join(work, "direct-" + os.path.basename(src))
+    subprocess.run([os.path.join(TOP, "build", "econvert"), "--fonts", FONTS, "--pages", "mono",
+                    "--photos", "indexed", "--pictures", "screen", "--page-width", sizes[0],
+                    "--picture-width", sizes[1], src, want], check=True, stdout=subprocess.DEVNULL)
+    return os.path.exists(got) and open(got, "rb").read() == open(want, "rb").read()
+
+
+def run_epdf(work, machine, port, there=True):
+    r = speed.Rig(os.path.join(work, "epdf-" + machine.replace(":", "_") + ("" if there else "-none")), machine,
+                  display=os.environ.get("XDISPLAY", ":91"))
+    bad = []
+    try:
+        r.extra += r.m.network()
+        os.makedirs(os.path.join(r.hd, "EPDF"))
+        os.makedirs(os.path.join(r.hd, "DOCS"))
+        shutil.copy(os.path.join(TOP, "binary", "EPDF.PRG"), os.path.join(r.hd, "EPDF", "EPDF.PRG"))
+        r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
+        src = os.path.join(r.hd, "DOCS", "BOOK.PDF")
+        make_pdf(src, book(4))
+        r.write("EPDF/epdf.inf", "GATEWAY=1\nGATE=127.0.0.1\nGATEPORT=%d\n" % (port if there else 1))
+        r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\DOCS\\BOOK.PDF\n")
+        r.start("C:\\LAUNCH.PRG")
+        end = time.time() + 300
+        while time.time() < end and "EPDF gateway-done" not in r.console():
+            time.sleep(1)
+        time.sleep(6)
+        r.still()
+        r.shot("after")
+        con = r.console()
+        if not there:
+            if "EPDF gateway-done -3" not in con:
+                bad.append("no Gateway: not said so")
+        else:
+            sizes = [l.split()[2:4] for l in con.splitlines() if l.startswith("EPDF gateway-sizes")]
+            if "EPDF gateway-done 0" not in con:
+                bad.append("not converted")
+            elif not sizes:
+                bad.append("no sizes logged")
+            elif not direct_same(src, sizes[0], os.path.join(r.hd, "DOCS", "atari", "BOOK.PDF"), r.work):
+                bad.append("the copy in atari isn't the direct conversion")
+            if con.count("EPDF opening") < 2:
+                bad.append("the copy wasn't opened after")
+        print("EPDF %s%s: %s  (%s)" % (r.describe(), "" if there else ", no Gateway", "ok" if not bad else "; ".join(bad),
+                                       r.shots))
+    finally:
+        r.stop()
+        r.m.stop()
+    return bad
+
+
 def main(argv):
     if not argv:
         sys.exit(__doc__)
@@ -137,6 +194,9 @@ def main(argv):
         for m in argv[1:] or ["ST:mono"]:
             bad += bool(run(work, m, port))
         bad += bool(run(work, (argv[1:] or ["ST:mono"])[0], port, there=False))
+        for m in argv[1:] or ["ST:mono"]:
+            bad += bool(run_epdf(work, m, port))
+        bad += bool(run_epdf(work, (argv[1:] or ["ST:mono"])[0], port, there=False))
     finally:
         gate.kill()
         gate.wait()

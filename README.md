@@ -56,7 +56,10 @@ into, and halts with "OUT OF INTERNAL MEMORY" when it runs out; FOLDRxxx makes t
 
 ## How it reaches the servers
 
-It doesn't: EPDF works on files, and needs no network.
+EPDF and EConvert work on files. Only in Gateway mode do they use the network: a PDF goes to the
+Gateway (AERA-Gateway's `pdf` service, port 8380, on a Raspberry Pi at home) through STinG,
+MiNTnet or MagiC-Net, and the converted PDF comes back (`docs/PI-GATEWAY.md`). Set the Gateway's
+address and port in **File > Settings...**; nothing is sent while Gateway mode is off.
 
 ## Building
 

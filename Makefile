@@ -364,8 +364,12 @@ GEM_SRC = src/gem/epdf.c src/gem/doc.c src/gem/textwin.c src/gem/badge.c src/gem
           src/pdfimg.c src/ccitt.c src/rscale.c $(PIC_SRC) \
           common/atari/gem.c common/atari/crash.c common/ui/mbar.c common/ui/aboutbox.c common/ui/aboutline.c \
           common/ui/alert.c common/ui/dialog.c common/ui/field.c common/ui/av.c common/ui/text.c common/ui/clip.c common/ui/iconify.c common/ui/help.c common/ui/dd.c common/ui/popup.c common/ui/fontsel.c common/ui/click.c common/ui/progbar.c common/ui/enlarge.c \
-          common/src/charset.c common/src/bidi.c common/ui/accmem.c common/atari/bigbuf.c common/atari/dspjpeg.c
-GEM_OBJ = $(patsubst %.c,build/m68000/%.o,$(GEM_SRC)) build/m68000/version.o
+          common/src/charset.c common/src/bidi.c common/ui/accmem.c common/atari/bigbuf.c common/atari/dspjpeg.c \
+          src/gem/gwopen.c src/gem/gatedlg.c src/pigate.c src/pftime_tos.c src/conv/cvio_tos.c common/src/conn.c \
+          common/src/tls_none.c common/atari/net_tos.c common/atari/sting.c common/ui/scrsize.c
+GEM_OBJ = $(patsubst %.c,build/m68000/%.o,$(GEM_SRC)) build/m68000/version.o build/m68000/sting_s.o
+build/m68000/sting_s.o: common/atari/sting.S | build/m68000
+	$(XCC) -m68000 -c -o $@ $<
 $(patsubst %.c,build/m68000/%.o,$(GEM_SRC)): XFLAGS += -Isrc/gem -Isrc/view -Icommon/ui -I$(T)/tjpgd -I$(T)/nsgif/include -I$(T)/nsgif/src
 # the Falcon's DSP for JPEGs, from pic.c's own header reader (one 68000
 # program for every Atari, guideline 7.4); no PNG or GIF decoder (a PDF's

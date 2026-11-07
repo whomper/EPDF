@@ -37,7 +37,7 @@ EPDF has one window. Its title is the document's name.
 then what EPDF is doing, if it is working on something you wait for: how far it has got and about
 how long is left, "Reading page 5 of 8 · 30% · 2 min left" while it reads the document's text (a
 slow page, such as a map on an ST, counts too), "Picture on page 1" while a picture is made,
-"Searching page 5 of 8", "Copying page 2 of 12". A thin line along its foot fills from the left as
+"Searching page 5 of 8", "Copying page 2 of 12", "Converting on the Gateway". A thin line along its foot fills from the left as
 the work goes on. What a search found, or that a copy is done, is said there too.
 
 Every page follows the one before, under a line that names it ("Page 3"). EPDF reads the text a
@@ -45,7 +45,8 @@ page at a time while you read, starting with the page you are on; a page it hasn
 "..." until it has. You can scroll, jump to a page or open another document at any time: reading
 gives way to you at once.
 
-- **File:** Open... (^O), Quit (^Q).
+- **File:** Open... (^O), Open on the Gateway (ticked: see [The Gateway](#the-gateway)),
+  Settings... (^,), Quit (^Q).
 - **Edit:** Copy (^C) puts the text you selected on the clipboard (a big selection is copied a
   page at a time, with its progress in the status bar; Esc stops it); Select all (^A); Find... (^F)
   looks for a word or a phrase, whatever its case, across the lines it was set on; Find next (^G)
@@ -100,6 +101,7 @@ icon shows the page you are on.
 | ^C, ^A | copy the selection, select everything |
 | ^F, ^G, ⇧^G | find, find next, find previous |
 | ⇧^F | the font |
+| ^, | Settings (the Gateway) |
 | Insert | the menu for the selection (as the right mouse button) |
 | ^U, ^Q | quit (EPDF has one window, so ^U closes it and quits) |
 | Help | this guide |
@@ -113,16 +115,32 @@ Each setting has a note above it in the file:
 
 - `WINDOW=` the window's place and size, as you left it;
 - `FOLDER=` the folder **File > Open...** shows first: the one you last opened a document from;
-- `LINES=` 1 when **View > The page's lines** is ticked.
+- `LINES=` 1 when **View > The page's lines** is ticked;
+- `GATEWAY=` 1 when **File > Open on the Gateway** is ticked;
+- `GATE=` and `GATEPORT=` the Gateway's address and port (**File > Settings...**).
 
 A line EPDF doesn't know is kept as it is.
+
+## The Gateway
+
+The Gateway (AERA-Gateway, on a Raspberry Pi at home) can convert PDFs for EPDF much faster than
+an Atari can, and for every Atari, an ST included. On the Raspberry Pi, `sudo aera-gateway install
+pdf --allow ATARI_IP` sets it up. On the Atari you need STinG, MiNTnet or MagiC-Net.
+
+- **File > Settings...** (^,): **Through the Gateway:** its address and port (8380).
+- **File > Open on the Gateway:** ticked, a PDF you open that isn't converted yet is shown as it
+  is, while the Gateway converts it; the status bar says "Converting on the Gateway" (or "Waiting
+  for the Gateway", while it converts another Atari's), and when the converted PDF has come, EPDF
+  shows it in its place, with View > Pages. The converted PDF is kept in a folder `atari` beside
+  the original, with the original's name, and opened from there the next time. Esc stops it.
 
 ## EConvert
 
 EConvert prepares PDFs for EPDF: each page's text already read, its pictures at the size EPDF
 shows them, its charts and maps drawn as pictures, and, if you want them, its pages whole as
 pictures (**View > Pages** in EPDF). The files it writes are still PDFs that any viewer opens, and
-EPDF reads them quickly on every Atari. EConvert itself needs a Falcon or a TT (a 68030).
+EPDF reads them quickly on every Atari. EConvert converts on a Falcon or a TT (a 68030); on any
+Atari, an ST too, it can have the Gateway convert them instead.
 
 - **Install:** copy the `econvert` folder (`ECONVERT.PRG` and its `fonts` folder) anywhere. It
   keeps its settings in `ECONVERT.INF` beside itself.
@@ -135,6 +153,8 @@ EPDF reads them quickly on every Atari. EConvert itself needs a Falcon or a TT (
   as well, for a Falcon or a TT; a page with little colour gets the black and white one only).
 - **Photos:** 256 colours (fast on every Atari) or JPEG (smaller files, but slow to show on an
   8 MHz ST). Charts and pictures of few colours are kept exact either way.
+- **Convert on:** This Atari, or the Gateway (its address and port in **File > Settings...**, ^,).
+  On an ST only the Gateway. The Gateway's converted PDFs are the same as the Falcon's.
 - **Convert** (Return, ^R) works through the batch. Two bars show the file and the whole batch,
   each with how far it has got and about how long is left. **Stop** (Esc) stops at once; the file
   under way is left out, the ones done stay.
