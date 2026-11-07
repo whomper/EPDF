@@ -8,7 +8,7 @@
  *   econvert --render PAGE OUT.ppm IN.pdf  page PAGE (1-based) drawn 640 wide, and its drawings listed
  *
  * options: --pages none|mono|colour (whole pages: none, mono, mono and colour; mono),
- *          --photos indexed|jpeg (indexed), --pictures page|screen (screen), --page-width N, --picture-width N (640: a screen's), --canvas KB (any), --fonts DIR (the standard fonts' files,
+ *          --photos indexed|jpeg (indexed), --pictures page|screen (screen), --page-width N, --picture-width N (640: a screen's), --canvas KB (any), --progress ("progress DONE TOTAL" lines on stderr), --fonts DIR (the standard fonts' files,
  *          Liberation*.ttf; /usr/share/fonts/truetype/liberation), --width N (640)
  */
 #include <stdio.h>
@@ -38,6 +38,21 @@ static int ppm(const RCANVAS *c, const char *path)
 	return fclose(f);
 }
 
+/* --progress: the conversion's thousandths on stderr, a line each time it
+   moves by a hundredth ("progress DONE TOTAL"), for pdfgate's 102 answers */
+static long last_done = -1;
+static int show_progress(void *u, long done, long total)
+{
+	long pc = total > 0 ? done * 100 / total : 0;
+
+	if (pc != last_done) {
+		last_done = pc;
+		fprintf(stderr, "progress %ld %ld\n", done, total);
+		fflush(stderr);
+	}
+	return 0;
+}
+
 int main(int argc, char **argv)
 {
 	const char *fonts = "/usr/share/fonts/truetype/liberation", *in = NULL, *out = NULL, *img = NULL;
@@ -57,6 +72,8 @@ int main(int argc, char **argv)
 		else if (!strcmp(argv[i], "--pages") && i + 1 < argc) {
 			i++;
 			o.pages = !strcmp(argv[i], "none") ? CV_PAGES_NONE : !strcmp(argv[i], "colour") ? CV_PAGES_COLOUR : CV_PAGES_MONO;
+		} else if (!strcmp(argv[i], "--progress")) {
+			o.progress = show_progress;
 		} else if (!strcmp(argv[i], "--normal-pages")) {
 			o.page_double = 0;
 		} else if (!strcmp(argv[i], "--page-width") && i + 1 < argc) {
