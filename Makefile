@@ -92,6 +92,7 @@ test: build/test_xe build/test_ccitt build/test_textview build/test_inf build/te
 	@if [ -f build/m68000/epdf.elf ]; then python3 common/tools/oddaccess.py build/m68000/epdf.elf; fi
 	tools/nofpu.sh build/m68000/epdf.elf build/m68030/measure.elf build/m68030/fttest.elf
 	@if [ -f build/m68030/econvert.elf ]; then tools/nofpu.sh build/m68030/econvert.elf; fi
+	@if [ -f build/m68030ovl/render.elf ]; then tools/nofpu.sh build/m68030ovl/render.elf; fi
 measure: build/pdfmeasure
 	@echo "see tools/measure.py"
 clean:
