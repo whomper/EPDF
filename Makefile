@@ -444,6 +444,13 @@ gui-test: binary/EPDF.PRG binary/LAUNCH.PRG
 files-test: binary/EPDF.PRG binary/LAUNCH.PRG
 	python3 tests/hatari/files.py build/files ST-1
 
+# the Pi converter's exchange (src/pigate.c) against a real pdfgate on this
+# computer (AERA-Gateway's gateway/, PDFGATE=its folder) and this build's
+# converter: byte for byte the direct one, a stop, a refusal (docs/PI-GATEWAY.md)
+pi-test: build/econvert
+	tests/pigate/run.sh $(PDF)
+.PHONY: pi-test
+
 # docs/screenshot.png and docs/help/WINDOW.IMG again, from Hatari (commit them)
 shots: binary/EPDF.PRG binary/LAUNCH.PRG
 	python3 tests/hatari/shots.py build/shots
