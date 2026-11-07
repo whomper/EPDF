@@ -271,6 +271,15 @@ at first. This section is kept up to date: the build, the tests, what a release 
   JPEG on a 68000 shows its 1/8 preview with a note, never 24 s without a turn; the Liberation (OFL
   1.1) licence is cleared before a release carries it; the first GEM release gets the speed rig and
   `acc_all` with EPDF in front.
+- **Stage 2 (started 7 Nov 2026, Falcon/TT only; first goal a page in seconds on Falcon-4, drawn from the
+  top down):** the renderer is `render.ovl` (`src/rovl/`: EConvert's renderer and its own reader, 68030,
+  linked with common's `tlsovl/ovl.ld`), loaded by EPDF.PRG with common's `ovl.c` through
+  `src/gem/rdraw.c` only on a 68020 or better: the ST keeps its memory. JPEGs there go through pic.c
+  (the DSP; `cv_jpeg_pic`), never in EConvert or the Gateway (their files stay byte for byte the same).
+  Standard fonts are read from their files as FreeType asks (render.c's RSTREAM), not held whole.
+  `make rovl-test` (tests/hatari/rovl.py, ROVLTEST.PRG). Next: View > Pages for any PDF (EPDF shows
+  what render.ovl draws), then zoom, then speed. A page in bands re-reads the page once a band (18
+  bands: 4 to 15 times slower): draw it whole where memory allows.
 - **The road to 1.0, and EConvert (Erez, 31 Oct 2026):**
   - **1.0 is the text view, complete:** 0.2 speed on an 8 MHz ST (the guidelines' times), 0.3 big
     documents on ST-1 (streamed content, pictures' memory), 0.4 pictures (DSP JPEG on the Falcon, the

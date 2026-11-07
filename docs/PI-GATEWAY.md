@@ -5,7 +5,10 @@ on a Raspberry Pi) instead of by the Atari itself: the PDF goes to pdfgate, AERA
 service, and the converted PDF comes back. The converted file is the same,
 byte for byte, as EConvert writes on a Falcon with the same settings
 (`CONVERTED-PDF.md`): the Gateway runs `aerapdf`, which is EPDF's own converter
-(`tools/econvert.c` and `src/conv/`) built for Linux.
+(`tools/econvert.c` and `src/conv/`) built for Linux. One difference: a
+Falcon whose memory can't hold a page's double size (1280 pixels wide)
+whole leaves that page's double picture out (a stock 4 MB one does); the
+Gateway always has the room for it.
 
 The Gateway's side lives in AERA-Gateway (`gateway/pdfgate.py`, `pdf/`), its
 copy of the converter taken from this repository by its

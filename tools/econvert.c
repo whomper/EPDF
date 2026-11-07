@@ -6,6 +6,7 @@
  *
  *   econvert [options] IN.pdf OUT.pdf      a converted PDF (docs/CONVERTED-PDF.md)
  *   econvert --render PAGE OUT.ppm IN.pdf  page PAGE (1-based) drawn 640 wide, and its drawings listed
+ *            (--width W, --jpeg-pic: its JPEGs through pic.c, as render.ovl draws them)
  *
  * options: --pages none|mono|colour (whole pages: none, mono, mono and colour; mono),
  *          --photos indexed|jpeg (indexed), --pictures page|screen (screen), --page-width N, --picture-width N (640: a screen's), --canvas KB (any), --progress ("progress DONE TOTAL" lines on stderr), --fonts DIR (the standard fonts' files,
@@ -18,6 +19,7 @@
 #include "render.h"
 #include "conv.h"
 #include "pic.h"
+#include "cvjpeg.h"
 #include "charset.h"
 
 static int ppm(const RCANVAS *c, const char *path)
@@ -74,6 +76,8 @@ int main(int argc, char **argv)
 			o.pages = !strcmp(argv[i], "none") ? CV_PAGES_NONE : !strcmp(argv[i], "colour") ? CV_PAGES_COLOUR : CV_PAGES_MONO;
 		} else if (!strcmp(argv[i], "--font-kb") && i + 1 < argc) {
 			o.font_budget = atol(argv[++i]) * 1024L;	/* (as EConvert's quarter of what is free) */
+		} else if (!strcmp(argv[i], "--jpeg-pic")) {
+			cv_jpeg_pic = 1;	/* (the JPEGs as render.ovl takes them: through pic.c) */
 		} else if (!strcmp(argv[i], "--progress")) {
 			o.progress = show_progress;
 		} else if (!strcmp(argv[i], "--normal-pages")) {

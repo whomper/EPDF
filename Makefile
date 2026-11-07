@@ -9,6 +9,7 @@
 #   make icons      icons/, src/gem/icon*.h and src/econv/icon*.h from common/icons/EPDF.txt, EPDFDOC.txt
 #                   (and ECONVERT.txt when AERA-Atari has it)
 #   make gui-test   EPDF.PRG driven in Hatari (tests/hatari/gui.py)
+#   make rovl-test  render.ovl, the page as printed (stage 2), loaded and drawn in Hatari (tests/hatari/rovl.py)
 #   make files-test each file's opens on a 1 MB ST against the budget (tests/hatari/files.py, 6.5)
 #   big documents on a 1 MB ST: python3 tests/hatari/big.py WORK [NAME...] (the corpus)
 #   make measure-atari  the stage 0 measuring programs (MEASURE.PRG and the others)
@@ -29,7 +30,7 @@ COMMON_SRC = common/src/inflate.c common/src/util.c common/src/futil.c
 BSSL_SRC = $(addprefix $(BSSL)/src/, hash/md5.c hash/sha2small.c hash/sha2big.c \
            symcipher/aes_big_cbcdec.c symcipher/aes_big_cbcenc.c symcipher/aes_big_dec.c symcipher/aes_big_enc.c symcipher/aes_common.c \
            codec/dec32be.c codec/enc32be.c codec/dec32le.c codec/enc32le.c codec/dec64be.c codec/enc64be.c)
-HDRS     = $(wildcard src/*.h src/conv/*.h src/gem/*.h src/view/*.h src/econv/*.h common/src/*.h common/ui/*.h common/atari/*.h common/atari/include/*.h)
+HDRS     = $(wildcard src/*.h src/conv/*.h src/rovl/*.h src/gem/*.h src/view/*.h src/econv/*.h common/src/*.h common/ui/*.h common/atari/*.h common/atari/include/*.h)
 
 .PHONY: all test measure dist help clean atari measure-atari fttest imgbench gui-test files-test viewtest
 all: build/pdfmeasure build/pdftext build/pdfmem build/glyphjob build/imgdump binary/EPDF.PRG
@@ -291,7 +292,7 @@ binary/MEAS30F.PRG: build/m68030/measure.elf | binary
 	PRGFLAGS=7 python3 common/tools/elf2tos.py $< $@
 binary/FTTEST30F.PRG: build/m68030/fttest.elf | binary
 	PRGFLAGS=7 python3 common/tools/elf2tos.py $< $@
-atari: binary/EPDF.PRG binary/LAUNCH.PRG binary/ECONVERT.PRG
+atari: binary/EPDF.PRG binary/LAUNCH.PRG binary/ECONVERT.PRG binary/render.ovl
 measure-atari: binary/MEASURE.PRG binary/MEAS30.PRG binary/MEAS30F.PRG
 fttest: binary/FTTEST.PRG binary/FTTEST30.PRG
 
@@ -314,6 +315,35 @@ binary/CONVTEST.PRG: $(CV_ATARI_OBJ) build/m68030cv/atari/convtest.o build/m6803
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68030/convtest.elf \
 	  build/m68030/crt0.o build/m68030/nf.o build/m68030cv/atari/convtest.o $(CV_ATARI_OBJ) -lgcc
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/m68030/convtest.elf $@
+
+# ---------------------------------------------------------------- render.ovl (stage 2)
+# The page as printed, drawn on a Falcon or TT (src/rovl/rovl.h): the
+# renderer and the reader as CONVTEST.PRG has them, built for the 68030,
+# loaded by EPDF.PRG with common's ovl.c (an ST never loads it); its heap
+# is the program's (libc.c with LIBC_NO_HEAP)
+ROVL_OBJ = build/m68030cv/src/rovl/head.o build/m68030ovl/libc.o \
+           $(filter-out build/m68030cv/common/atari/libc.o,$(CV_ATARI_OBJ))
+build/m68030cv/src/rovl/head.o: XFLAGS += -DROVL_VERSION=\"$(VERSION_STR)\"
+build/m68030ovl/libc.o: common/atari/libc.c $(HDRS)
+	@mkdir -p $(dir $@)
+	$(XCC) $(XFLAGS) -DLIBC_NO_HEAP -c -o $@ $<
+build/m68030ovl/%: XCPU = -m68030 -msoft-float
+binary/render.ovl: XCPU = -m68030 -msoft-float
+binary/render.ovl: $(ROVL_OBJ) common/tlsovl/ovl.ld | binary
+	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/tlsovl/ovl.ld -Wl,-e,rovl \
+	  -Wl,--gc-sections -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments \
+	  -o build/m68030ovl/render.elf $(ROVL_OBJ) -lgcc
+	python3 common/tools/elf2tos.py build/m68030ovl/render.elf $@
+
+# ROVLTEST.PRG (tests/hatari/rovl.py): render.ovl loaded and its pages drawn
+# as EPDF.PRG would (rdraw.c, the 68000 build), without EPDF's window
+ROVLT_OBJ = $(addprefix build/m68000/,atari/rovltest.o src/gem/rdraw.o common/src/ovl.o src/pdfio_tos.o \
+              $(patsubst %.c,%.o,$(RT_C)))
+build/m68000/atari/rovltest.o build/m68000/src/gem/rdraw.o: XFLAGS += -Isrc/rovl -Isrc/gem
+binary/ROVLTEST.PRG: XCPU = -m68000 -mstrict-align -fdisable-tree-bswap
+binary/ROVLTEST.PRG: $(ROVLT_OBJ) build/m68000/crt0.o build/m68000/nf.o common/atari/link.ld | binary
+	$(XCC) $(XLDFLAGS) -o build/m68000/rovltest.elf build/m68000/crt0.o build/m68000/nf.o $(ROVLT_OBJ) -lgcc
+	python3 common/tools/elf2tos.py build/m68000/rovltest.elf $@
 
 # ---------------------------------------------------------------- ECONVERT.PRG (the converter's window)
 # One program for every machine (Erez, 7 Nov 2026: Gateway mode on an ST
@@ -470,6 +500,9 @@ files-test: binary/EPDF.PRG binary/LAUNCH.PRG
 pi-test: build/econvert
 	tests/pigate/run.sh $(PDF)
 .PHONY: pi-test
+rovl-test: build/econvert binary/ROVLTEST.PRG binary/render.ovl
+	python3 tests/hatari/rovl.py build/rovl-test
+.PHONY: rovl-test
 
 # docs/screenshot.png and docs/help/WINDOW.IMG again, from Hatari (commit them)
 shots: binary/EPDF.PRG binary/LAUNCH.PRG
