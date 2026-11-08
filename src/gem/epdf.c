@@ -40,6 +40,11 @@
 #include "progbar.h"
 #include "badge.h"
 #include "gwopen.h"
+#include "trview.h"
+#include "charset.h"
+#include "translate.h"
+#include "langs.h"
+#include "popup.h"
 #include "gatedlg.h"
 
 short ap_id;
@@ -57,6 +62,7 @@ static int lines_mode;
 /* File > Open on the Gateway (Erez, 7 Nov 2026): a PDF that isn't
    converted is converted by the Gateway while it is shown (gwopen.c) */
 static int gw_on;
+static unsigned short tr_port = TR_PORT;	/* translategate's */
 static char gate_host[64];
 static unsigned short gate_port = GATE_PORT;
 static char open_dir[160] = "";		/* where Open looks first (FOLDER=) */
@@ -111,6 +117,16 @@ static void settings_read(void)
 		strcpy(gate_host, v);
 	if ((v = inf_get(&inf, "GATEPORT")) != NULL && atol(v) > 0 && atol(v) < 65536)
 		gate_port = (unsigned short)atol(v);
+	{
+		/* View > Translate and the language (Erez, 8 Nov 2026) */
+		int t = (v = inf_get(&inf, "TRANSLATE")) != NULL && v[0] == '1';
+		const char *to = inf_get(&inf, "TRANSLATETO");
+
+		if ((v = inf_get(&inf, "TRPORT")) != NULL && atol(v) > 0 && atol(v) < 65536)
+			tr_port = (unsigned short)atol(v);	/* (translategate's elsewhere: the rigs) */
+		tr_setup(gate_host, tr_port);
+		tr_set(t, to && translate_code_ok(to) ? to : "");
+	}
 }
 
 static void settings_write(void)
@@ -170,6 +186,7 @@ static void open_doc(const char *p)
 	win_zoom_end();
 	win_zoom_forget();
 	copy_end(NULL);			/* a copy of the old document's text: given up */
+	tr_stop();			/* (the old document's page under translation) */
 	if (doc_open(p, win_cols(), lines_mode, cache_path) != 0) {
 		open_failed();
 		return;
@@ -193,6 +210,7 @@ static void gateway_begin(void)
 
 	if (!gw_on || !doc_is_open() || doc_prepared() || gw_busy() || gw_is_temp(doc_path()))
 		return;
+	gw_set_translate(tr_on() ? tr_to() : "");	/* (Translate on: the Gateway translates with the conversion) */
 	r = gw_start(doc_path(), doc_path(), gate_host, gate_port);
 	if (r == GW_NO_ADDRESS && settings_dialog())
 		r = gw_start(doc_path(), doc_path(), gate_host, gate_port);
@@ -231,6 +249,7 @@ static void gateway_end(void)
 static void opened(void)
 {
 	bg_opened();
+	tr_new_document();
 	gateway_begin();
 	win_title();
 	menu_states();
@@ -734,10 +753,97 @@ static void select_word(short mx, short my)
  * the selection. Only the menu bar's commands, with their keys; Copy
  * first, as a double-click is a selection's.
  */
+/* the right-click menu's Translate... (Erez, 8 Nov 2026): the words
+   selected (their first 2 KB) sent to translategate as one short request,
+   the answer shown in a box over the window, which nothing else changes */
+static void translate_selection(void)
+{
+	DOCVIEW *v = doc_view();
+	SBUF b;
+	long p, o0, o1, len, outlen = 0;
+	char from[TR_LANG], err[120], *out, line[4][41];
+	int nl = 0;
+
+	if (!v || v->sel_p0 < 0 || !tr_to()[0] || !gate_host[0])
+		return;
+	sb_init(&b);
+	for (p = v->sel_p0; p <= v->sel_p1 && b.len < TR_PIECE_DEFAULT; p++) {
+		const char *t = doc_page_text(p, &len);
+
+		if (!t)
+			break;
+		o0 = p == v->sel_p0 ? v->sel_o0 : 0;
+		o1 = p == v->sel_p1 ? v->sel_o1 : len;
+		if (o1 > len)
+			o1 = len;
+		if (o1 > o0)
+			sb_add(&b, t + o0, o1 - o0 > TR_PIECE_DEFAULT - b.len ? TR_PIECE_DEFAULT - b.len : o1 - o0);
+		if (p < v->sel_p1)
+			sb_add(&b, "\n", 1);
+	}
+	{
+		long i;
+
+		for (i = 0; i < b.len; i++)
+			if (b.s[i] == '\r' || b.s[i] == '\n' || b.s[i] == '\t' || (unsigned char)b.s[i] == 0x7F)
+				b.s[i] = ' ';	/* (one piece of words: the soft breaks and line ends as spaces) */
+	}
+	if (b.len == 0) {
+		sb_free(&b);
+		return;
+	}
+	graf_mouse(BUSYBEE, NULL);
+	out = translate_atari(gate_host, tr_port, tr_to(), NULL, b.s, b.len, NULL, from, &outlen, err, sizeof err);
+	graf_mouse(ARROW, NULL);
+	sb_free(&b);
+	log_event("translate-selection", out ? "ok" : "failed", NULL);
+	if (!out) {
+		alert(1, "[1][The words can't be translated:|%.40s][ OK ]", err);
+		return;
+	}
+	{
+		/* the answer in up to four lines of 40, broken at a space */
+		long k = 0;
+
+		while (k < outlen && nl < 4) {
+			long n = outlen - k > 40 ? 40 : outlen - k, cut = n;
+
+			if (outlen - k > 40)
+				while (cut > 10 && out[k + cut] != ' ')
+					cut--;
+			if (cut <= 10)
+				cut = n;
+			snprintf(line[nl], sizeof line[nl], "%.*s", (int)cut, out + k);
+			{
+				char *c;
+
+				for (c = line[nl]; *c; c++)
+					if (*c == '[' || *c == ']' || *c == '|' || *c == '\n' || *c == '\r')
+						*c = *c == '[' ? '(' : *c == ']' ? ')' : ' ';	/* (an alert's own marks) */
+			}
+			nl++;
+			k += cut;
+			while (k < outlen && out[k] == ' ')
+				k++;
+		}
+		if (k < outlen && nl == 4) {
+			size_t l = strlen(line[3]);
+
+			if (l > 37)
+				l = 37;
+			strcpy(line[3] + l, "...");
+		}
+	}
+	free(out);
+	alert(1, "[0][%s%s%s%s%s%s%s][ OK ]", line[0], nl > 1 ? "|" : "", nl > 1 ? line[1] : "", nl > 2 ? "|" : "",
+	      nl > 2 ? line[2] : "", nl > 3 ? "|" : "", nl > 3 ? line[3] : "");
+}
+
 static void context_menu(short mx, short my)
 {
 	static const struct { const char *label; int cmd; } all[] = {
 		{ "  Copy                   ^C ", CMD_COPY },
+		{ "  Translate...              ", CMD_TRSEL },
 		{ "  Select all             ^A ", CMD_SELALL },
 		{ "-", CMD_NONE },
 		{ "  Find...                ^F ", CMD_FIND },
@@ -757,8 +863,10 @@ static void context_menu(short mx, short my)
 	for (i = 0; i < N; i++) {
 		int c = all[i].cmd, grey = !v && c != CMD_LINES;
 
-		if (c == CMD_COPY && (!v || v->sel_p0 < 0))
+		if ((c == CMD_COPY || c == CMD_TRSEL) && (!v || v->sel_p0 < 0))
 			grey = 1;
+		if (c == CMD_TRSEL && (!tr_to()[0] || !gate_host[0]))
+			grey = 1;		/* (no language or no Gateway yet: Settings) */
 		if (c == CMD_FINDNEXT && !find_text[0])
 			grey = 1;
 		lab[i] = all[i].label;
@@ -818,6 +926,22 @@ static void command(int c)
 	case CMD_ZOOMOUT:
 		win_zoom_step(c == CMD_ZOOMIN ? 1 : -1);
 		menu_states();
+		break;
+	case CMD_TRSEL:
+		translate_selection();
+		break;
+	case CMD_TRANSLATE:
+		if (!tr_to()[0] && !settings_dialog())
+			break;		/* (no language yet: Settings first) */
+		if (!tr_to()[0])
+			break;
+		tr_set(!tr_on(), NULL);
+		setting("TRANSLATE", tr_on() ? "1" : "0", "1: View > Translate ticked (the text view translated)");
+		if (has_menu)
+			menu_icheck(menu.tree, mbar_object(&menu, CMD_TRANSLATE), tr_on());
+		log_event("translate", tr_on() ? "on" : "off", tr_to());
+		win_layout();
+		win_draw_all();
 		break;
 	case CMD_GATEWAY:
 		gw_on = !gw_on;
@@ -905,15 +1029,147 @@ static void command(int c)
 }
 
 /* File > Settings... (^,): where the Gateway is; 1 when OK */
+/* a language's name for the page heads and Settings, by its code (the
+   Gateway's own names where it gave them: lang_names) */
+static SBUF lang_names;			/* "CODE<TAB>NAME" lines, the last GET /languages */
+
+const char *lang_name(const char *code)
+{
+	static const char *const known[] = {
+		"en", "English", "he", "Hebrew", "de", "German", "fr", "French", "es", "Spanish",
+		"it", "Italian", "nl", "Dutch", "pt", "Portuguese", "ru", "Russian", "ar", "Arabic",
+		"pl", "Polish", "sv", "Swedish", "da", "Danish", "fi", "Finnish", "no", "Norwegian",
+		"nb", "Norwegian", "cs", "Czech", "hu", "Hungarian", "el", "Greek", "tr", "Turkish",
+		"ja", "Japanese", "zh", "Chinese", "ko", "Korean", "uk", "Ukrainian", "ro", "Romanian",
+		NULL
+	};
+	static char nm[TR_LANGNAME];
+	int i;
+	long k, cl;
+
+	if (!code || !code[0])
+		return "";
+	cl = (long)strlen(code);
+	for (k = 0; lang_names.s && k < lang_names.len;) {
+		const char *l = lang_names.s + k, *e = memchr(l, '\n', (size_t)(lang_names.len - k));
+		long ll = e ? e - l : lang_names.len - k;
+
+		if (ll > cl + 1 && !memcmp(l, code, (size_t)cl) && l[cl] == '\t') {
+			long nl = ll - cl - 1, al;
+			char *a = cs_to_atari(l + cl + 1, nl, CS_UTF8, &al);
+
+			if (a) {
+				snprintf(nm, sizeof nm, "%.*s", (int)al, a);
+				free(a);
+				return nm;
+			}
+		}
+		k += ll + 1;
+	}
+	for (i = 0; known[i]; i += 2)
+		if (!strcmp(known[i], code))
+			return known[i + 1];
+	return code;
+}
+
+/* Settings > Translate into: the languages the Gateway has installed, in a
+   menu at the button (GET /languages) */
+static int pick_language(char *to, int tocap, char *name, int namecap)
+{
+	char err[120];
+	const char *lab[TR_LANGS_MAX];
+	char codes[TR_LANGS_MAX][TR_LANG];
+	char names[TR_LANGS_MAX][TR_LANGNAME];
+	short n = 0, r;
+	long k;
+	short mx, my, mb, ks;
+
+	if (!gate_host[0]) {
+		alert(1, "[1][Type the Gateway's address first.][ OK ]");
+		return 0;
+	}
+	graf_mouse(BUSYBEE, NULL);
+	sb_reset(&lang_names);
+	k = translate_languages(gate_host, tr_port, &lang_names, err, sizeof err);
+	graf_mouse(ARROW, NULL);
+	log_event("languages", k ? "ok" : "failed", NULL);
+	if (!k) {
+		alert(1, "[1][The Gateway's languages can't be had:|%.40s][ OK ]", err);
+		return 0;
+	}
+	for (k = 0; lang_names.s && k < lang_names.len && n < TR_LANGS_MAX;) {
+		const char *l = lang_names.s + k, *e = memchr(l, '\n', (size_t)(lang_names.len - k)), *t;
+		long ll = e ? e - l : lang_names.len - k;
+
+		t = memchr(l, '\t', (size_t)ll);
+		if (t && t - l < TR_LANG && t > l) {
+			snprintf(codes[n], sizeof codes[n], "%.*s", (int)(t - l), l);
+			if (translate_code_ok(codes[n])) {
+				snprintf(names[n], sizeof names[n], "  %s ", lang_name(codes[n]));
+				if (!strcmp(codes[n], to))
+					names[n][0] = '\x08';	/* (the one chosen: ticked) */
+				lab[n] = names[n];
+				n++;
+			}
+		}
+		k += ll + 1;
+	}
+	if (!n) {
+		alert(1, "[1][The Gateway has no languages installed:|see Languages....][ OK ]");
+		return 0;
+	}
+	graf_mkstate(&mx, &my, &mb, &ks);
+	r = popup(mx, my, lab, n);
+	if (r < 0)
+		return 0;
+	snprintf(to, (size_t)tocap, "%s", codes[r]);
+	snprintf(name, (size_t)namecap, "%.11s", lang_name(codes[r]));
+	return 1;
+}
+
+/* Settings > Languages...: the family's dialog (common's langs.c); the
+   install the Gateway then runs is followed in the status bar */
+static langs_job ljob;
+static int ljob_on;
+
+static void languages_dialog(void)
+{
+	static langs l;
+	int r;
+
+	if (!gate_host[0]) {
+		alert(1, "[1][Type the Gateway's address first.][ OK ]");
+		return;
+	}
+	memset(&l, 0, sizeof l);
+	l.host = gate_host;
+	l.port = tr_port;
+	r = langs_run(&l);
+	log_event("languages-dialog", r == 1 ? "ok" : r == 0 ? "cancel" : "failed", NULL);
+	if (r == 1 && l.job) {
+		langs_job_begin(&ljob, gate_host, tr_port, l.job, l.add_mb, tos_ms());
+		ljob_on = 1;
+	}
+}
+
 static int settings_dialog(void)
 {
-	char port[8];
+	char port[8], to[TR_LANG];
+	int was_on = tr_on();
 
-	if (!gate_dialog(gate_host, (int)sizeof gate_host, &gate_port))
+	snprintf(to, sizeof to, "%s", tr_to());
+	if (!gate_dialog_tr(gate_host, (int)sizeof gate_host, &gate_port, to, (int)sizeof to, lang_name(to),
+			    pick_language, languages_dialog))
 		return 0;
 	setting("GATE", gate_host, "the Gateway's address (Through the Gateway)");
 	snprintf(port, sizeof port, "%u", (unsigned)gate_port);
 	setting("GATEPORT", port, "the Gateway's port for PDFs (8380)");
+	tr_setup(gate_host, tr_port);
+	if (strcmp(to, tr_to())) {
+		setting("TRANSLATETO", to, "the language View > Translate translates into");
+		tr_set(was_on, to);
+		win_draw_all();
+	}
 	return 1;
 }
 
@@ -932,6 +1188,11 @@ static void key(short kstate, short k)
 		return;			/* a picture shown whole takes them */
 	if ((scan == 0x4e || scan == 0x4a) && doc_pages_mode()) {
 		command(scan == 0x4e ? CMD_ZOOMIN : CMD_ZOOMOUT);	/* the keypad's + and - */
+		return;
+	}
+	if (tr_busy() && scan == 0x01 && !cp.on && !find_dir && !gw_busy()) {
+		tr_halt();		/* Esc: the document's translation given up */
+		log_event("translate-stopped", NULL, NULL);
 		return;
 	}
 	if (gw_busy() && scan == 0x01 && !cp.on && !find_dir) {
@@ -1052,7 +1313,7 @@ static void message(const short *msg)
 static void progress(void)
 {
 	char w[64];
-	long pg, made, of, n = doc_pages(), p0, p1, rp;
+	long pg, made, of, n = doc_pages(), p0, p1, rp, tp;
 	int pm = 0, pic;
 
 	rp = doc_reading(&pm);
@@ -1072,6 +1333,11 @@ static void progress(void)
 
 		gw_words(w, sizeof w, &d, &t);	/* (the three phases: guideline 7.3) */
 		win_progress(6, w, d, t);
+	} else if (tr_page(&tp)) {
+		snprintf(w, sizeof w, "Translating page %ld of %ld", tp + 1, n);
+		win_progress(7, w, 0, 0);
+	} else if (ljob_on) {
+		win_progress(8, ljob.text, langs_job_permille(&ljob), PB_FULL);
 	} else if (rp >= 0 && (!pic || (rp >= p0 && rp <= p1))) {
 		snprintf(w, sizeof w, "Reading page %ld of %ld", rp + 1, n);
 		win_progress(1, w, doc_read() * 1000L + pm, n * 1000L);
@@ -1102,6 +1368,7 @@ static long arrived_pic = -1;		/* a picture made, its rows still to draw */
 static long rows_pic = -1, rows_from, rows_to;	/* a picture being made: its new rows, to draw */
 static int pic_turn;			/* pictures and pages take turns */
 static int gw_turn;			/* the Gateway's exchange and the reading take turns */
+static int tr_turn;			/* and the translation */
 
 /* the reading on for a piece of the slice; 1 when a page came, whose rows
    are drawn in a turn of their own (a page's rows and the slice that read
@@ -1241,6 +1508,7 @@ int main(void)
 		if (has_menu) {
 			menu_icheck(menu.tree, mbar_object(&menu, CMD_LINES), lines_mode);
 			menu_icheck(menu.tree, mbar_object(&menu, CMD_GATEWAY), gw_on);
+			menu_icheck(menu.tree, mbar_object(&menu, CMD_TRANSLATE), tr_on());
 		}
 		menu_states();
 	}
@@ -1273,7 +1541,8 @@ int main(void)
 	while (!quit_now) {
 		short which, flags = MU_MESAG | MU_KEYBD | MU_BUTTON;
 		unsigned long t;
-		int pending = doc_pending() || find_dir || doc_pic_busy() || pics_waiting() || cp.on || gw_busy();
+		int pending = doc_pending() || find_dir || doc_pic_busy() || pics_waiting() || cp.on || gw_busy() ||
+			      tr_busy() || ljob_on;
 
 		progress();
 
@@ -1374,6 +1643,25 @@ int main(void)
 				bg_begin();
 				if (gw_slice(40))
 					gateway_end();
+			} else if (tr_busy() && bg_may_work() && ((tr_turn ^= 1) || !doc_pending())) {
+				/* View > Translate: the page in view's translation, every
+				   other turn with the reading (Translate off: never here) */
+				long tn;
+				const char *why;
+
+				bg_begin();
+				if ((tn = tr_slice(40)) >= 0)
+					win_page_ready(tn);
+				if ((why = tr_failed()) != NULL)
+					alert(1, "[1][The pages can't be translated:|%.40s][ OK ]", why);	/* (one a document) */
+			} else if (ljob_on && bg_may_work()) {
+				/* the Gateway installing languages (Settings > Languages...) */
+				int st;
+
+				bg_begin();
+				st = langs_job_step(&ljob, tos_ms());
+				if (st == 2)
+					ljob_on = 0;
 			} else if (pending && bg_may_work()) {
 				bg_begin();
 				/* a search first: the user waits for it; the reading after */
@@ -1399,6 +1687,7 @@ int main(void)
 	mbar_free(&menu);
 	copy_end(NULL);
 	doc_close();
+	tr_stop();
 	gw_stop();
 	while (gw_busy())
 		gw_slice(50);		/* (stopped at its next wait: its file closed) */

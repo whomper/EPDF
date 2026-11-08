@@ -29,5 +29,8 @@ const char *gw_words(char *w, int n, long *done, long *total);
 /* how it ended: pg_convert's 0, -1 (why), -2 stopped, -3 no answer; the copy */
 int gw_result(char *copy, int ncopy, char *why, int nwhy);
 const char *gw_host(void);
+/* the language the next conversions are translated into ("" or NULL: none;
+   View > Translate) */
+void gw_set_translate(const char *to);
 
 #endif

@@ -21,6 +21,7 @@
 #include "bidi.h"
 #include "pic.h"
 #include "click.h"
+#include "trview.h"
 #include "pics.h"
 #include "enlarge.h"
 #include "epdf.h"
@@ -250,10 +251,17 @@ static int fill_set;
 static void draw_head(short x, short y, short w, long page)
 {
 	static const char badge[] = "Optimised";
-	char s[32];
+	char s[64];
 	short n, my = (short)(y + ch / 2), tx, end = (short)(x + w - MARGIN - 1), bx = 0, bw = 0, bh = 0, sw = 0, sh = 0, small = 0;
 
-	n = (short)snprintf(s, sizeof s, " Page %ld ", page + 1);
+	if (tr_on() && doc_tr_state(page) == TR_DONE && doc_tr_from(page)[0])
+		/* the page shown translated: where it came from (Erez, 8 Nov 2026:
+		   "Page 3 \xFA from Hebrew") */
+		n = (short)snprintf(s, sizeof s, " Page %ld \xFA from %s ", page + 1, lang_name(doc_tr_from(page)));
+	else
+		n = (short)snprintf(s, sizeof s, " Page %ld ", page + 1);
+	if (n > (short)sizeof s - 1)
+		n = (short)sizeof s - 1;
 	tx = (short)(x + MARGIN + 2 * cw);
 	if (doc_prepared()) {
 		/* the text centred in the system's small font, 3 pixels each side

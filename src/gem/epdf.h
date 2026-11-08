@@ -33,6 +33,20 @@ void doc_close(void);
 int doc_is_open(void);
 const char *doc_path(void);
 const char *doc_name(void);
+/* View > Translate: each page's translation (doc.c keeps them, in memory
+   only), the page's state */
+enum { TR_NONE, TR_DONE, TR_SAME, TR_FAILED, TR_NOTHING, TR_PARTIAL };
+int doc_tr_begin(const char *to);	/* the translations' store for language to: 0, -1 */
+void doc_tr_forget(void);
+void doc_set_translate(int on);		/* the view shows the translations, or the pages as read */
+int doc_tr_state(long n);
+const char *doc_tr_from(long n);
+/* page n's translation (Atari text; NULL with TR_SAME, TR_FAILED, TR_NOTHING) */
+int doc_tr_put(long n, int state, const char *text, long len, const char *from);
+const char *doc_page_original(long n, long *len);	/* the page as read */
+int doc_tr_from_file(void);
+const char *lang_name(const char *code);	/* epdf.c: "he" -> "Hebrew" */		/* a converted PDF translated into it: nothing to ask */
+const char *doc_tr_file_to(void);
 /* the document open is a copy made from path (its name shown) */
 void doc_set_original(const char *path);
 /* that PDF, or the document's own path */

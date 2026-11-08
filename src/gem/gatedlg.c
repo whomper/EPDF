@@ -17,12 +17,14 @@
 
 #define SHOW 24				/* the address's width on the screen */
 
-enum { BOX, TITLE, LABEL, ALABEL, ADDR, PLABEL, PORT, OK, CANCEL, NOBJ };
+enum { BOX, TITLE, LABEL, ALABEL, ADDR, PLABEL, PORT, TLABEL, TLANG, TLANGS, OK, CANCEL, NOBJ };
 
 static OBJECT tree[NOBJ];
 static TEDINFO ted_a, ted_p;
 static char tmpl_a[SHOW + 1], valid_a[SHOW + 1], view_a[SHOW + 1];
 static char tmpl_p[6], valid_p[6], text_p[6];
+static char lang_btn[24];		/* the Translate into button's words: the language's name */
+static int with_tr;			/* EPDF's: Translate into and Languages... (EConvert: none) */
 static LFIELD lf;
 
 static void obj(short i, short type, short flags, long spec, short x, short y, short w, short h)
@@ -60,9 +62,11 @@ static void ted(TEDINFO *t, char *text, char *tmpl, char *valid, int n, char v)
 
 static void build(void)
 {
+	short h = with_tr ? 13 : 10, by = with_tr ? 11 : 8;
+
 	ted(&ted_a, view_a, tmpl_a, valid_a, SHOW, 'X');
 	ted(&ted_p, text_p, tmpl_p, valid_p, 5, '9');
-	obj(BOX, G_BOX, 0, 0x00021100L, 0, 0, 44, 10);
+	obj(BOX, G_BOX, 0, 0x00021100L, 0, 0, 44, h);
 	tree[BOX].ob_next = -1;
 	tree[BOX].ob_head = TITLE;
 	tree[BOX].ob_tail = CANCEL;
@@ -73,31 +77,71 @@ static void build(void)
 	obj(ADDR, G_FBOXTEXT, EDITABLE, (long)&ted_a, 12, 5, SHOW, 1);
 	obj(PLABEL, G_STRING, 0, (long)"Port:", 6, 6, 5, 1);
 	obj(PORT, G_FBOXTEXT, EDITABLE, (long)&ted_p, 12, 6, 5, 1);
-	obj(OK, G_BUTTON, SELECTABLE | EXIT | DEFAULT, (long)"OK", 22, 8, 9, 1);
-	obj(CANCEL, G_BUTTON, SELECTABLE | EXIT | LASTOB, (long)"Cancel", 33, 8, 9, 1);
+	/* EPDF's (Erez, 8 Nov 2026: Settings has "Translate into", the
+	   installed languages only, and "Languages..."): hidden for EConvert */
+	obj(TLABEL, G_STRING, with_tr ? 0 : HIDETREE, (long)"Translate into:", 2, 8, 15, 1);
+	obj(TLANG, G_BUTTON, SELECTABLE | EXIT | (with_tr ? 0 : HIDETREE), (long)lang_btn, 18, 8, 12, 1);
+	obj(TLANGS, G_BUTTON, SELECTABLE | EXIT | (with_tr ? 0 : HIDETREE), (long)"Languages...", 31, 8, 13, 1);
+	obj(OK, G_BUTTON, SELECTABLE | EXIT | DEFAULT, (long)"OK", 22, by, 9, 1);
+	obj(CANCEL, G_BUTTON, SELECTABLE | EXIT | LASTOB, (long)"Cancel", 33, by, 9, 1);
 	tree[CANCEL].ob_next = BOX;
+	tree[TLANGS].ob_width = 12;
 	rsrc_obfix_all(tree, NOBJ);
 }
 
-int gate_dialog(char *host, int hostcap, unsigned short *port)
+static int run(char *host, int hostcap, unsigned short *port, char *to, int tocap,
+	       int (*pick)(char *to, int tocap, char *name, int namecap), void (*languages)(void))
 {
-	static int built;
+	static int built = -1;
 	short r;
 	long p;
 
-	if (!built) {
+	if (built != with_tr) {
 		build();
-		built = 1;
+		built = with_tr;
 	}
 	snprintf(text_p, sizeof text_p, "%u", (unsigned)*port);
 	lf_init(&lf, tree, ADDR, host, hostcap, 0);
 	lf_end(&lf);
-	dlg_name("Settings");
-	r = dlg_modal(tree, ADDR, CANCEL);
+	for (;;) {
+		dlg_name("Settings");
+		r = dlg_modal(tree, ADDR, CANCEL);
+		tree[r].ob_state &= ~SELECTED;
+		if (r == TLANG && pick) {
+			/* (the address as typed so far: the languages are the Gateway's there) */
+			lf_forget(tree);
+			pick(to, tocap, lang_btn, (int)sizeof lang_btn);
+			lf_init(&lf, tree, ADDR, host, hostcap, 0);
+			lf_end(&lf);
+			continue;
+		}
+		if (r == TLANGS && languages) {
+			lf_forget(tree);
+			languages();
+			lf_init(&lf, tree, ADDR, host, hostcap, 0);
+			lf_end(&lf);
+			continue;
+		}
+		break;
+	}
 	lf_forget(tree);
 	if (r != OK)
 		return 0;
 	p = atol(text_p);
 	*port = (unsigned short)(p > 0 && p < 65536 ? p : GATE_PORT);
 	return 1;
+}
+
+int gate_dialog(char *host, int hostcap, unsigned short *port)
+{
+	with_tr = 0;
+	return run(host, hostcap, port, NULL, 0, NULL, NULL);
+}
+
+int gate_dialog_tr(char *host, int hostcap, unsigned short *port, char *to, int tocap, const char *to_name,
+		   int (*pick)(char *to, int tocap, char *name, int namecap), void (*languages)(void))
+{
+	with_tr = 1;
+	snprintf(lang_btn, sizeof lang_btn, "%.11s", to_name && to_name[0] ? to_name : "Choose...");
+	return run(host, hostcap, port, to, tocap, pick, languages);
 }

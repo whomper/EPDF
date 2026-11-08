@@ -36,6 +36,12 @@ static int started, busy, finished, rc, waiting, net_ready, phase;
 static long done, total, part, whole;	/* (part, whole: the phase's bytes) */
 static unsigned long slice_end;
 static char in_path[256], out_path[256], host[64], err[120];
+static char translate_to[8];
+
+void gw_set_translate(const char *to)
+{
+	snprintf(translate_to, sizeof translate_to, "%s", to ? to : "");
+}
 static unsigned short port;
 
 static void idle(void)
@@ -101,6 +107,7 @@ static void job(void)
 		o.page_w = pw;
 		o.pic_w = iw;
 		o.page_double = -1;
+		o.translate = translate_to[0] ? translate_to : NULL;	/* (View > Translate on) */
 		{
 			char q[24];
 
@@ -234,7 +241,7 @@ const char *gw_words(char *w, int n, long *d, long *t)
 		*d = part;
 		*t = whole;
 	} else {
-		snprintf(w, (size_t)n, waiting ? "Waiting for the Gateway" : "The Gateway is converting...");
+		snprintf(w, (size_t)n, waiting ? "Waiting for the Gateway" : translate_to[0] ? "The Gateway is converting and translating..." : "The Gateway is converting...");
 		*d = *t = 0;
 	}
 	return w;

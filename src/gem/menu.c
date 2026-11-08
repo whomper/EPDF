@@ -40,6 +40,7 @@ static const MBAR_ITEM view_items[] = {
 	{ "-", NULL, CMD_NONE },
 	{ "The page's lines", NULL, CMD_LINES },
 	{ "Pages", NULL, CMD_PAGES },
+	{ "Translate", NULL, CMD_TRANSLATE },	/* a tick: the text view translated (Erez, 8 Nov 2026) */
 	{ "Zoom in", "+", CMD_ZOOMIN },		/* the keypad's + and - (Erez, 8 Nov 2026) */
 	{ "Zoom out", "-", CMD_ZOOMOUT },
 	{ NULL, NULL, CMD_NONE }

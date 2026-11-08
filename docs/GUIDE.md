@@ -63,7 +63,8 @@ gives way to you at once.
   bigger page is drawn by the Atari, in colour (a converted PDF's from its original where EPDF
   knows it, the Gateway's). On an ST, it's EConvert's double page in black and white (200 %).
   A zoomed page is moved by dragging it with the mouse, or with the arrow keys; Esc gives the
-  pages back.
+  pages back. **Translate**: ticked, the text view shows each page translated into the language
+  chosen in Settings (see [Translating](#translating)).
 - **Page:** the previous and the next page (^Left, ^Right), the first and the last (^Clr/Home,
   ⇧^Clr/Home).
 - **Help:** this guide.
@@ -149,6 +150,25 @@ pdf --allow ATARI_IP` sets it up. On the Atari you need STinG, MiNTnet or MagiC-
   shows it in its place, with View > Pages. Nothing is written beside the PDF: the converted PDF
   is kept only while it is open (beside `EPDF.PRG`); **File > Save Optimised...** keeps it where
   you choose. Esc stops it.
+
+## Translating
+
+EPDF translates the text view through the Gateway's translation service (translategate, on the
+Raspberry Pi with AERA-Gateway: `sudo aera-gateway install translate`).
+
+- **File > Settings...** (^,): **Translate into** shows the languages the Gateway has installed:
+  choose one. **Languages...** shows every language the Gateway offers, with its size, and
+  installs or removes them (the Gateway does it in the background; the status bar follows it).
+- **View > Translate**: ticked, each page's text is shown translated, the page in view first, then
+  the pages after it; a page shows as it is until its translation has come, and its line then says
+  where it came from ("Page 3 · from English"). Untick it for the pages as they are; tick it again
+  and the translations come back at once (they are kept in memory, never on the disk). Pictures and
+  the pages whole (View > Pages) are not translated. Esc stops it for the document.
+- With **Open on the Gateway** ticked, the Gateway translates while it converts: nothing more is
+  sent, and the converted PDF carries both texts.
+- **Translate...** in the right mouse button's menu shows the words selected translated, in a box.
+
+Nothing is asked of the Gateway while Translate is unticked.
 
 ## EConvert
 
