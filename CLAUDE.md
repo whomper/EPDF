@@ -287,7 +287,14 @@ at first. This section is kept up to date: the build, the tests, what a release 
   tests/hatari/zoom.py (Falcon:16 ST:mono; a stock Falcon-4 has room for 150 % at most). Gateway
   copies are EPDF's own, gate1.pdf/gate2.pdf beside EPDF.PRG, deleted when not open (Erez, 8 Nov
   2026: "no pre-save", no folder atari); File > Save Optimised... writes the open converted PDF
-  where the user says. Then speed. A page in bands re-reads the page once a band (18
+  where the user says. Translation (EPDF 2.0, Erez 8 Nov 2026; AERA-Atari standards/TRANSLATION-SERVICE.md):
+  View > Translate (TRANSLATE=, TRANSLATETO=; TRPORT= for the rigs), src/gem/trview.c (direct: trpara.c's
+  paragraphs to translategate through common's translate.c on a stack of its own, the page in view
+  first), doc.c's trstore (memory only, over the store as read: TSTORE.under), a converted copy's
+  /Translation (pdfgate's translate=CODE with Open on the Gateway: nothing asked by EPDF), Settings'
+  Translate into and Languages... (gatedlg.c's gate_dialog_tr, common's langs.c), the right-click
+  Translate...; Off runs nothing of it. Rig: tests/hatari/translate_view.py (gateway/'s translategate.py
+  stand-in and pdfgate.py; EPDF_PRG=build/aprof/EPDF.PRG for the turns). Then speed. A page in bands re-reads the page once a band (18
   bands: 4 to 15 times slower): draw it whole where memory allows.
 - **The road to 1.0, and EConvert (Erez, 31 Oct 2026):**
   - **1.0 is the text view, complete:** 0.2 speed on an 8 MHz ST (the guidelines' times), 0.3 big

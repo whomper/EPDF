@@ -1650,7 +1650,7 @@ int main(void)
 				const char *why;
 
 				bg_begin();
-				if ((tn = tr_slice(40)) >= 0)
+				if ((tn = tr_slice(30)) >= 0)
 					win_page_ready(tn);
 				if ((why = tr_failed()) != NULL)
 					alert(1, "[1][The pages can't be translated:|%.40s][ OK ]", why);	/* (one a document) */

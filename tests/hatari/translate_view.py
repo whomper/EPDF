@@ -77,7 +77,9 @@ def run(work, machine, tg_port, pdf_port, tglog, mode):
         r.extra += r.m.network()
         os.makedirs(os.path.join(r.hd, "EPDF"))
         os.makedirs(os.path.join(r.hd, "DOCS"))
-        shutil.copy(os.path.join(TOP, "binary", "EPDF.PRG"), os.path.join(r.hd, "EPDF", "EPDF.PRG"))
+        # (EPDF_PRG=build/aprof/EPDF.PRG: the profiled build, its AESGAP lines the turns while translating)
+        shutil.copy(os.environ.get("EPDF_PRG") or os.path.join(TOP, "binary", "EPDF.PRG"),
+                    os.path.join(r.hd, "EPDF", "EPDF.PRG"))
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
         make_pdf(os.path.join(r.hd, "DOCS", "BOOK.PDF"), book(4))
         inf = "GATE=127.0.0.1\nGATEPORT=%d\nTRPORT=%d\nTRANSLATETO=de\n" % (pdf_port, tg_port)
@@ -117,6 +119,10 @@ def run(work, machine, tg_port, pdf_port, tglog, mode):
                 bad.append("pages translated: %s" % done)
             elif done[0][0] != "1":
                 bad.append("the page in view wasn't first: %s" % done)
+            a, b = con.find("EPDF translate-piece"), con.rfind("EPDF translated")
+            gaps = [int(g) for g in re.findall(r"AESGAP (\d+) ms", con[a:b])] if a >= 0 else []
+            if gaps:
+                print("  the turns while translating (AESGAP): longest %d ms, %d turns" % (max(gaps), len(gaps)))
             if not pieces or not asked:
                 bad.append("no request seen (%d pieces, %d at translategate)" % (pieces, asked))
             # View > Translate off: the original; on again: the kept translation, nothing asked

@@ -57,7 +57,16 @@ static long job_len;
 static char job_from[TR_LANG];
 static long pieces;			/* requests made for this document (the rigs' counter) */
 
+/* conn.c's waits call it at most every 40 ms (CONN_SLICE_MS): each call a
+   turn for the machine, the slice's end not waited for on top (they were
+   90-100 ms on ST:mono); the joining and splitting of a page too
+   (trpara.c's tp_turn, every few paragraphs: a page put back took 275 ms) */
 static void idle(void)
+{
+	coro_switch(&job_co, &main_co);
+}
+
+static void tp_idle(void)
 {
 	if (tos_ms() >= slice_end)
 		coro_switch(&job_co, &main_co);
@@ -87,6 +96,7 @@ static void translate_page(long n)
 		return;
 	}
 	memcpy(orig, t, (size_t)len);	/* (the store's copy goes with its next use) */
+	tp_turn = tp_idle;
 	if (tp_split(orig, len, &p) != 0) {
 		free(orig);
 		job_state = TR_FAILED;
@@ -107,6 +117,7 @@ static void translate_page(long n)
 		pieces++;
 		snprintf(a, sizeof a, "%ld", n + 1);
 		log_event("translate-piece", a, NULL);
+		idle();			/* (a piece's answer handled: a turn before the next) */
 	}
 	pf_idle = NULL;
 	if (r < 0) {
@@ -123,6 +134,7 @@ static void translate_page(long n)
 		job_state = job_text ? TR_DONE : TR_FAILED;
 		snprintf(job_from, sizeof job_from, "%s", tr.from_used);
 	}
+	tp_turn = NULL;
 	sb_free(&out);
 	tp_free(&p);
 	free(orig);

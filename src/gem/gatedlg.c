@@ -66,7 +66,7 @@ static void build(void)
 
 	ted(&ted_a, view_a, tmpl_a, valid_a, SHOW, 'X');
 	ted(&ted_p, text_p, tmpl_p, valid_p, 5, '9');
-	obj(BOX, G_BOX, 0, 0x00021100L, 0, 0, 44, h);
+	obj(BOX, G_BOX, 0, 0x00021100L, 0, 0, with_tr ? 47 : 44, h);
 	tree[BOX].ob_next = -1;
 	tree[BOX].ob_head = TITLE;
 	tree[BOX].ob_tail = CANCEL;
@@ -81,11 +81,10 @@ static void build(void)
 	   installed languages only, and "Languages..."): hidden for EConvert */
 	obj(TLABEL, G_STRING, with_tr ? 0 : HIDETREE, (long)"Translate into:", 2, 8, 15, 1);
 	obj(TLANG, G_BUTTON, SELECTABLE | EXIT | (with_tr ? 0 : HIDETREE), (long)lang_btn, 18, 8, 12, 1);
-	obj(TLANGS, G_BUTTON, SELECTABLE | EXIT | (with_tr ? 0 : HIDETREE), (long)"Languages...", 31, 8, 13, 1);
-	obj(OK, G_BUTTON, SELECTABLE | EXIT | DEFAULT, (long)"OK", 22, by, 9, 1);
-	obj(CANCEL, G_BUTTON, SELECTABLE | EXIT | LASTOB, (long)"Cancel", 33, by, 9, 1);
+	obj(TLANGS, G_BUTTON, SELECTABLE | EXIT | (with_tr ? 0 : HIDETREE), (long)"Languages...", 32, 8, 13, 1);
+	obj(OK, G_BUTTON, SELECTABLE | EXIT | DEFAULT, (long)"OK", with_tr ? 25 : 22, by, 9, 1);
+	obj(CANCEL, G_BUTTON, SELECTABLE | EXIT | LASTOB, (long)"Cancel", with_tr ? 36 : 33, by, 9, 1);
 	tree[CANCEL].ob_next = BOX;
-	tree[TLANGS].ob_width = 12;
 	rsrc_obfix_all(tree, NOBJ);
 }
 
