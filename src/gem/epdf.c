@@ -42,6 +42,7 @@
 #include "gwopen.h"
 #include "trview.h"
 #include "charset.h"
+#include "bidi.h"
 #include "translate.h"
 #include "langs.h"
 #include "popup.h"
@@ -835,6 +836,29 @@ static void translate_selection(void)
 		}
 	}
 	free(out);
+	{
+		/* a right-to-left answer (Hebrew) in the order it is seen, each
+		   line against the right edge (EMail 2.14's fix: its box showed
+		   Hebrew left to right) */
+		int i, w = 0, rtl = 0;
+
+		for (i = 0; i < nl; i++)
+			if (bidi_has_rtl(line[i], (short)strlen(line[i])))
+				rtl = 1;
+		if (rtl) {
+			for (i = 0; i < nl; i++)
+				if ((int)strlen(line[i]) > w)
+					w = (int)strlen(line[i]);
+			for (i = 0; i < nl; i++) {
+				char v[41];
+				short n = (short)strlen(line[i]);
+
+				bidi_visual(line[i], n, 1, v);
+				v[n] = '\0';
+				snprintf(line[i], sizeof line[i], "%*s", w, v);
+			}
+		}
+	}
 	alert(1, "[0][%s%s%s%s%s%s%s][ OK ]", line[0], nl > 1 ? "|" : "", nl > 1 ? line[1] : "", nl > 2 ? "|" : "",
 	      nl > 2 ? line[2] : "", nl > 3 ? "|" : "", nl > 3 ? line[3] : "");
 }
