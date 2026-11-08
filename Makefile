@@ -58,6 +58,9 @@ build/glyphjob: tools/glyphjob.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSS
 build/imgdump: tools/imgdump.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HDRS) | build
 	$(CC) $(HCFLAGS) -o $@ tools/imgdump.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC)
 
+build/test_trpara: tests/test_trpara.c src/view/trpara.c src/view/trpara.h common/src/charset.c | build
+	$(CC) $(HCFLAGS) -Isrc/view -fsanitize=address,undefined -o $@ tests/test_trpara.c src/view/trpara.c common/src/charset.c
+
 build/test_pens: tests/test_pens.c src/rovl/pens.c src/rovl/pens.h | build
 	$(CC) $(HCFLAGS) -Isrc/rovl -fsanitize=address,undefined -o $@ tests/test_pens.c src/rovl/pens.c
 
@@ -81,10 +84,12 @@ build/test_tstore build/test_docview: build/test_%: tests/test_%.c $(VIEW_TEST_S
 build/test_xe: tests/test_xe.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HDRS) | build
 	$(CC) $(HCFLAGS) -fsanitize=address,undefined -o $@ tests/test_xe.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC)
 
-test: build/test_xe build/test_ccitt build/test_textview build/test_inf build/test_tstore build/test_docview build/test_search build/pdftext build/econvert build/test_pens
+test: build/test_xe build/test_ccitt build/test_textview build/test_inf build/test_tstore build/test_docview build/test_search build/pdftext build/econvert build/test_pens build/test_trpara
 	build/test_xe
 	build/test_pens
+	build/test_trpara
 	python3 tests/convtext.py
+	python3 tests/translate.py
 	python3 tests/ccitt.py
 	python3 tests/glyphwise.py
 	python3 tests/crypt.py
@@ -195,7 +200,7 @@ $(eval $(call FT_BUILD,m68030))
 FT_OBJS = $(patsubst $(FT)/src/%.c,ft/%.o,$(filter $(FT)/src/%,$(FT_SRC))) ft/epdf/ftsystem.o ft/setjmp.o
 
 # EConvert's converter on this computer (src/conv/, FreeType built for the host in build/host-ft)
-CONV_SRC = src/conv/conv.c src/conv/render.c src/conv/raster.c src/conv/cvjpeg.c src/conv/deflate.c src/conv/quant.c src/conv/jpegenc.c common/src/charset.c
+CONV_SRC = src/conv/conv.c src/conv/render.c src/conv/raster.c src/conv/cvjpeg.c src/conv/deflate.c src/conv/quant.c src/conv/jpegenc.c common/src/charset.c src/view/trpara.c
 HFT_OBJS = $(patsubst $(FT)/src/%.c,build/host-ft/%.o,$(filter $(FT)/src/%,$(FT_SRC))) build/host-ft/epdf/ftsystem.o
 build/host-ft/%.o: $(FT)/src/%.c
 	@mkdir -p $(dir $@)
@@ -218,7 +223,7 @@ build/host-lj/%.o: $(LJ)/src/%.c
 CPIC_SRC = src/pdfimg.c src/ccitt.c src/rscale.c common/src/pic.c common/src/png.c common/src/pic_lj8.c \
            common/third_party/nsgif/src/gif.c common/third_party/nsgif/src/lzw.c
 build/econvert: tools/econvert.c $(CONV_SRC) src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(CPIC_SRC) $(HFT_OBJS) $(HLJ_OBJS) $(HDRS) src/conv/*.h | build
-	$(CC) $(HCFLAGS) -DPDF_DRAW -Isrc/conv -I$(FT)/include '-DFT_CONFIG_OPTIONS_H="epdf/ftoption.h"' '-DFT_CONFIG_MODULES_H="epdf/ftmodule.h"' -I$(FT) \
+	$(CC) $(HCFLAGS) -DPDF_DRAW -Isrc/conv -Isrc/view -I$(FT)/include '-DFT_CONFIG_OPTIONS_H="epdf/ftoption.h"' '-DFT_CONFIG_MODULES_H="epdf/ftmodule.h"' -I$(FT) \
 	  $(LJ_DEFS) -Icommon/third_party/nsgif/include -Icommon/third_party/nsgif/src \
 	  -o $@ tools/econvert.c $(CONV_SRC) src/conv/cvio_host.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(CPIC_SRC) $(HFT_OBJS) $(HLJ_OBJS)
 
@@ -308,7 +313,7 @@ CV_ATARI_SRC = $(CONV_SRC) src/conv/cvio_tos.c src/pdfio_tos.c $(PDF_SRC) $(COMM
                src/pdfimg.c src/ccitt.c src/rscale.c common/src/pic.c common/src/png.c common/src/pic_lj8.c \
                $(T)/nsgif/src/gif.c $(T)/nsgif/src/lzw.c common/atari/dspjpeg.c $(LJ_SRC) $(RT_C)
 build/m68030cv/%.o: XFLAGS += -DPDF_DRAW -DPIC_LIBJPEG -DNO_GETENV -DNO_PUTENV -DAERA_NO_FLOAT -fwrapv -I$(LJ)/src -I$(LJ)/config \
-                              -I$(T)/nsgif/include -I$(T)/nsgif/src -Isrc/conv $(FT_INC) '-DFT_CONFIG_OPTIONS_H="epdf/ftoption.h"' \
+                              -I$(T)/nsgif/include -I$(T)/nsgif/src -Isrc/conv -Isrc/view $(FT_INC) '-DFT_CONFIG_OPTIONS_H="epdf/ftoption.h"' \
                               '-DFT_CONFIG_MODULES_H="epdf/ftmodule.h"'
 build/m68030cv/$(LJ)/%.o build/m68030cv/$(T)/%.o: XFLAGS += -w
 build/m68030cv/common/src/inflate.o build/m68030cv/src/pdffilt.o: XFLAGS += -DINFLATE_ASM
