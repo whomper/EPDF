@@ -39,6 +39,17 @@ EConvert's settings:
 | `picture_width` | 64 to 4096                  | `--picture-width`    |
 | `double`        | `1`, `0`                    | `--normal-pages` (0) |
 | `name`          | the PDF's own name          | (kept in the result) |
+| `translate`     | a language, ISO 639-1 (`en`, `he`, ...) | `--translate` (below) |
+
+`translate` (Erez, 8 Nov 2026; EPDF with View > Translate ticked): the converted PDF also carries each
+page's text translated into that language (CONVERTED-PDF.md, `/Translation`), translated on the
+Gateway's own machine by its translation service, so the text crosses the network once. Without
+`translate` the exchange is byte for byte as before. The 102 answers cover converting and translating
+(the Atari says "The Gateway is converting and translating..."). The final 200 also carries
+`X-Translate-From: CODE` (the language most of the pages were in) and, when every page was in that
+language already, `X-Translate-Same: 1`. The translation service's refusals come back as pdfgate's:
+422 `pdfgate: no translation from LANG into LANG` (a pair not installed: "Settings > Languages" on the
+Atari), 503 `pdfgate: the translation service is busy`, 504 as before.
 
 `name` is what the converted PDF's AERA entry records as the original
 (`/Name`): letters, digits, `_`, `.`, `-` and spaces, at most 64, not
@@ -73,6 +84,28 @@ The connection closes after the final response.
 
 `GET /version` answers `aerapdf COMMIT`: the EPDF commit the Gateway's
 converter was built from.
+
+### aerapdf and the translator (who does what)
+
+aerapdf is EPDF's converter (`tools/econvert.c`): EPDF builds and tests it. The translator is the
+Gateway's (AERA-Gateway's session builds it): a program `translateclient` on the Gateway that sends
+text to translategate on the same machine. pdfgate runs
+
+    aerapdf ... --translate CODE --translator PATH IN.pdf OUT.pdf
+
+and aerapdf, for each page, after its text is made:
+
+- runs `PATH --to CODE` with the page's paragraphs on its standard input: UTF-8, paragraphs separated
+  by an empty line, a paragraph's soft breaks as spaces, the lines CONVERTED-PDF.md leaves out not sent
+  (a page with nothing to send is not run);
+- reads the translation from its standard output, the same paragraphs in the same order, separated
+  by an empty line, and on its standard error first line `from CODE` (or `same CODE`);
+- exit status 0 done; 2 the pair isn't installed, 3 busy, 4 too long: aerapdf stops and pdfgate
+  answers 422, 503 or 504; any other: 422.
+
+`--progress` goes on counting the pages' thousandths, translating included. The translator splits the
+text into pieces of 2 KB for translategate, keeps nothing and logs no word of it (TRANSLATION-SERVICE.md).
+A stand-in translator in EPDF's tests (`tests/pigate/`) lets aerapdf's side be tested without an engine.
 
 ## On the Atari
 

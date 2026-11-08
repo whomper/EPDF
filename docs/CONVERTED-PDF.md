@@ -19,6 +19,7 @@ The document catalog has an entry `/AERA`, a dictionary:
 | `/Prepared` | an array of names, what every page carries: `/Text`, `/Pictures`, `/Drawings`, and `/PageMono` and `/PageColour` when the batch made them |
 | `/Photos` | `/Indexed` (256 colours, the default) or `/JPEG`: how the photos are stored (EConvert's per-batch setting) |
 | `/Source` | a dictionary on the original: `/Name` (its file name), `/Bytes` (its size), `/Pages` (its page count) |
+| `/Translate` | only in a file translated by the Gateway (below): a dictionary, `/To` the language the text was translated into, an ISO 639-1 name (`/en`, `/he`, ...) |
 
 The document information dictionary's `/Producer` is `(EConvert 1.1 \(AERA\): prepared for the Atari)`. Its `/Title`, `/Author`, `/Subject`, `/Keywords`, `/Creator`, `/CreationDate` and `/ModDate` are the original's, each as it was (written as a hex string).
 
@@ -35,6 +36,8 @@ Each page dictionary has an entry `/AERA`, a dictionary:
 | `/Mono` | when the batch made it: the page whole as a picture, 1 bit a pixel, as wide as EPDF's text column in a window the size of the converting machine's desktop (640 before EConvert 1.3) |
 | `/Colour` | when the batch made it: the page whole in 16 colours, 4 bits a pixel, as wide as `/Mono` |
 | `/Double` | where the converting machine had the memory: `/Mono` at twice its width, shown when the page is clicked in View > Pages |
+| `/Translation` | in a translated file (the catalog's `/AERA /Translate`): a stream (FlateDecode), the page's text translated into `/To` (below) |
+| `/From` | in a translated file: the language the page's text was in, a name as `/To`'s; `/Same` when it was in `/To` already (then the page has no `/Translation`, and `/Text` is shown) |
 
 A page's pictures are kept at their own pixels up to the converting machine's window width (a drawing at what the page drawn gives it); their lines in `/Text` keep their size on the page, so EPDF shows them as the page does and whole when clicked.
 
@@ -50,6 +53,24 @@ The bytes are in the Atari character set, exactly as EPDF's text store (`epdf.tx
   the page shows it (turned or mirrored already), so the line never carries `v` or `h`.
 
 A drawing (a chart, a diagram, a map) is one picture. Its labels are in the picture, not in the text.
+
+### The translation (Erez, 8 Nov 2026)
+
+When the Atari asked the Gateway for a translation (PI-GATEWAY.md's `translate`), each page keeps its
+`/Text` as it is and carries its translation beside it, so EPDF shows either without converting again:
+
+- the same character set and line rules as `/Text`, in the language of `/To`;
+- each paragraph of `/Text` (lines joined by soft breaks, up to a line ending in LF) is a paragraph of
+  the translation, in the same order: one line ending in LF (EPDF wraps it to the window), or, for a
+  paragraph whose lines were all short (a list, an address), its lines as they came back, each ending
+  in LF;
+- a picture's line, an empty line and a Tab-separated table line stay where they are, as they were:
+  they are not sent for translation;
+- Hebrew is in logical order, as in `/Text`.
+
+EPDF shows the translation in the text view when View > Translate is ticked and the target language
+in Settings is `/To`; the page's head says where it came from ("Page 3 · from Hebrew"). The page
+pictures (`/Mono`, `/Colour`, `/Double`) are never translated.
 
 ### Pictures
 
@@ -89,8 +110,11 @@ The page's `/Contents` draws the prepared parts, so any viewer shows something s
   them, and it decodes no JPEG unless the batch chose `/Photos /JPEG`.
 - It draws the badge on each page's heading line.
 - With View > Pages it shows `/Colour` on a screen with 16 colours or more, else `/Mono`.
+- With View > Translate ticked and the file's `/Translate /To` its target, it shows each page's
+  `/Translation` in the text view (`/Text` where the page is `/Same` or has none).
 
 ## Versions
 
-Version 1 is this document. A later version adds keys. A reader of version 1 ignores keys it doesn't know,
+Version 1 is this document; `/Translate`, `/Translation` and `/From` were added to it on 8 Nov 2026
+(a reader that doesn't know them shows `/Text`, as before). A later version adds keys. A reader of version 1 ignores keys it doesn't know,
 and a file whose `/Version` it doesn't know is read as a standard PDF.
