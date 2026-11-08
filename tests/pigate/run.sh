@@ -7,7 +7,10 @@
 # through it is the same, byte for byte, as build/econvert writes on its own;
 # a stop half-way leaves no file; a refusal comes back in its words.
 #
-#   tests/pigate/run.sh [IN.pdf]   (a book of 6 pages)
+# With PDFGATE (AERA-Gateway's gateway/ folder) the same against its
+# pdfgate.py itself: EPDF tests every change to pdfgate (guidelines 1.2).
+#
+#   [PDFGATE=../aera-gateway/gateway] tests/pigate/run.sh [IN.pdf]   (a book of 6 pages)
 set -e
 cd "$(dirname "$0")/../.."
 fonts=${FONTS:-third_party/liberation/fonts}
@@ -23,7 +26,15 @@ cc -O1 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-sign-compare -fsanitize=
    -Isrc -Icommon/src -o "$w/test_pigate" tests/pigate/test_pigate.c src/pigate.c \
    common/src/conn.c common/src/tls_none.c common/src/util.c src/pdfio_host.c src/conv/cvio_host.c
 port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
-python3 tests/pigate/fakegate.py --port "$port" --aerapdf build/econvert --fonts "$fonts" --log "$w/gate.log" &
+if [ -n "$PDFGATE" ]; then
+	echo "aerapdf test" > "$w/SOURCE"
+	echo "the Gateway: pdfgate.py from $PDFGATE"
+	python3 "$PDFGATE/pdfgate.py" --bind 127.0.0.1 --port "$port" --aerapdf build/econvert --fonts "$fonts" \
+		--source "$w/SOURCE" --tmp "$w" 2> "$w/gate.log" &
+else
+	echo "the Gateway: EPDF's stand-in, tests/pigate/fakegate.py"
+	python3 tests/pigate/fakegate.py --port "$port" --aerapdf build/econvert --fonts "$fonts" --log "$w/gate.log" &
+fi
 pid=$!
 sleep 1
 "$w/test_pigate" "$port" "$in" "$w/pi.pdf"

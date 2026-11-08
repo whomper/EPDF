@@ -501,9 +501,10 @@ files-test: binary/EPDF.PRG binary/LAUNCH.PRG
 
 # the Gateway's exchange (src/pigate.c) against EPDF's stand-in for it
 # (tests/pigate/fakegate.py) and this build's converter: byte for byte the
-# direct one, a stop, a refusal (docs/PI-GATEWAY.md); no other AERA program
+# direct one, a stop, a refusal (docs/PI-GATEWAY.md); PDFGATE=AERA-Gateway's
+# gateway/ folder: against its pdfgate.py, which EPDF tests at every change
 pi-test: build/econvert
-	tests/pigate/run.sh $(PDF)
+	PDFGATE=$(PDFGATE) tests/pigate/run.sh $(PDF)
 .PHONY: pi-test
 rovl-test: build/econvert binary/ROVLTEST.PRG binary/render.ovl
 	python3 tests/hatari/rovl.py build/rovl-test

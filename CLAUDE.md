@@ -328,7 +328,10 @@ at first. This section is kept up to date: the build, the tests, what a release 
   with its reason and tests. A release goes out when this repo's checks and rigs pass (Erez, 7 Nov
   2026: the hub's checks no longer hold it); then send the hub the commit and the link. Its checks on
   Erez's TOS and NVDI follow, and a fault they find is fixed forward first. Gateway code (pdfgate,
-  aerapdf) reaches the Pi only through the AERA-Gateway session, and a release that needs it names the
+  aerapdf) is EPDF's protocol and EPDF tests every change to it (Erez, 8 Nov 2026, guidelines 1.2):
+  `make pi-test PDFGATE=.../aera-gateway/gateway` and `PDFGATE=... tests/hatari/gateway.py`
+  against pdfgate itself (without PDFGATE both run EPDF's stand-in, tests/pigate/fakegate.py, and
+  no other AERA program). It reaches the Pi only through the AERA-Gateway session, and a release that needs it names the
   Gateway version and goes out after it (guideline 7.3). Ask the hub before copying anything from
   another app.
 - **Licences:** everything must be GPL-2.0-or-later compatible. No MuPDF (AGPL), nothing else
