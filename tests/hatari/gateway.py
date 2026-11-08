@@ -4,16 +4,16 @@
 """EConvert's Gateway mode on an emulated Atari against the Gateway's
 protocol on this computer (Erez, 7 Nov 2026):
 
-    [PDFGATE=.../aera-gateway/gateway] gateway.py WORK [MACHINE...]   (ST:mono)
+    [PDFGATE=FOLDER|none] gateway.py WORK [MACHINE...]   (ST:mono)
 
 The Atari's network is the family's FAKESTNG and its serial bridge
 (machines.py network()); the Gateway is EPDF's stand-in for it,
 tests/pigate/fakegate.py, with this build's converter (build/econvert), at
-127.0.0.1: no other AERA program (guidelines 1.2, Erez 8 Nov 2026). With
-PDFGATE (AERA-Gateway's gateway/ folder) the Gateway is its pdfgate.py
-itself: pdfgate is EPDF's protocol and EPDF tests every change to it
-(guidelines 1.2, Erez 8 Nov 2026: "Gateway code of an app must be tested
-by the app"). EConvert
+127.0.0.1, when there is no pdfgate.py to run (PDFGATE=none). By default
+the Gateway is pdfgate.py itself from EPDF's read-only gateway/ copy
+(tools/sync-gateway.sh; PDFGATE=FOLDER for another): pdfgate is EPDF's
+protocol and EPDF tests every change to it (guidelines 1.2, Erez 8 Nov
+2026: "Gateway code of an app must be tested by the app"). EConvert
 starts with CONVERT=gateway and two PDFs; Return converts. Checked:
 - both come back, and each is byte for byte what build/econvert writes on
   its own with the sizes EConvert sent ("gateway-sizes" in its log);
@@ -59,7 +59,9 @@ def gateway(work):
     (PDFGATE) or the stand-in: (process, port, log path)"""
     port = free_port()
     log = os.path.join(work, "pdfgate.log")
-    gate = os.environ.get("PDFGATE")
+    gate = os.environ.get("PDFGATE", os.path.join(TOP, "gateway"))
+    if gate == "none" or not os.path.exists(os.path.join(gate, "pdfgate.py")):
+        gate = None
     if gate:
         with open(os.path.join(work, "SOURCE"), "w") as f:
             f.write("rig\n")
