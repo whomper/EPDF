@@ -18,7 +18,13 @@ with translateclient.py, on 127.0.0.1:
   translation at once, nothing asked again;
 - through the Gateway (GATEWAY=1): pdfgate converts and translates, the
   copy's pages shown translated, no "translate-piece" (nothing asked by
-  EPDF itself).
+  EPDF itself);
+- Hebrew (direct, against common's tests/langs/fakegate.py, whose /translate
+  answers into he with a right-to-left sentence holding "Atari 2.13"): the
+  pages translated, the shot of the text view (right to left, against the
+  right edge), then a word selected and the right mouse button's
+  Translate...: the box's shot (the hub, 8 Nov 2026: EMail's box showed
+  Hebrew left to right).
 """
 import os
 import re
@@ -69,7 +75,7 @@ def requests(tglog):
         return len(re.findall(r"translategate: 127\.0\.0\.1 \S+ (?:200, \d+ bytes in|same, \d+ bytes)", f.read()))
 
 
-def run(work, machine, tg_port, pdf_port, tglog, mode):
+def run(work, machine, tg_port, pdf_port, tglog, mode, he_port=0):
     r = speed.Rig(os.path.join(work, machine.replace(":", "_") + "-" + mode), machine,
                   display=os.environ.get("XDISPLAY", ":91"))
     bad = []
@@ -82,19 +88,22 @@ def run(work, machine, tg_port, pdf_port, tglog, mode):
                     os.path.join(r.hd, "EPDF", "EPDF.PRG"))
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
         make_pdf(os.path.join(r.hd, "DOCS", "BOOK.PDF"), book(4))
-        inf = "GATE=127.0.0.1\nGATEPORT=%d\nTRPORT=%d\nTRANSLATETO=de\n" % (pdf_port, tg_port)
+        if mode == "hebrew":
+            tg_port = he_port
+        inf = "GATE=127.0.0.1\nGATEPORT=%d\nTRPORT=%d\nTRANSLATETO=%s\n" % (pdf_port, tg_port,
+                                                                         "he" if mode == "hebrew" else "de")
         inf += {"off": "TRANSLATE=0\nGATEWAY=0\n", "direct": "TRANSLATE=1\nGATEWAY=0\n",
-                "gateway": "TRANSLATE=1\nGATEWAY=1\n"}[mode]
+                "gateway": "TRANSLATE=1\nGATEWAY=1\n", "hebrew": "TRANSLATE=1\nGATEWAY=0\n"}[mode]
         r.write("EPDF/epdf.inf", inf)
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\DOCS\\BOOK.PDF\n")
-        before = requests(tglog)
+        before = requests(tglog) if mode != "hebrew" else 0
         r.start("C:\\LAUNCH.PRG")
         end = time.time() + 600
         if mode == "off":
             while time.time() < end and r.console().count("EPDF page ") < 4:
                 time.sleep(1)
             time.sleep(8)
-        elif mode == "direct":
+        elif mode in ("direct", "hebrew"):
             while time.time() < end and r.console().count("EPDF translated ") < 4:
                 time.sleep(1)
         else:
@@ -109,7 +118,7 @@ def run(work, machine, tg_port, pdf_port, tglog, mode):
         shot = r.shot("text")
         con = r.console()
         pieces = con.count("EPDF translate-piece")
-        asked = requests(tglog) - before
+        asked = requests(tglog) - before if mode != "hebrew" else pieces
         if mode == "off":
             if pieces or "EPDF translated" in con or asked:
                 bad.append("Translate off asked: %d pieces, %d requests at translategate" % (pieces, asked))
@@ -145,6 +154,31 @@ def run(work, machine, tg_port, pdf_port, tglog, mode):
                 bad.append("on again: not the translation as it was (%d pixels)" % differ(shot, again))
             if requests(tglog) != n0:
                 bad.append("on again asked translategate again")
+        elif mode == "hebrew":
+            done = re.findall(r"EPDF translated (\d+) (\w+)", con)
+            if len([d for d in done if d[1] == "done"]) < 4:
+                bad.append("pages translated into Hebrew: %s" % done)
+            # a word of the text (a double click), then the right mouse
+            # button's Translate... (its second item)
+            g = dict(l.split("=") for l in r.xdo("getwindowgeometry", "--shell", r.win()).split())
+            gx, gy = int(g["X"]), int(g["Y"])
+            r.xdo("mousemove", str(gx + 300), str(gy + 120))
+            time.sleep(0.5)
+            r.xdo("click", "--repeat", "2", "--delay", "120", "1")
+            time.sleep(2)
+            r.xdo("click", "3")
+            time.sleep(2)
+            r.xdo("mousemove", str(gx + 320), str(gy + 120 + 24))
+            time.sleep(0.5)
+            r.xdo("click", "1")
+            end = time.time() + 60
+            while time.time() < end and "EPDF translate-selection" not in r.console():
+                time.sleep(1)
+            time.sleep(3)
+            r.shot("box")
+            if "EPDF translate-selection ok" not in r.console():
+                bad.append("Translate...: %s" % [l for l in r.console().splitlines() if "selection" in l or "menu" in l][-3:])
+            r.key("Return")
         else:
             if "EPDF gateway-done 0" not in con:
                 bad.append("not converted: %s" % [l for l in con.splitlines() if "gateway" in l][-3:])
@@ -168,11 +202,17 @@ def main(argv):
     os.makedirs(work, exist_ok=True)
     procs, tg_port, pdf_port, logs = services(work)
     bad = []
+    sys.path.insert(0, os.path.join(TOP, "common", "tests", "langs"))
+    import fakegate
+    he = fakegate.Gate(port=free_port(), installed=("he",))
+    he.start()
+    modes = [m for m in os.environ.get("TRV_MODES", "off direct gateway hebrew").split()]
     try:
         for m in argv[1:] or ["ST:mono", "Falcon-4:16"]:
-            for mode in ("off", "direct", "gateway"):
-                bad += run(work, m, tg_port, pdf_port, logs[0], mode)
+            for mode in modes:
+                bad += run(work, m, tg_port, pdf_port, logs[0], mode, he.port)
     finally:
+        he.stop()
         for p in procs:
             p.terminate()
     with open(logs[0], errors="replace") as f:

@@ -729,7 +729,11 @@ int doc_pic_start(void)
 		/* its stack: 12 KB, 64 KB once pages are drawn (render.ovl's);
 		   between pictures the decoder waits at its loop's top, so it
 		   starts again on a bigger one */
-		long need = drawn ? DRAW_STACK : PIC_STACK;
+		/* (any document whose pages render.ovl draws: a converted
+		   copy's zoomed page too, since 1.10. That one ran on the
+		   pictures' 12 KB and overran it: Erez's EDOS copy, a page
+		   clicked in View > Pages, 4 bombs past the stack's top, 8 Nov) */
+		long need = drawn || (e->obj >= PICS_PAGE) || doc_page_drawable() ? DRAW_STACK : PIC_STACK;
 
 		if (pic_stack && pic_stack_size < need) {
 			free(pic_stack);

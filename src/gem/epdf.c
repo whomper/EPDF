@@ -762,8 +762,7 @@ static void translate_selection(void)
 	DOCVIEW *v = doc_view();
 	SBUF b;
 	long p, o0, o1, len, outlen = 0;
-	char from[TR_LANG], err[120], *out, line[4][41];
-	int nl = 0;
+	char from[TR_LANG], err[120], *out;
 
 	if (!v || v->sel_p0 < 0 || !tr_to()[0] || !gate_host[0])
 		return;
@@ -803,64 +802,24 @@ static void translate_selection(void)
 		return;
 	}
 	{
-		/* the answer in up to four lines of 40, broken at a space */
-		long k = 0;
+		/* the answer as it came: common's alert wraps it into lines of 30
+		   at the spaces and puts Hebrew into the order it is seen (bidi);
+		   its own marks and the line ends made harmless, cut to what five
+		   lines hold */
+		char msg[150];
+		long i, n = outlen < (long)sizeof msg - 4 ? outlen : (long)sizeof msg - 4;
 
-		while (k < outlen && nl < 4) {
-			long n = outlen - k > 40 ? 40 : outlen - k, cut = n;
+		for (i = 0; i < n; i++) {
+			char c = out[i];
 
-			if (outlen - k > 40)
-				while (cut > 10 && out[k + cut] != ' ')
-					cut--;
-			if (cut <= 10)
-				cut = n;
-			snprintf(line[nl], sizeof line[nl], "%.*s", (int)cut, out + k);
-			{
-				char *c;
-
-				for (c = line[nl]; *c; c++)
-					if (*c == '[' || *c == ']' || *c == '|' || *c == '\n' || *c == '\r')
-						*c = *c == '[' ? '(' : *c == ']' ? ')' : ' ';	/* (an alert's own marks) */
-			}
-			nl++;
-			k += cut;
-			while (k < outlen && out[k] == ' ')
-				k++;
+			msg[i] = c == '[' ? '(' : c == ']' ? ')' : (c == '|' || c == '\n' || c == '\r' || c == '\t') ? ' ' : c;
 		}
-		if (k < outlen && nl == 4) {
-			size_t l = strlen(line[3]);
-
-			if (l > 37)
-				l = 37;
-			strcpy(line[3] + l, "...");
-		}
+		if (n < outlen)
+			memcpy(msg + n, "...", 3), n += 3;
+		msg[n] = '\0';
+		free(out);
+		alert(1, "[0][%s][ OK ]", msg);
 	}
-	free(out);
-	{
-		/* a right-to-left answer (Hebrew) in the order it is seen, each
-		   line against the right edge (EMail 2.14's fix: its box showed
-		   Hebrew left to right) */
-		int i, w = 0, rtl = 0;
-
-		for (i = 0; i < nl; i++)
-			if (bidi_has_rtl(line[i], (short)strlen(line[i])))
-				rtl = 1;
-		if (rtl) {
-			for (i = 0; i < nl; i++)
-				if ((int)strlen(line[i]) > w)
-					w = (int)strlen(line[i]);
-			for (i = 0; i < nl; i++) {
-				char v[41];
-				short n = (short)strlen(line[i]);
-
-				bidi_visual(line[i], n, 1, v);
-				v[n] = '\0';
-				snprintf(line[i], sizeof line[i], "%*s", w, v);
-			}
-		}
-	}
-	alert(1, "[0][%s%s%s%s%s%s%s][ OK ]", line[0], nl > 1 ? "|" : "", nl > 1 ? line[1] : "", nl > 2 ? "|" : "",
-	      nl > 2 ? line[2] : "", nl > 3 ? "|" : "", nl > 3 ? line[3] : "");
 }
 
 static void context_menu(short mx, short my)
