@@ -49,3 +49,10 @@ printf 'GIF89a not a pdf' > "$w/x.pdf"
 "$w/test_pigate" "$port" "$w/x.pdf" "$w/y.pdf" | grep -q 'err "pdfgate: not a PDF"' && \
 	echo "ok   a refusal in pdfgate's words"
 ! grep -q "$(basename "$in")" "$w/gate.log" && echo "ok   the Pi's log names no file"
+# translate=CODE (docs/PI-GATEWAY.md): pdfgate.py, translateclient.py and
+# translategate.py's stand-in engine from gateway/, with this build's aerapdf
+if [ -n "$PDFGATE" ] && [ -f "$PDFGATE/translateclient.py" ]; then
+	python3 tests/pigate/translate_gate.py "$PDFGATE" "$in"
+else
+	echo "SKIPPED: translate=CODE (no pdfgate.py with translateclient.py to run)"
+fi
