@@ -113,6 +113,14 @@ def run(work, machine, converted):
             if not wait(r, "EPDF zoom 150", 1, 30):
                 bad.append("keypad +: no 150 %%: %s" % [l for l in r.console().splitlines() if "zoom" in l])
                 raise RuntimeError
+            # the page's picture enlarged at once, before the sharp one is drawn
+            # (Erez, 8 Nov 2026: "tens of seconds of wait time")
+            time.sleep(2)
+            quick = r.shot("enlarged")
+            if "EPDF zoom-enlarged" not in r.console():
+                bad.append("150 %: no enlarged picture shown first")
+            elif differ(pages, quick) < 5000:
+                bad.append("150 %%: the enlarged page didn't show at once (%d pixels)" % differ(pages, quick))
             n0 = r.console().count("rows from 0 ")
             if not wait(r, "rows from 0 ", n0 + 0, 5):
                 pass

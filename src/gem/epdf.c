@@ -1524,6 +1524,7 @@ int main(void)
 	while (!quit_now) {
 		short which, flags = MU_MESAG | MU_KEYBD | MU_BUTTON;
 		unsigned long t;
+		pics_focus = doc_view() ? dv_page_at_top(doc_view()) : -1;
 		int pending = doc_pending() || find_dir || doc_pic_busy() || pics_waiting() || cp.on || gw_busy() ||
 			      tr_busy() || ljob_on;
 
@@ -1592,7 +1593,10 @@ int main(void)
 						break;
 					t0 = t1;
 				}
-			} else if ((doc_pic_busy() || pics_waiting()) && bg_may_work() && ((pic_turn ^= 1) || !doc_pending())) {
+			} else if ((doc_pic_busy() || pics_waiting()) && bg_may_work() &&
+				   ((pic_turn ^= 1) || !doc_pending() || pics_focus_busy())) {
+				/* (the page in focus's picture: every turn, the reading
+				   and the rest after it: Erez, 8 Nov 2026) */
 				long obj = -1;
 
 				doc_pic_drop_ahead();	/* (one shown waits: the one ahead gives way) */

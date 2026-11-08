@@ -823,7 +823,11 @@ int doc_pic_busy(void)
    the one ahead stopped, its slot let go (made again later, if room) */
 void doc_pic_drop_ahead(void)
 {
-	if (!rpic || !rpic->ahead || !pics_shown_waiting())
+	/* one ahead of the view gives way to one it shows; one the window
+	   shows but not on the page in focus gives way to that page's (Erez,
+	   8 Nov 2026: the page in focus first) */
+	if (!rpic || !((rpic->ahead && pics_shown_waiting()) ||
+		       (!rpic->ahead && pics_focus >= 0 && rpic->page != pics_focus && pics_focus_busy())))
 		return;
 	abandon = 1;
 	while (!pdone) {

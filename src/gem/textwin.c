@@ -1066,6 +1066,12 @@ static struct {
 	long top, left;			/* its first row and column in view */
 	int pct;			/* a page of View > Pages zoomed: 150 to 400 (0: a picture) */
 	DVPIC base;			/* that page's line as View > Pages shows it */
+	/* a converted PDF's page: its own picture enlarged at once (made in a
+	   second or so from what is stored), then the page drawn sharp at that
+	   size (render.ovl, seconds to tens of seconds) in its place when it
+	   is ready (Erez, 8 Nov 2026: "tens of seconds of wait time") */
+	MFDB pre;			/* the page's picture as View > Pages shows it, enlarged */
+	int pre_heap;
 } zoom;
 
 /* View > Zoom in and Zoom out's steps (Erez, 8 Nov 2026: keypad + and -,
@@ -1073,6 +1079,11 @@ static struct {
 static const short zsteps[] = { 100, 150, 200, 300, 400 };
 static int zoom_failed_at;		/* the size that couldn't be made (this document): not offered again */
 #define NZSTEPS (int)(sizeof zsteps / sizeof zsteps[0])
+
+static void zoom_pre_free(void)
+{
+	pics_enlarge_free(&zoom.pre, zoom.pre_heap);
+}
 
 int win_zoomed(void)
 {
@@ -1085,6 +1096,7 @@ void win_zoom_end(void)
 		return;
 	zoom.on = 0;
 	zoom.pct = 0;
+	zoom_pre_free();
 	if (has_menu_states)
 		has_menu_states();
 	win_draw_all();
@@ -1093,8 +1105,19 @@ void win_zoom_end(void)
 static void draw_zoom(const GRECT *c)
 {
 	PICE *e = pics_get(zoom.p.obj, zoom.p.w, zoom.p.h, zoom.p.flip);
+	const MFDB *from;
 	short x = (short)(work.x + (work.w - zoom.p.w) / 2), y = work.y;
 	long made = e && e->bm.fd_addr ? (e->state == PICS_READY ? zoom.p.h : e->ready) : 0;
+
+	if (e && e->state == PICS_READY && zoom.pre.fd_addr) {
+		zoom_pre_free();	/* (the sharp one is here) */
+		log_event("zoom-sharp", NULL, NULL);
+	}
+	if (zoom.pre.fd_addr && (!e || e->state != PICS_READY)) {
+		from = &zoom.pre;	/* the enlarged one till the sharp one is made */
+		made = zoom.p.h;
+	} else
+		from = e ? &e->bm : NULL;
 	long y1 = zoom.top + work.h < zoom.p.h ? zoom.top + work.h : zoom.p.h;
 	short vw = (short)(zoom.p.w - zoom.left < work.w ? zoom.p.w - zoom.left : work.w);	/* its columns in view */
 	long m1 = made < y1 ? made : y1;
@@ -1133,7 +1156,7 @@ static void draw_zoom(const GRECT *c)
 			pxy[5] = dy0;
 			pxy[6] = dx1;
 			pxy[7] = dy1;
-			vro_cpyfm(vdi_h, 3, pxy, &e->bm, &scr);
+			vro_cpyfm(vdi_h, 3, pxy, (MFDB *)from, &scr);
 		}
 	} else {
 		/* its frame till its rows come */
@@ -1182,6 +1205,34 @@ static int zoom_page_pic(const DVPIC *b, int pct, DVPIC *out)
 	return 1;
 }
 
+/* p (a page's zoomed picture) shown, and until it is made (render.ovl:
+   seconds to tens of seconds) the page's picture as View > Pages has it
+   enlarged at once, its pixels nearest (Erez, 8 Nov 2026: "tens of
+   seconds of wait time ... the user may think there is an error"), where
+   memory holds both */
+static void zoom_set_pic(const DVPIC *p)
+{
+	long bytes = (p->w + 15) / 16 * 2 * (planes > 8 ? 16 : planes) * (long)p->h;
+	PICE *b;
+
+	zoom_pre_free();
+	zoom.p = *p;
+	b = pics_get(zoom.base.obj, zoom.base.w, zoom.base.h, zoom.base.flip);
+	if (p->obj >= PICS_PAGE && b && b->state == PICS_READY && (long)Malloc(-1L) >= 2 * bytes + 128 * 1024L) {
+		unsigned long t0 = tos_ms();
+
+		graf_mouse(BUSYBEE, NULL);
+		if (pics_enlarge(b, p->w, p->h, &zoom.pre, &zoom.pre_heap) == 0) {
+			char a[24];
+
+			snprintf(a, sizeof a, "%lu ms", tos_ms() - t0);
+			log_event("zoom-enlarged", a, NULL);
+		} else
+			memset(&zoom.pre, 0, sizeof zoom.pre);
+		graf_mouse(ARROW, NULL);
+	}
+}
+
 /* the page line in view (View > Pages): the first row of a page's picture
    from the top, or the one at row r */
 static int page_line_at(long r0, long r1, DVPIC *out)
@@ -1223,7 +1274,7 @@ static void zoom_to(int k, short fx, short fy)
 	cy = (zoom.on ? zoom.top : zoom.base.row) + (fy - work.y);
 	cx = cx * p.w / (ow > 0 ? ow : 1);
 	cy = cy * p.h / (oh > 0 ? oh : 1);
-	zoom.p = p;
+	zoom_set_pic(&p);
 	zoom.pct = zsteps[k];
 	zoom.left = cx - (fx - work.x);
 	zoom.top = cy - (fy - work.y);
@@ -1367,7 +1418,7 @@ int win_zoom_at(short mx, short my)
 			{
 				long cx = mx - x, cy = (long)v->pic.row * ch + (my - work.y - r * ch);
 
-				zoom.p = p;
+				zoom_set_pic(&p);
 				zoom.pct = 200;
 				zoom.left = cx * p.w / v->pic.w - (fx - work.x);
 				zoom.top = cy * p.h / v->pic.h - (fy - work.y);
