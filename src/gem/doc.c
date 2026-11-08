@@ -20,6 +20,7 @@
 #include "pdf.h"
 #include "plat.h"
 #include "tstore.h"
+#include "crash.h"
 #include "docview.h"
 #include "epdf.h"
 #include "coro.h"
@@ -772,6 +773,29 @@ int doc_pic_start(void)
 
 /* the picture on for ms milliseconds: 1 when it is done (the window's
    bitmap made, or failed), its object in *obj */
+/* the background stacks' deepest use so far, in crash.log's "last status"
+   (the hub, 8 Nov 2026: a crash near a stack's end shows itself there);
+   asked after a picture on a 68020 or better (a scan of the stack's unused
+   part, a few ms there), only when it is deeper than before */
+static void stacks_note(void)
+{
+	static long rmax, pmax;
+	long r = read_started ? coro_used(read_stack, READ_STACK) : 0;
+	long p = pic_started ? coro_used(pic_stack, pic_stack_size) : 0;
+	char a[80];
+
+	if (r <= rmax && p <= pmax)
+		return;
+	if (r > rmax)
+		rmax = r;
+	if (p > pmax)
+		pmax = p;
+	snprintf(a, sizeof a, "stacks: reading %ld of %ld, pictures %ld of %ld", rmax, READ_STACK, pmax,
+		 pic_stack_size);
+	crash_note(a);
+	log_event("stacks", a, NULL);
+}
+
 int doc_pic_slice(unsigned long ms, long *obj)
 {
 	if (!rpic)
@@ -793,6 +817,8 @@ int doc_pic_slice(unsigned long ms, long *obj)
 		return 0;
 	}
 	*obj = rpic->obj;
+	if (rdraw_machine())
+		stacks_note();
 	if (rpic_rows)
 		pics_made(rpic, rpic_ok, rpic_why);
 	else

@@ -535,6 +535,20 @@ done_one:
 				snprintf(a, sizeof a, "%d %ld ms %ld bytes stack %ld%s%s", r, st.ms, st.out_bytes,
 					 coro_used(work_stack, CONV_STACK), r == -1 ? " why " : "", r == -1 ? err : "");
 				log_event("converted", base_of(files[i].path), a);
+				{
+					/* the job's stack, deepest so far, in crash.log's "last
+					   status" (Erez's bombs left no record of it) */
+					static long most;
+					long u = coro_used(work_stack, CONV_STACK);
+
+					if (u > most) {
+						char q[64];
+
+						most = u;
+						snprintf(q, sizeof q, "the job's stack: %ld of %ld", most, CONV_STACK);
+						crash_note(q);
+					}
+				}
 			}
 			bytes_done += files[i].bytes;
 			if (gate_off)
