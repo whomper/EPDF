@@ -14,6 +14,7 @@ static const MBAR_ITEM desk_items[] = {
 
 static const MBAR_ITEM file_items[] = {
 	{ "Open...", "^O", CMD_OPEN },
+	{ "Save Optimised...", NULL, CMD_SAVEOPT },	/* greyed but for a converted PDF (Erez, 8 Nov 2026) */
 	{ "Open on the Gateway", NULL, CMD_GATEWAY },	/* a tick: on (Erez, 7 Nov 2026) */
 	{ "Settings...", "^,", CMD_SETTINGS },
 	{ "-", NULL, CMD_NONE },
@@ -39,6 +40,8 @@ static const MBAR_ITEM view_items[] = {
 	{ "-", NULL, CMD_NONE },
 	{ "The page's lines", NULL, CMD_LINES },
 	{ "Pages", NULL, CMD_PAGES },
+	{ "Zoom in", "+", CMD_ZOOMIN },		/* the keypad's + and - (Erez, 8 Nov 2026) */
+	{ "Zoom out", "-", CMD_ZOOMOUT },
 	{ NULL, NULL, CMD_NONE }
 };
 

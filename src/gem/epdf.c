@@ -166,18 +166,15 @@ static void open_failed(void)
    window saying so, and opened() follows when it is done */
 static void open_doc(const char *p)
 {
-	char copy[256];
-
-	if (gw_on && !gw_in_copy_folder(p) && gw_copy(p, copy, sizeof copy)) {
-		log_event("gateway-copy", NULL, NULL);
-		p = copy;		/* converted before: that copy, at once */
-	}
 	gw_stop();			/* (another document's conversion: given up) */
+	win_zoom_end();
+	win_zoom_forget();
 	copy_end(NULL);			/* a copy of the old document's text: given up */
 	if (doc_open(p, win_cols(), lines_mode, cache_path) != 0) {
 		open_failed();
 		return;
 	}
+	gw_forget(p);			/* (the Gateway's copies but the one open: never kept) */
 	find_dir = 0;
 	win_status(NULL);
 	win_title();
@@ -194,14 +191,12 @@ static void gateway_begin(void)
 {
 	int r;
 
-	if (!gw_on || !doc_is_open() || doc_prepared() || gw_busy() || gw_in_copy_folder(doc_path()))
+	if (!gw_on || !doc_is_open() || doc_prepared() || gw_busy() || gw_is_temp(doc_path()))
 		return;
-	r = gw_start(doc_path(), gate_host, gate_port);
+	r = gw_start(doc_path(), doc_path(), gate_host, gate_port);
 	if (r == GW_NO_ADDRESS && settings_dialog())
-		r = gw_start(doc_path(), gate_host, gate_port);
-	if (r == GW_NO_FOLDER)
-		alert(1, "[1][The folder atari can't be made beside %.20s: the disk is write-protected.][ OK ]", doc_name());
-	else if (r == GW_NO_NETWORK)
+		r = gw_start(doc_path(), doc_path(), gate_host, gate_port);
+	if (r == GW_NO_NETWORK)
 		alert(1, "[1][The Gateway is reached through STinG, MiNTnet or MagiC-Net, and none of them is running.][ OK ]");
 	else if (r == GW_NO_MEMORY)
 		alert(1, "[3][Not enough memory to send it to the Gateway.][ OK ]");
@@ -217,8 +212,15 @@ static void gateway_end(void)
 
 	snprintf(q, sizeof q, "%d", r);
 	log_event("gateway-done", q, NULL);
-	if (r == 0)
+	if (r == 0) {
+		char src[256];
+
+		snprintf(src, sizeof src, "%s", gw_source());
 		open_doc(copy);
+		if (doc_is_open() || doc_opening())
+			doc_set_original(src);	/* (its name the PDF's: the copy is EPDF's own) */
+		win_title();
+	}
 	else if (r == -3)
 		alert(1, "[1][The Gateway at %.24s doesn't answer. Check that it is on and that the PDF converter is installed on it.][ OK ]",
 		      gw_host());
@@ -262,6 +264,72 @@ static void open_dialog(void)
 	open_doc(full);
 }
 
+/* File > Save Optimised... (Erez, 8 Nov 2026): the converted PDF open (an
+   "Optimised" one: the Gateway's copy, or EConvert's file) written where
+   the user says, as it is: nothing converted again. Under the PDF's own
+   name by default, in its folder; written to a temporary name and renamed
+   (6.4's safe save) */
+int pf_wopen(const char *path);
+long pf_wwrite(int h, const void *data, long len);
+int pf_wclose(int h, const char *path, int keep);
+
+static void save_optimised(void)
+{
+	static char name[16];
+	char dir[200], full[256], *s;
+	const char *o = doc_original();
+	short button;
+	int in, out, ok = 1;
+	char *buf;
+	long n;
+
+	if (!doc_is_open() || !doc_prepared())
+		return;
+	snprintf(name, sizeof name, "%.12s", doc_name());
+	s = strrchr(o, '\\');
+	if (s)
+		snprintf(dir, sizeof dir, "%.*s\\*.PDF", (int)(s - o), o);
+	else
+		snprintf(dir, sizeof dir, "%c:\\*.PDF", (char)('A' + Dgetdrv()));
+	if (!fsel_exinput(dir, name, &button, "Save the optimised PDF") || !button || !name[0])
+		return;
+	strcpy(full, dir);
+	s = strrchr(full, '\\');
+	if (!s)
+		return;
+	strcpy(s + 1, name);
+	if (!strcasecmp(full, doc_path()))
+		return;			/* (itself) */
+	if (pf_size(full) >= 0 && alert(2, "[2][%.30s is there already.|Replace it?][Replace|Cancel]", name) != 1)
+		return;
+	if ((in = pf_open(doc_path(), PF_READ)) < 0) {
+		alert(1, "[1][EPDF can't read the optimised PDF.][ OK ]");
+		return;
+	}
+	if (!(buf = malloc(32768L)) || (out = pf_wopen(full)) < 0) {
+		free(buf);
+		pf_close(in);
+		alert(1, "[1][%.30s can't be written there.][ OK ]", name);
+		return;
+	}
+	graf_mouse(BUSYBEE, NULL);
+	while ((n = pf_read(in, buf, 32768L)) > 0)
+		if (pf_wwrite(out, buf, n) != n) {
+			ok = 0;
+			break;
+		}
+	if (n < 0)
+		ok = 0;
+	pf_close(in);
+	free(buf);
+	if (pf_wclose(out, full, ok) != 0)
+		ok = 0;
+	graf_mouse(ARROW, NULL);
+	log_event("save-optimised", ok ? "ok" : "failed", NULL);
+	if (!ok)
+		alert(1, "[1][%.30s couldn't be written: the disk may be full.][ OK ]", name);
+}
+
 /* ---------------------------------------------------------------- the selection, Find, Copy */
 
 static char find_text[65];
@@ -273,11 +341,12 @@ static long find_left;			/* pages it may still look at */
    every step of a selection dragged) */
 static void menu_states(void)
 {
-	static const short cmd[6] = { CMD_COPY, CMD_SELALL, CMD_FIND, CMD_FINDNEXT, CMD_FINDPREV, CMD_PAGES };
-	static signed char was[6] = { -1, -1, -1, -1, -1, -1 };
+	static const short cmd[9] = { CMD_COPY, CMD_SELALL, CMD_FIND, CMD_FINDNEXT, CMD_FINDPREV, CMD_PAGES,
+				      CMD_SAVEOPT, CMD_ZOOMIN, CMD_ZOOMOUT };
+	static signed char was[9] = { -1, -1, -1, -1, -1, -1, -1, -1, -1 };
 	static signed char tick = -1;
 	DOCVIEW *v = doc_view();
-	signed char now[6];
+	signed char now[9];
 	int i;
 
 	menus_due = 0;
@@ -287,7 +356,10 @@ static void menu_states(void)
 	now[1] = now[2] = v != NULL;
 	now[3] = now[4] = v && find_text[0];
 	now[5] = doc_has_pages() != 0;		/* (greyed for a file without its pages whole) */
-	for (i = 0; i < 6; i++)
+	now[6] = v && doc_prepared();		/* Save Optimised...: a converted PDF's */
+	now[7] = v && doc_pages_mode() && win_zoom_can(1);
+	now[8] = v && doc_pages_mode() && win_zoom_can(-1);
+	for (i = 0; i < 9; i++)
 		if (now[i] != was[i]) {
 			menu_ienable(menu.tree, mbar_object(&menu, cmd[i]), now[i]);
 			was[i] = now[i];
@@ -565,7 +637,29 @@ static void click(short mx, short my, short kstate, int dbl)
 	int how;
 
 	if (win_zoomed()) {
-		win_zoom_end();		/* (a click gives the text back) */
+		/* held and moved: the page dragged under the mouse (Erez, 8 Nov
+		   2026); a click alone gives the text back */
+		if (press_track(&anywhere, mx, my, 0, held_msg, 0, 0) != PRESS_DRAG) {
+			win_zoom_end();
+			menu_states();
+			return;
+		}
+		wind_update(BEG_MCTRL);
+		graf_mouse(FLAT_HAND, NULL);
+		for (;;) {
+			short nx, ny;
+
+			graf_mkstate(&nx, &ny, &mb, &ks);
+			if (!(mb & 1))
+				break;
+			if (nx != mx || ny != my) {
+				win_zoom_pan(nx - mx, ny - my);
+				mx = nx;
+				my = ny;
+			}
+		}
+		graf_mouse(ARROW, NULL);
+		wind_update(END_MCTRL);
 		return;
 	}
 	if (!dbl && !(kstate & (K_LSHIFT | K_RSHIFT)) && win_zoom_at(mx, my))
@@ -708,7 +802,7 @@ static void command(int c)
 {
 	char n[8];
 
-	if (c != CMD_ABOUT)
+	if (c != CMD_ABOUT && c != CMD_ZOOMIN && c != CMD_ZOOMOUT)
 		win_zoom_end();		/* (a picture shown whole: the text back first) */
 	switch (c) {
 	case CMD_ABOUT:
@@ -716,6 +810,14 @@ static void command(int c)
 		break;
 	case CMD_OPEN:
 		open_dialog();
+		break;
+	case CMD_SAVEOPT:
+		save_optimised();
+		break;
+	case CMD_ZOOMIN:
+	case CMD_ZOOMOUT:
+		win_zoom_step(c == CMD_ZOOMIN ? 1 : -1);
+		menu_states();
 		break;
 	case CMD_GATEWAY:
 		gw_on = !gw_on;
@@ -828,6 +930,10 @@ static void key(short kstate, short k)
 		return;			/* an iconified window takes no keys (5.1) */
 	if (win_zoom_key(scan))
 		return;			/* a picture shown whole takes them */
+	if ((scan == 0x4e || scan == 0x4a) && doc_pages_mode()) {
+		command(scan == 0x4e ? CMD_ZOOMIN : CMD_ZOOMOUT);	/* the keypad's + and - */
+		return;
+	}
 	if (gw_busy() && scan == 0x01 && !cp.on && !find_dir) {
 		gw_stop();		/* Esc: the Gateway's conversion given up */
 		log_event("gateway-stopped", NULL, NULL);
@@ -1076,6 +1182,8 @@ int main(void)
 	}
 	path_join(inf_path, sizeof inf_path, start_dir, "epdf.inf");
 	path_join(cache_path, sizeof cache_path, start_dir, "epdf.txc");
+	gw_set_temp_dir(start_dir);
+	has_menu_states = menu_states;
 	/* stage 2: render.ovl and the standard fonts beside the program */
 	path_join(rdraw_path, sizeof rdraw_path, start_dir, "render.ovl");
 	path_join(doc_font_dir, sizeof doc_font_dir, start_dir, "fonts");
@@ -1291,6 +1399,10 @@ int main(void)
 	mbar_free(&menu);
 	copy_end(NULL);
 	doc_close();
+	gw_stop();
+	while (gw_busy())
+		gw_slice(50);		/* (stopped at its next wait: its file closed) */
+	gw_forget(NULL);		/* (the Gateway's copies: kept only by Save Optimised...) */
 	pics_exit();
 	font_exit();
 	inf_free(&inf);

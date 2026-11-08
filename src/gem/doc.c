@@ -64,6 +64,9 @@ static int abandon;			/* the document closes: stop the page and the picture */
    slices' hook): doc stays NULL until it is done */
 static PDOC *odoc;
 static char opath[256], ocache[256];
+/* the PDF a copy shown was made from (the Gateway's: its name the
+   window's, File > Save Optimised...'s and the page drawn bigger's) */
+static char orig[256];
 static int opening, open_ok, ocols, olines;
 static long onpages;
 static unsigned long slice_end;		/* tos_ms() when the slice is up */
@@ -185,6 +188,11 @@ int doc_double_of(long obj, long *dbl, long *w, long *h)
 int doc_has_pages(void)
 {
 	return doc && (doc->prepared || drawn) && pages_have;
+}
+
+int doc_page_drawable(void)
+{
+	return doc && (drawn || (doc->prepared && rdraw_machine() && pf_size(rdraw_path) > 0));
 }
 
 int doc_drawn(void)
@@ -404,7 +412,12 @@ static int page_rows(long n, int w, int h, void (*row)(void *u, long y, const un
 
 		/* its canvas a page whole where it can (bands read the page again
 		   for each: 4 to 15 times slower) */
-		rdoc = o->open(opath, doc_font_dir, fr / 8, fr * 2 / 3, err, sizeof err);
+		/* a converted copy's pages drawn bigger from its original
+		   (Erez, 8 Nov 2026: zoomed in colour), where it is still there;
+		   else from the copy itself */
+		const char *from = orig[0] && pf_size(orig) > 0 ? orig : opath;
+
+		rdoc = o->open(from, doc_font_dir, fr / 8, fr * 2 / 3, err, sizeof err);
 		if (!rdoc) {
 			log_event("render-open", err, NULL);
 			*why = abandon ? PIC_STOPPED : PIC_MEMORY;
@@ -429,6 +442,14 @@ static int page_rows(long n, int w, int h, void (*row)(void *u, long y, const un
 			snprintf(a, sizeof a, "%ld ms %d rows from %d glyphs %ld images %ld", tos_ms() - t0, pg.rows, y0,
 				 pg.glyphs, pg.images);
 			log_event("page-drawn", a, NULL);
+		}
+		if (pg.images_missed > 0 && pg.images_missed == pg.images && pg.glyphs == 0) {
+			/* nothing on it drawn: a page that is one picture (a
+			   converted copy's) without the memory for it, white */
+			free(pn);
+			draw_page = -1;
+			*why = PIC_MEMORY;
+			return 0;
 		}
 		draw_rows = 1;
 		rows_t0 = tos_ms();
@@ -723,6 +744,21 @@ const char *doc_name(void)
 	return name;
 }
 
+void doc_set_original(const char *path)
+{
+	const char *base = strrchr(path, '\\');
+
+	strncpy(orig, path, sizeof orig - 1);
+	orig[sizeof orig - 1] = '\0';
+	strncpy(name, base ? base + 1 : path, sizeof name - 1);
+	name[sizeof name - 1] = '\0';
+}
+
+const char *doc_original(void)
+{
+	return orig[0] ? orig : opath;
+}
+
 long doc_pages(void)
 {
 	return npages;
@@ -821,6 +857,7 @@ int doc_open(const char *path, int cols, int lines_mode, const char *cache)
 	}
 	strncpy(opath, path, sizeof opath - 1);
 	opath[sizeof opath - 1] = '\0';
+	orig[0] = '\0';
 	strncpy(ocache, cache ? cache : "", sizeof ocache - 1);
 	ocache[sizeof ocache - 1] = '\0';
 	ocols = cols;

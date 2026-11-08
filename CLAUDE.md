@@ -277,8 +277,17 @@ at first. This section is kept up to date: the build, the tests, what a release 
   `src/gem/rdraw.c` only on a 68020 or better: the ST keeps its memory. JPEGs there go through pic.c
   (the DSP; `cv_jpeg_pic`), never in EConvert or the Gateway (their files stay byte for byte the same).
   Standard fonts are read from their files as FreeType asks (render.c's RSTREAM), not held whole.
-  `make rovl-test` (tests/hatari/rovl.py, ROVLTEST.PRG). Next: View > Pages for any PDF (EPDF shows
-  what render.ovl draws), then zoom, then speed. A page in bands re-reads the page once a band (18
+  `make rovl-test` (tests/hatari/rovl.py, ROVLTEST.PRG). View > Pages for any PDF is in (1.7). Zoom
+  (Erez, 8 Nov 2026): View > Zoom in and out, the keypad's + and -, 150/200/300/400 % of the page's
+  line, as far as memory holds (a size that failed isn't offered again for the document); on a
+  Falcon/TT render.ovl draws the page at that width (PICS_PAGE + page, any document: a converted
+  copy's from its original, doc_set_original, else from the copy), in colour; on an ST EConvert's
+  mono double at 200 %. A zoomed page is dragged with the mouse (press_track, drawn through
+  press_update_begin). render.ovl draws in smaller bands when its canvas can't be had. Rig:
+  tests/hatari/zoom.py (Falcon:16 ST:mono; a stock Falcon-4 has room for 150 % at most). Gateway
+  copies are EPDF's own, gate1.pdf/gate2.pdf beside EPDF.PRG, deleted when not open (Erez, 8 Nov
+  2026: "no pre-save", no folder atari); File > Save Optimised... writes the open converted PDF
+  where the user says. Then speed. A page in bands re-reads the page once a band (18
   bands: 4 to 15 times slower): draw it whole where memory allows.
 - **The road to 1.0, and EConvert (Erez, 31 Oct 2026):**
   - **1.0 is the text view, complete:** 0.2 speed on an 8 MHz ST (the guidelines' times), 0.3 big

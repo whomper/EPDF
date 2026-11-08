@@ -21,12 +21,14 @@ starts with CONVERT=gateway and two PDFs; Return converts. Checked:
 - the Gateway's log names no file;
 - a Gateway that isn't there: the alert, and the files stay in the list.
 Then EPDF with Open on the Gateway ticked (GATEWAY=1): a book opened is
-shown, converted by the Gateway meanwhile into C:\\atari\\BOOK.PDF (byte
-for byte the direct conversion with EPDF's sizes) and opened in its place
-(the Optimised badge: a shot); opened again, the copy at once, nothing
-sent; no Gateway: the alert, the book stays shown.
+shown, converted by the Gateway meanwhile into EPDF's own copy beside the
+program (gate1.pdf: byte for byte the direct conversion with EPDF's sizes;
+no folder atari beside the PDF, Erez 8 Nov 2026) and opened in its place
+(the Optimised badge: a shot); no Gateway: the alert, the book stays
+shown.
 """
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -192,9 +194,19 @@ def run_epdf(work, machine, port, there=True):
                 bad.append("not converted")
             elif not sizes:
                 bad.append("no sizes logged")
-            elif not direct_same(src, sizes[0], os.path.join(r.hd, "DOCS", "atari", "BOOK.PDF"), r.work,
-                                 "colour" if machine.split(":")[-1] in ("16", "256") else "mono"):
-                bad.append("the copy in atari isn't the direct conversion")
+            else:
+                # the copy is EPDF's own, beside the program (gate1.pdf or
+                # gate2.pdf), never beside the PDF (Erez, 8 Nov 2026: no
+                # pre-save; File > Save Optimised... keeps it)
+                ed = os.path.join(r.hd, "EPDF")
+                copies = [os.path.join(ed, f) for f in os.listdir(ed) if re.fullmatch(r"(?i)gate[12]\.pdf", f)]
+                if os.path.exists(os.path.join(r.hd, "DOCS", "atari")) or os.path.exists(os.path.join(r.hd, "DOCS", "ATARI")):
+                    bad.append("a folder atari was made beside the PDF")
+                if len(copies) != 1:
+                    bad.append("EPDF's copy: %s" % sorted(os.listdir(ed)))
+                elif not direct_same(src, sizes[0], copies[0], r.work,
+                                     "colour" if machine.split(":")[-1] in ("16", "256") else "mono"):
+                    bad.append("EPDF's copy isn't the direct conversion")
             if con.count("EPDF opening") < 2:
                 bad.append("the copy wasn't opened after")
         print("EPDF %s%s: %s  (%s)" % (r.describe(), "" if there else ", no Gateway", "ok" if not bad else "; ".join(bad),

@@ -33,6 +33,10 @@ void doc_close(void);
 int doc_is_open(void);
 const char *doc_path(void);
 const char *doc_name(void);
+/* the document open is a copy made from path (its name shown) */
+void doc_set_original(const char *path);
+/* that PDF, or the document's own path */
+const char *doc_original(void);
 long doc_pages(void);
 long doc_read(void);			/* pages whose text is read */
 int doc_pending(void);			/* pages still to read */
@@ -56,6 +60,9 @@ long doc_page_len(long n);		/* -1 when not read yet; nothing read */
 #include "docview.h"
 DOCVIEW *doc_view(void);		/* NULL without a document */
 int doc_prepared(void);			/* a converted PDF (EConvert's) */
+/* a page can be drawn at any size here (render.ovl on a Falcon or TT: a
+   PDF's own pages, or a converted copy's from its original) */
+int doc_page_drawable(void);
 int doc_drawn(void);			/* its pages drawn as printed by render.ovl (stage 2) */
 int doc_pic_drawing(void);		/* the picture being made is a page drawn */
 extern char doc_font_dir[200];
@@ -109,6 +116,15 @@ int win_zoom_at(short mx, short my);
 int win_zoomed(void);
 void win_zoom_end(void);
 int win_zoom_key(short scan);
+/* View > Zoom in (dir 1) and Zoom out (-1) on View > Pages' page in view
+   (100 to 400 %): can it, and do it */
+int win_zoom_can(int dir);
+void win_zoom_step(int dir);
+/* the zoomed picture dragged by (dx, dy): 1 when it moved */
+int win_zoom_pan(long dx, long dy);
+extern void (*has_menu_states)(void);
+/* a new document: every zoom offered again */
+void win_zoom_forget(void);
 /* doc.c: a page's picture (View > Pages) and its double: 1, its object and size */
 int doc_double_of(long obj, long *dbl, long *w, long *h);
 

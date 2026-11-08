@@ -45,8 +45,9 @@ page at a time while you read, starting with the page you are on; a page it hasn
 "..." until it has. You can scroll, jump to a page or open another document at any time: reading
 gives way to you at once.
 
-- **File:** Open... (^O), Open on the Gateway (ticked: see [The Gateway](#the-gateway)),
-  Settings... (^,), Quit (^Q).
+- **File:** Open... (^O), Save Optimised... (a converted PDF written where you choose, as it is:
+  nothing is converted again; greyed for a PDF that isn't converted), Open on the Gateway
+  (ticked: see [The Gateway](#the-gateway)), Settings... (^,), Quit (^Q).
 - **Edit:** Copy (^C) puts the text you selected on the clipboard (a big selection is copied a
   page at a time, with its progress in the status bar; Esc stops it); Select all (^A); Find... (^F)
   looks for a word or a phrase, whatever its case, across the lines it was set on; Find next (^G)
@@ -56,7 +57,13 @@ gives way to you at once.
   `EPDF.INF`. **The page's lines**: ticked, each line is as it is on the page; not ticked (as EPDF
   starts), the lines of a paragraph are joined and wrapped to the window, so the text reads at any
   window width. **Pages**: each page whole, as it is printed: on a Falcon or a TT any PDF (see
-  below), on an ST a converted PDF's; greyed where there are none.
+  below), on an ST a converted PDF's; greyed where there are none. **Zoom in** (the keypad's +)
+  and **Zoom out** (the keypad's -) show the page in view bigger: 150, 200, 300 and 400 %, as far
+  as the memory holds; a click on a page goes to 200 % and a click back. On a Falcon or a TT the
+  bigger page is drawn by the Atari, in colour (a converted PDF's from its original where EPDF
+  knows it, the Gateway's). On an ST, it's EConvert's double page in black and white (200 %).
+  A zoomed page is moved by dragging it with the mouse, or with the arrow keys; Esc gives the
+  pages back.
 - **Page:** the previous and the next page (^Left, ^Right), the first and the last (^Clr/Home,
   ⇧^Clr/Home).
 - **Help:** this guide.
@@ -108,6 +115,7 @@ icon shows the page you are on.
 | ^C, ^A | copy the selection, select everything |
 | ^F, ^G, ⇧^G | find, find next, find previous |
 | ⇧^F | the font |
+| keypad +, keypad - | zoom in, zoom out (View > Pages) |
 | ^, | Settings (the Gateway) |
 | Insert | the menu for the selection (as the right mouse button) |
 | ^U, ^Q | quit (EPDF has one window, so ^U closes it and quits) |
@@ -138,8 +146,9 @@ pdf --allow ATARI_IP` sets it up. On the Atari you need STinG, MiNTnet or MagiC-
 - **File > Open on the Gateway:** ticked, a PDF you open that isn't converted yet is shown as it
   is, while the Gateway converts it; the status bar says "Converting on the Gateway" (or "Waiting
   for the Gateway", while it converts another Atari's), and when the converted PDF has come, EPDF
-  shows it in its place, with View > Pages. The converted PDF is kept in a folder `atari` beside
-  the original, with the original's name, and opened from there the next time. Esc stops it.
+  shows it in its place, with View > Pages. Nothing is written beside the PDF: the converted PDF
+  is kept only while it is open (beside `EPDF.PRG`); **File > Save Optimised...** keeps it where
+  you choose. Esc stops it.
 
 ## EConvert
 
@@ -160,8 +169,8 @@ Atari, an ST too, it can have the Gateway convert them instead.
   as well, for a Falcon or a TT; a page with little colour gets the black and white one only).
 - **Photos:** 256 colours (fast on every Atari) or JPEG (smaller files, but slow to show on an
   8 MHz ST). Charts and pictures of few colours are kept exact either way.
-- **Convert on:** This Atari, or the Gateway (its address and port in **File > Settings...**, ^,).
-  On an ST only the Gateway. The Gateway's converted PDFs are the same as the Falcon's.
+- **Convert on:** This Atari, or the Gateway (its address and port in **File > Settings...**, ^,;
+  until you set them there, EPDF's, from `EPDF.INF` in the folder above). On an ST only the Gateway. The Gateway's converted PDFs are the same as the Falcon's.
 - **Convert** (Return, ^R) works through the batch. Two bars show the file and the whole batch,
   each with how far it has got and about how long is left. **Stop** (Esc) stops at once; the file
   under way is left out, the ones done stay.
