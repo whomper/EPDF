@@ -84,6 +84,46 @@ static int has_030, on_gateway;
 static char gate_host[64];
 static unsigned short gate_port = GATE_PORT;
 
+/* no Gateway of its own yet: EPDF's, from epdf.inf in the folder above
+   (the release's epdf\econvert\), or beside it (Erez, 8 Nov 2026: the
+   converter takes the Gateway EPDF has) */
+static void epdf_gateway(void)
+{
+	char p[200], dir[170];
+	const char *where[2];
+	int k;
+
+	snprintf(dir, sizeof dir, "%s", start_dir);
+	{
+		char *b = strrchr(dir, '\\');
+
+		if (b)
+			*b = '\0';
+	}
+	where[0] = dir;
+	where[1] = start_dir;
+	for (k = 0; k < 2 && !gate_host[0]; k++) {
+		INF e;
+		long n;
+		char *t;
+		const char *v;
+
+		path_join(p, sizeof p, where[k], "epdf.inf");
+		if (!(t = pf_load(p, &n)))
+			continue;
+		inf_init(&e);
+		inf_parse(&e, t, n);
+		free(t);
+		if ((v = inf_get(&e, "GATE")) != NULL && v[0] && strlen(v) < sizeof gate_host) {
+			strcpy(gate_host, v);
+			if ((v = inf_get(&e, "GATEPORT")) != NULL && atol(v) > 0 && atol(v) < 65536)
+				gate_port = (unsigned short)atol(v);
+			log_event("gateway-from-epdf", gate_host, NULL);
+		}
+		inf_free(&e);
+	}
+}
+
 static void settings_read(void)
 {
 	long n;
@@ -111,6 +151,8 @@ static void settings_read(void)
 		strcpy(gate_host, v);
 	if ((v = inf_get(&inf, "GATEPORT")) != NULL && atol(v) > 0 && atol(v) < 65536)
 		gate_port = (unsigned short)atol(v);
+	if (!gate_host[0])
+		epdf_gateway();
 }
 
 static void setting(const char *name, const char *value, const char *note)
@@ -144,14 +186,24 @@ static long mem_free(void)
    picture as wide as EPDF's text column in a window the desktop's size
    (its kind and margins: textwin.c's WKIND and MARGIN), and a picture at
    most that window's inside (common's scr_work_size) */
-static void screen_sizes(int *page_w, int *pic_w)
+static int sizes_page = 640, sizes_pic = 640;
+
+/* asked of the AES on the main stack when a batch begins (screen_sizes
+   is called on the job's stack, where nothing may call the AES) */
+static void screen_sizes_measure(void)
 {
 	short w, h;
 
 	scr_work_size(NAME | CLOSER | FULLER | MOVER | SIZER | UPARROW | DNARROW | VSLIDE, 8, &w, &h);
-	*page_w = w;
+	sizes_page = w;
 	scr_work_size(NAME | CLOSER | FULLER | MOVER | SIZER | UPARROW | DNARROW | VSLIDE, 0, &w, &h);
-	*pic_w = w;
+	sizes_pic = w;
+}
+
+static void screen_sizes(int *page_w, int *pic_w)
+{
+	*page_w = sizes_page;
+	*pic_w = sizes_pic;
 }
 
 #define MAXF 200
@@ -802,6 +854,7 @@ static void begin(void)
 		alert(1, "[3][Not enough memory to start.][ OK ]");
 		return;
 	}
+	screen_sizes_measure();
 	coro_start(&work_co, work_stack, CONV_STACK, worker);
 	batch_bytes = bytes_done = 0;
 	for (i = 0; i < nfiles; i++)
