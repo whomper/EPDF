@@ -94,7 +94,6 @@ C_LO	equ	$30		; LO + 16
 C_BIG	equ	$31		; 1024 x 2^12: farther than any pen
 C_FF	equ	$32		; $0000FF, $FF8000: masks (AND takes no immediate)
 C_FM	equ	$33
-C_DMP	equ	$34		; damp/16 (5/16, or 8/16: no damping) as a fraction
 C_M	equ	$e0		; X and Y: -$020202
 ; internal X and Y: the tables, from the 68030. For a cell's red, mr
 ; (-16..15; mr + 16 the 68030's), WR its row of the near table: NT + (mr
@@ -383,19 +382,6 @@ rgo
 	and	y0,a		b,x0
 	sub	x1,a
 	asr	a		x:<C_38,x1
-	; only damp/8 of each error is passed on (pic.c DITHER_DAMP): each
-	; error (q 2^13 here) times damp/16, doubled: q damp 2^10, exact
-	move	a,y0
-	move	x:<C_DMP,x1
-	mpy	y1,x1,a
-	asl	a
-	move	a,y1
-	mpy	x0,x1,a
-	asl	a
-	move	a,x0
-	mpy	y0,x1,a
-	asl	a
-	move	x:<C_38,x1
 	; to the next row: at x - dir, A + 3/16 q (it is done); A = B + 5/16
 	; q; B = 1/16 q; and 7/16 q to the next pixel
 	move	x:V_AR,b	a,y0
