@@ -1,16 +1,15 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
-# pigate.c against a real pdfgate on this computer: AERA-Gateway's
-# gateway/pdfgate.py (PDFGATE: its folder) with this build's converter
-# (build/econvert as aerapdf). A PDF converted through it is the same, byte
-# for byte, as build/econvert writes on its own; a stop half-way leaves no
-# file; a refusal comes back in pdfgate's words.
+# pigate.c against the Gateway's protocol on this computer: the stand-in
+# tests/pigate/fakegate.py with this build's converter (build/econvert); no
+# other AERA program (guidelines 1.2, Erez 8 Nov 2026). A PDF converted
+# through it is the same, byte for byte, as build/econvert writes on its own;
+# a stop half-way leaves no file; a refusal comes back in its words.
 #
-#   PDFGATE=../aera-gateway/gateway tests/pigate/run.sh [IN.pdf]   (a book of 6 pages)
+#   tests/pigate/run.sh [IN.pdf]   (a book of 6 pages)
 set -e
 cd "$(dirname "$0")/../.."
-gate=${PDFGATE:?the folder with pdfgate.py}
 fonts=${FONTS:-third_party/liberation/fonts}
 w=$(mktemp -d)
 trap 'kill $pid 2>/dev/null; rm -rf "$w"' EXIT
@@ -23,10 +22,8 @@ make -s build/econvert
 cc -O1 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-sign-compare -fsanitize=address,undefined \
    -Isrc -Icommon/src -o "$w/test_pigate" tests/pigate/test_pigate.c src/pigate.c \
    common/src/conn.c common/src/tls_none.c common/src/util.c src/pdfio_host.c src/conv/cvio_host.c
-echo "aerapdf test" > "$w/SOURCE"
 port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
-python3 "$gate/pdfgate.py" --bind 127.0.0.1 --port "$port" --aerapdf build/econvert --fonts "$fonts" \
-	--source "$w/SOURCE" --tmp "$w" 2> "$w/gate.log" &
+python3 tests/pigate/fakegate.py --port "$port" --aerapdf build/econvert --fonts "$fonts" --log "$w/gate.log" &
 pid=$!
 sleep 1
 "$w/test_pigate" "$port" "$in" "$w/pi.pdf"

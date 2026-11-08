@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
-"""EConvert's Gateway mode on an emulated Atari against a real pdfgate on
-this computer (Erez, 7 Nov 2026):
+"""EConvert's Gateway mode on an emulated Atari against the Gateway's
+protocol on this computer (Erez, 7 Nov 2026):
 
-    PDFGATE=.../aera-gateway/gateway gateway.py WORK [MACHINE...]   (ST:mono)
+    gateway.py WORK [MACHINE...]   (ST:mono)
 
 The Atari's network is the family's FAKESTNG and its serial bridge
-(machines.py network()); the Gateway is AERA-Gateway's pdfgate.py with this
-build's converter (build/econvert) as aerapdf, at 127.0.0.1. EConvert
+(machines.py network()); the Gateway is EPDF's stand-in for it,
+tests/pigate/fakegate.py, with this build's converter (build/econvert), at
+127.0.0.1: no other AERA program (guidelines 1.2, Erez 8 Nov 2026). EConvert
 starts with CONVERT=gateway and two PDFs; Return converts. Checked:
 - both come back, and each is byte for byte what build/econvert writes on
   its own with the sizes EConvert sent ("gateway-sizes" in its log);
@@ -50,18 +51,12 @@ def free_port():
 
 
 def gateway(work):
-    """pdfgate on 127.0.0.1 with build/econvert: (process, port, log path)"""
-    gate = os.environ.get("PDFGATE")
-    if not gate:
-        sys.exit("gateway.py: PDFGATE names AERA-Gateway's gateway/ folder")
+    """the stand-in Gateway on 127.0.0.1 with build/econvert: (process, port, log path)"""
     port = free_port()
-    with open(os.path.join(work, "SOURCE"), "w") as f:
-        f.write("rig\n")
     log = os.path.join(work, "pdfgate.log")
-    p = subprocess.Popen([sys.executable, os.path.join(gate, "pdfgate.py"), "--bind", "127.0.0.1",
+    p = subprocess.Popen([sys.executable, os.path.join(TOP, "tests", "pigate", "fakegate.py"),
                           "--port", str(port), "--aerapdf", os.path.join(TOP, "build", "econvert"),
-                          "--fonts", FONTS, "--source", os.path.join(work, "SOURCE"), "-v"],
-                         stderr=open(log, "w"))
+                          "--fonts", FONTS, "--log", log])
     time.sleep(1)
     return p, port, log
 
