@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
-"""View > Zoom in and Zoom out (Erez, 8 Nov 2026: the keypad's + and -, 100
-to 400 %, a zoomed page dragged with the mouse), on common's speed rig:
+"""View > Larger text, Smaller text and Actual size (Erez, 8 Nov 2026: the
+keypad's + and -, 100 to 400 %, a zoomed page dragged with the mouse; 9 Nov:
+EWeb's words and ^+ ^- ^0), on common's speed rig:
 
     zoom.py WORK [MACHINE...]        (default: Falcon:16 ST:mono)
 
@@ -162,6 +163,19 @@ def run(work, machine, converted):
             back = r.shot("back")
             if differ(pages, back) > 2000:
                 bad.append("keypad - twice: not View > Pages as it was (%d pixels differ)" % differ(pages, back))
+            # EWeb's keys (Erez, 9 Nov 2026): ^+ a step larger, ^0 the page as it was
+            n150 = r.console().count("EPDF zoom 150")
+            r.key("ctrl+plus")
+            if not wait(r, "EPDF zoom 150", n150 + 1, 30):
+                bad.append("^+ didn't zoom")
+            time.sleep(4)
+            r.key("ctrl+0")
+            time.sleep(4)
+            park(r)
+            r.still()
+            actual = r.shot("actual")
+            if differ(pages, actual) > 2000:
+                bad.append("^0: not View > Pages as it was (%d pixels differ)" % differ(pages, actual))
             print("  zoom: drawn %s" % ", ".join(re.findall(r"EPDF page-drawn (\d+ ms \d+ rows from 0) ",
                                                             r.console())[-4:]))
         for l in r.console().splitlines():

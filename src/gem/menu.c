@@ -40,8 +40,12 @@ static const MBAR_ITEM view_items[] = {
 	{ "The page's lines", NULL, CMD_LINES },
 	{ "Pages", NULL, CMD_PAGES },
 	{ "Translate", NULL, CMD_TRANSLATE },	/* a tick: the text view translated (Erez, 8 Nov 2026) */
-	{ "Zoom in", "+", CMD_ZOOMIN },		/* the keypad's + and - (Erez, 8 Nov 2026) */
-	{ "Zoom out", "-", CMD_ZOOMOUT },
+	/* EWeb's words and keys (Erez, 9 Nov 2026: "Change EPDF to align with
+	   EWeb"; the keypad's + and - too): View > Pages' page bigger, smaller,
+	   and as it was */
+	{ "Larger text", "^+", CMD_ZOOMIN },
+	{ "Smaller text", "^-", CMD_ZOOMOUT },
+	{ "Actual size", "^0", CMD_ZOOMACTUAL },
 	{ NULL, NULL, CMD_NONE }
 };
 
@@ -56,7 +60,7 @@ static const MBAR_ITEM page_items[] = {
 
 static const MBAR_ITEM options_items[] = {
 	{ "Settings...", "^,", CMD_SETTINGS },
-	{ "Font...", "\x01^F", CMD_FONT },
+	{ "Font...", NULL, CMD_FONT },		/* no key (Erez, 9 Nov 2026, D6) */
 	{ "-", NULL, CMD_NONE },
 	{ "Open on the Gateway", NULL, CMD_GATEWAY },	/* a tick: on (Erez, 7 Nov 2026) */
 	{ NULL, NULL, CMD_NONE }

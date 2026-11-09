@@ -476,7 +476,7 @@ static void out_path(const char *in, char *out, long n)
    converted PDF the last), conn.c's waits a turn each (pf_idle) */
 static int gate_waiting;		/* the Gateway hasn't begun this one yet */
 static int gate_phase = -1;		/* PG_SEND, PG_WORK, PG_RECV; -1 none */
-static long gate_part;			/* the bytes of the phase so far */
+static long gate_part, gate_whole;		/* the bytes of the phase so far, and in all */
 static int net_ready;
 
 static void gate_idle(void)
@@ -492,8 +492,10 @@ static int gate_progress(void *u, int phase, long done, long total)
 		total = 1;
 	gate_waiting = phase == PG_WORK && done == 0;
 	gate_phase = phase;
-	if (phase != PG_WORK)
+	if (phase != PG_WORK) {
 		gate_part = done;
+		gate_whole = total;
+	}
 	cur_total = 1000;
 	cur_done = phase == PG_SEND ? done * 100 / total : phase == PG_WORK ? 100 + done * 800 / total :
 		   900 + done * 100 / total;
@@ -618,21 +620,21 @@ static GRECT work_area(void)
 	return r;
 }
 
-/* "45 %, 2 min left" from the share done (thousandths) and the time it took */
+/* "45%, 2 min left" (the family's form: Erez, 9 Nov 2026, D35) from the share done (thousandths) and the time it took */
 static void left(char *s, long n, long share, unsigned long since)
 {
 	unsigned long t = tos_ms() - since, rest;
 	int pc = (int)(share / 10);
 
 	if (share < 20 || t < 3000) {
-		snprintf(s, (size_t)n, "%d %%", pc);
+		snprintf(s, (size_t)n, "%d%%", pc);
 		return;
 	}
 	rest = (t / 1000UL) * (1000UL - (unsigned long)share) / (unsigned long)share;
 	if (rest >= 120)
-		snprintf(s, (size_t)n, "%d %%, %lu min left", pc, (rest + 30) / 60);
+		snprintf(s, (size_t)n, "%d%%, %lu min left", pc, (rest + 30) / 60);
 	else
-		snprintf(s, (size_t)n, "%d %%, %lu s left", pc, rest < 5 ? 5UL : rest);
+		snprintf(s, (size_t)n, "%d%%, %lu s left", pc, rest < 5 ? 5UL : rest);
 }
 
 static long share_file(void)
@@ -770,9 +772,14 @@ static void progress_texts(void)
 		return;
 	left(a, sizeof a, share_file(), t_file);
 	/* the three phases (guideline 7.3, Erez 7 Nov 2026) */
-	if (gate_phase == PG_SEND || gate_phase == PG_RECV)
-		snprintf(l, sizeof l, "%.12s  %s the Gateway... %ld KB", base_of(files[cur].path),
-			 gate_phase == PG_SEND ? "Sending to" : "Receiving from", (gate_part + 1023) / 1024);
+	if (gate_phase == PG_SEND || gate_phase == PG_RECV) {
+		char p1[16], p2[16];	/* "12 KB of 3.4 MB" (D35) */
+
+		size_words(p1, sizeof p1, gate_part);
+		size_words(p2, sizeof p2, gate_whole);
+		snprintf(l, sizeof l, "%.12s  %s the Gateway... %s of %s", base_of(files[cur].path),
+			 gate_phase == PG_SEND ? "Sending to" : "Receiving from", p1, p2);
+	}
 	else if (gate_phase == PG_WORK)
 		snprintf(l, sizeof l, "%.12s  %s", base_of(files[cur].path),
 			 gate_waiting ? "Waiting for the Gateway" : "The Gateway is converting...");
@@ -859,7 +866,7 @@ static const char *icon_status(void)
 
 	if (!working)
 		return nfiles ? "ready" : "";
-	snprintf(st, sizeof st, "%ld %%", share_batch() / 10);
+	snprintf(st, sizeof st, "%ld%%", share_batch() / 10);
 	return st;
 }
 

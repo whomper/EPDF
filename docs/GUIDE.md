@@ -55,9 +55,10 @@ gives way to you at once.
 - **View:** **The page's lines**: ticked, each line is as it is on the page; not ticked (as EPDF
   starts), the lines of a paragraph are joined and wrapped to the window, so the text reads at any
   window width. **Pages**: each page whole, as it is printed: on a Falcon or a TT any PDF (see
-  below), on an ST a converted PDF's; greyed where there are none. **Zoom in** (the keypad's +)
-  and **Zoom out** (the keypad's -) show the page in view bigger: 150, 200, 300 and 400 %, as far
-  as the memory holds; a click on a page goes to 200 % and a click back. On a Falcon or a TT the
+  below), on an ST a converted PDF's; greyed where there are none. **Larger text** (^+, or the
+  keypad's +), **Smaller text** (^-, or the keypad's -) and **Actual size** (^0) show the page in
+  view bigger, smaller, and as it was: 150, 200, 300 and 400%, as far as the memory holds; a click
+  on a page goes to 200% and a click back. On a Falcon or a TT the
   bigger page is drawn by the Atari, in colour (a converted PDF's from its original where EPDF
   knows it, the Gateway's). On an ST, it's EConvert's double page in black and white (200 %).
   A zoomed page is moved by dragging it with the mouse, or with the arrow keys; Esc gives the
@@ -67,7 +68,7 @@ gives way to you at once.
   ⇧^Clr/Home).
 - **Options:** Settings... (^,): two pages, **General** (the language View > Translate translates
   into, and Languages...: see [Translating](#translating)) and **Secure** (the Gateway's address
-  and port: see [The Gateway](#the-gateway)). Font... (⇧^F): the system font in its two sizes, or
+  and port: see [The Gateway](#the-gateway)). Font...: the system font in its two sizes, or
   a fixed-width GDOS font, kept in `EPDF.INF`. Open on the Gateway (ticked: see
   [The Gateway](#the-gateway)).
 - **Help:** EPDF help (Help): this guide. Keys...: EPDF's keys.
@@ -118,8 +119,7 @@ icon shows the page you are on.
 | ^O | open a document |
 | ^C, ^A | copy the selection, select everything |
 | ^F, ^G, ⇧^G | find, find next, find previous |
-| ⇧^F | the font |
-| keypad +, keypad - | zoom in, zoom out (View > Pages) |
+| ^+, ^-, ^0 (and the keypad's + and -) | the page larger, smaller, as it was (View > Pages) |
 | ^, | Settings (the Gateway) |
 | Insert | the menu for the selection (as the right mouse button) |
 | ^U, ^Q | quit (EPDF has one window, so ^U closes it and quits) |

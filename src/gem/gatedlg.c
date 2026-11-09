@@ -178,14 +178,15 @@ void keys_dialog(void)
 		"^O  open a PDF          ^Q  quit",
 		"^C  copy                ^A  select all",
 		"^F  find                ^G  find next",
-		"\x01^G find previous      \x01^F font",
+		"\x01^G find previous      ^,  settings",
 		"^Left, ^Right  the page before, after",
 		"^Home  the first page   \x01^Home  the last",
 		"Up, Down, Space  scroll (\x01: a window)",
-		"Keypad + and -  zoom in and out (Pages)",
+		"^+  ^-  ^0  a page larger, smaller, as it was",
+		"           (View > Pages; the keypad's + and -)",
 		"Insert  the context menu",
 		"Esc  stops what EPDF is doing",
-		"^,  settings            Help  EPDF's help",
+		"Help  EPDF's help",
 		"^U  quit (one window)   Undo cancels a dialog"
 	};
 	short n = (short)(sizeof lines / sizeof lines[0]), i, x, y, w, h, ok;

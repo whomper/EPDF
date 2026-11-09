@@ -135,6 +135,7 @@ int win_zoom_key(short scan);
    (100 to 400 %): can it, and do it */
 int win_zoom_can(int dir);
 void win_zoom_step(int dir);
+void win_zoom_actual(void);		/* View > Actual size */
 /* the zoomed picture dragged by (dx, dy): 1 when it moved */
 int win_zoom_pan(long dx, long dy);
 extern void (*has_menu_states)(void);

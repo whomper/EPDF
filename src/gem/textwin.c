@@ -1379,6 +1379,13 @@ void win_zoom_step(int dir)
 		}
 }
 
+/* View > Actual size: View > Pages' page as it was */
+void win_zoom_actual(void)
+{
+	if (zoom.on && zoom.pct)
+		zoom_to(0, (short)(work.x + work.w / 2), (short)(work.y + work.h / 2));
+}
+
 /* a click at (mx, my) on a picture with more pixels than it shows: shown
    whole (a page of View > Pages: at 200 %); 1 when it was one */
 int win_zoom_at(short mx, short my)

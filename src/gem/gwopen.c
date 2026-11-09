@@ -230,14 +230,31 @@ int gw_progress(long *d, long *t)
 }
 
 /* the status line's words for where it is (guideline 7.3, Erez 7 Nov
-   2026: the three phases): "Sending to the Gateway... 12 KB", "The
-   Gateway is converting...", "Receiving from the Gateway... 40 KB"; the
+   2026: the three phases): "Sending to the Gateway... 12 KB of 3.4 MB",
+   "The Gateway is converting...", "Receiving from the Gateway... 40 KB of
+   80 KB"; the
    bytes of the phase in *d of *t (0 of 0 while it converts) */
+/* "820 KB", "3.4 MB" (the family's sizes in a job: Erez, 9 Nov 2026, D35) */
+static void size_words(char *s, size_t n, long bytes)
+{
+	if (bytes >= 1024L * 1024L)
+		snprintf(s, n, "%ld.%ld MB", bytes / (1024L * 1024L), bytes % (1024L * 1024L) * 10 / (1024L * 1024L));
+	else
+		snprintf(s, n, "%ld KB", (bytes + 1023) / 1024);
+}
+
 const char *gw_words(char *w, int n, long *d, long *t)
 {
 	if (phase == PG_SEND || phase == PG_RECV) {
-		snprintf(w, (size_t)n, "%s the Gateway... %ld KB", phase == PG_SEND ? "Sending to" : "Receiving from",
-			 (part + 1023) / 1024);
+		char a[16], b[16];
+
+		size_words(a, sizeof a, part);
+		size_words(b, sizeof b, whole);
+		if (whole > 0)	/* "12 KB of 3.4 MB" */
+			snprintf(w, (size_t)n, "%s the Gateway... %s of %s", phase == PG_SEND ? "Sending to" : "Receiving from",
+				 a, b);
+		else
+			snprintf(w, (size_t)n, "%s the Gateway... %s", phase == PG_SEND ? "Sending to" : "Receiving from", a);
 		*d = part;
 		*t = whole;
 	} else {

@@ -362,12 +362,12 @@ static long find_left;			/* pages it may still look at */
    every step of a selection dragged) */
 static void menu_states(void)
 {
-	static const short cmd[9] = { CMD_COPY, CMD_SELALL, CMD_FIND, CMD_FINDNEXT, CMD_FINDPREV, CMD_PAGES,
-				      CMD_SAVEOPT, CMD_ZOOMIN, CMD_ZOOMOUT };
-	static signed char was[9] = { -1, -1, -1, -1, -1, -1, -1, -1, -1 };
+	static const short cmd[10] = { CMD_COPY, CMD_SELALL, CMD_FIND, CMD_FINDNEXT, CMD_FINDPREV, CMD_PAGES,
+				       CMD_SAVEOPT, CMD_ZOOMIN, CMD_ZOOMOUT, CMD_ZOOMACTUAL };
+	static signed char was[10] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
 	static signed char tick = -1;
 	DOCVIEW *v = doc_view();
-	signed char now[9];
+	signed char now[10];
 	int i;
 
 	menus_due = 0;
@@ -379,8 +379,8 @@ static void menu_states(void)
 	now[5] = doc_has_pages() != 0;		/* (greyed for a file without its pages whole) */
 	now[6] = v && doc_prepared();		/* Save Optimised...: a converted PDF's */
 	now[7] = v && doc_pages_mode() && win_zoom_can(1);
-	now[8] = v && doc_pages_mode() && win_zoom_can(-1);
-	for (i = 0; i < 9; i++)
+	now[8] = now[9] = v && doc_pages_mode() && win_zoom_can(-1);
+	for (i = 0; i < 10; i++)
 		if (now[i] != was[i]) {
 			menu_ienable(menu.tree, mbar_object(&menu, cmd[i]), now[i]);
 			was[i] = now[i];
@@ -530,7 +530,7 @@ static void copy(void)
 	if (!v || v->sel_p0 < 0 || cp.on)
 		return;
 	if (!clip_put_begin()) {
-		win_status("no clipboard to copy to");
+		win_status("Couldn't write the clipboard.");
 		return;
 	}
 	memset(&cp, 0, sizeof cp);
@@ -565,7 +565,7 @@ static int copy_step(void)
 		cp.on = 0;		/* clip_put_end is called here, not by copy_end */
 		if (clip_put_end(ok) && ok) {
 			snprintf(n, sizeof n, "%ld", cp.len);
-			copy_end(cp.missing ? "copied; pages not read yet left out" : "copied");
+			copy_end(cp.missing ? "Copied to the clipboard. Pages not read yet were left out." : "Copied to the clipboard.");
 			log_event("copied", n, NULL);	/* the copy done, its status shown */
 		} else {
 			copy_end("nothing copied");
@@ -612,7 +612,7 @@ static int copy_step(void)
 	if (q > cp.piece && !clip_put_step(cp.piece, (long)(q - cp.piece))) {
 		cp.on = 0;
 		clip_put_end(0);
-		copy_end("the clipboard couldn't be written");
+		copy_end("Couldn't write the clipboard.");
 		return 0;
 	}
 	cp.len += (long)(q - cp.piece);
@@ -894,7 +894,7 @@ static void command(int c)
 {
 	char n[8];
 
-	if (c != CMD_ABOUT && c != CMD_ZOOMIN && c != CMD_ZOOMOUT)
+	if (c != CMD_ABOUT && c != CMD_ZOOMIN && c != CMD_ZOOMOUT && c != CMD_ZOOMACTUAL)
 		win_zoom_end();		/* (a picture shown whole: the text back first) */
 	switch (c) {
 	case CMD_ABOUT:
@@ -909,6 +909,10 @@ static void command(int c)
 	case CMD_ZOOMIN:
 	case CMD_ZOOMOUT:
 		win_zoom_step(c == CMD_ZOOMIN ? 1 : -1);
+		menu_states();
+		break;
+	case CMD_ZOOMACTUAL:
+		win_zoom_actual();
 		menu_states();
 		break;
 	case CMD_TRSEL:
@@ -1265,7 +1269,15 @@ static void key(short kstate, short k)
 		case 0x10: command(CMD_QUIT); return;		/* ^Q */
 		case 0x2e: command(CMD_COPY); return;		/* ^C */
 		case 0x1e: command(CMD_SELALL); return;		/* ^A */
-		case 0x21: command(shift(kstate) ? CMD_FONT : CMD_FIND); return;	/* ^F; Shift+^F: Font... */
+		case 0x21:			/* ^F (Font... has no key: Erez, 9 Nov 2026) */
+			if (!shift(kstate))
+				command(CMD_FIND);
+			return;
+		/* View > Pages' zoom, EWeb's keys: ^+ (^= and the keypad's), ^-,
+		   ^0 (Erez, 9 Nov 2026) */
+		case 0x0d: case 0x4e: if (doc_pages_mode()) command(CMD_ZOOMIN); return;
+		case 0x0c: case 0x4a: if (doc_pages_mode()) command(CMD_ZOOMOUT); return;
+		case 0x0b: case 0x70: if (doc_pages_mode()) command(CMD_ZOOMACTUAL); return;
 		case 0x22: command(shift(kstate) ? CMD_FINDPREV : CMD_FINDNEXT); return;	/* ^G, Shift+^G */
 		}
 		return;

@@ -371,7 +371,7 @@ EC_GEM_SRC = src/econv/econvert.c src/gem/gemui.c src/view/inf.c common/atari/ge
              common/atari/net_tos.c common/atari/sting.c
 EC_CV_SRC  = $(filter-out src/conv/cvio_tos.c src/pdfio_tos.c common/src/util.c common/src/futil.c \
                $(RT_C) $(BSSL_SRC),$(CV_ATARI_SRC))
-build/m68000ec/%.o: XFLAGS += -DPDF_DRAW -DAERA_NO_FLOAT -Isrc/gem -Isrc/view -Icommon/ui -Isrc/conv
+build/m68000ec/%.o: XFLAGS += -DDLG_CLICK -DPDF_DRAW -DAERA_NO_FLOAT -Isrc/gem -Isrc/view -Icommon/ui -Isrc/conv
 build/m68000ec/version.o: build/m68000/version.c | build/m68000ec
 	$(XCC) $(XFLAGS) -c -o $@ $<
 build/m68000ec/coro.o: src/gem/coro.S | build/m68000ec
@@ -411,7 +411,7 @@ GEM_SRC = src/gem/epdf.c src/gem/doc.c src/gem/rdraw.c common/src/ovl.c src/gem/
 GEM_OBJ = $(patsubst %.c,build/m68000/%.o,$(GEM_SRC)) build/m68000/version.o build/m68000/sting_s.o
 build/m68000/sting_s.o: common/atari/sting.S | build/m68000
 	$(XCC) -m68000 -c -o $@ $<
-$(patsubst %.c,build/m68000/%.o,$(GEM_SRC)): XFLAGS += -Isrc/gem -Isrc/rovl -Isrc/view -Icommon/ui -I$(T)/tjpgd -I$(T)/nsgif/include -I$(T)/nsgif/src
+$(patsubst %.c,build/m68000/%.o,$(GEM_SRC)): XFLAGS += -DDLG_CLICK -Isrc/gem -Isrc/rovl -Isrc/view -Icommon/ui -I$(T)/tjpgd -I$(T)/nsgif/include -I$(T)/nsgif/src
 # the Falcon's DSP for JPEGs, from pic.c's own header reader (one 68000
 # program for every Atari, guideline 7.4); no PNG or GIF decoder (a PDF's
 # pictures are JPEG or its own streams: 20 KB of the resident size, the
@@ -499,6 +499,7 @@ dist: binary/EPDF.PRG binary/render.ovl binary/ECONVERT.PRG help
 
 gui-test: binary/EPDF.PRG binary/LAUNCH.PRG
 	python3 tests/hatari/gui.py ST:mono build/gui
+	python3 tests/hatari/fontdlg.py build/fontdlg ST:mono
 
 # each file's opens and lookups from Hatari's GEMDOS trace, a 40-page book on
 # a 1 MB ST (the text goes to EPDF.TXC), against the job's budget (6.5)

@@ -167,23 +167,8 @@ def main(argv):
         key(A, [CTRL])
         key(C, [CTRL])
         wait("EPDF copied")
-        # the Font dialog: Esc cancels it; then the system font's 8 x 8.
-        # The keys go in once EPDF says the dialog opens (on an ST it may
-        # still be decoding the picture when ^F comes), and a moment after
-        n = count("EPDF dialog font")
-        key(F, [CTRL, SHIFT])
-        wait_count("EPDF dialog font", n + 1)
-        time.sleep(4)
-        key(ESC)
-        wait("EPDF dialog-closed font cancel")
-        key(F, [CTRL, SHIFT])
-        wait_count("EPDF dialog font", n + 2)
-        time.sleep(4)               # EPDF says so before the dialog has drawn its lists
-        for k in (TAB, TAB, UP, RETURN):
-            key(k)
-            time.sleep(0.5)
-        wait("EPDF dialog-closed font System font,8")
-        shot("font8")
+        # (the Font dialog: Options > Font..., no key since 9 Nov 2026, Erez:
+        # tests/hatari/fontdlg.py clicks the menu)
         # Insert: the context menu; Esc closes it with nothing chosen
         key(INSERT)
         wait("EPDF menu popup")
