@@ -486,8 +486,8 @@ static void pg_pop(void)
 	OBJECT *t = TREE;
 	checkf(popups == 1 && pop_n == 4, "a click on the pop-up button opens the pop-up with its 4 choices");
 	checkf(s_when == 2, "the choice taken is the app's variable at once (%d)", s_when);
-	checkf(!strcmp(pop_lab[1], "\x08 At start") && !strcmp(pop_lab[0], "  When first opened") && !strcmp(pop_lab[2], "  After a minute"),
-	       "the labels: the chosen one '\\x08 At start' (the check mark), the others with two spaces");
+	checkf(pop_new && !strcmp(pop_lab[1], "\x08" "At start") && !strcmp(pop_lab[0], "When first opened") && !strcmp(pop_lab[2], "After a minute"),
+	       "popup_m's labels: the chosen one '\\x08At start' (the check mark), the others plain (popup.h)");
 	objc_offset(t, o_pop, &bx, &by);
 	checkf(pop_x == bx && pop_y == by - 3 - 1 * (16 + 2),
 	       "opened over the button, its chosen row (1) on it: x %d, y %d (button at %d, %d)", pop_x, pop_y, bx, by);

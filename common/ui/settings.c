@@ -348,20 +348,22 @@ static void pop_run(SETTINGS *s, SET_W *p)
 {
 	char name[SET_POPMAX][SET_NAME + 3];
 	const char *lab[SET_POPMAX];
-	short i, x, y, r, sel = *p->sel < 0 || *p->sel >= p->n ? 0 : *p->sel;
+	short i, k, x, y, r, sel = *p->sel < 0 || *p->sel >= p->n ? 0 : *p->sel;
 	OBJECT *tree = s->b.tree;
 	for (i = 0; i < p->n; i++) {
 		short n = (short)strlen(p->ch[i]);
 		if (n > SET_NAME)
 			n = SET_NAME;
-		name[i][0] = i == *p->sel ? '\x08' : ' ';
-		name[i][1] = ' ';
-		memcpy(name[i] + 2, p->ch[i], (size_t)n);
-		name[i][2 + n] = 0;
+		/* popup_m's labels: the words, the ticked one with the check mark in front (popup.h) */
+		k = 0;
+		if (i == *p->sel)
+			name[i][k++] = '\x08';
+		memcpy(name[i] + k, p->ch[i], (size_t)n);
+		name[i][k + n] = 0;
 		lab[i] = name[i];
 	}
 	objc_offset(tree, p->obj, &x, &y);
-	r = popup(x, over_button(s, y, sel), lab, p->n);
+	r = popup_m(x, over_button(s, y, sel), lab, p->n);
 	tree[p->obj].ob_state &= ~SELECTED;
 	if (!popup_put_back && settings_uncover)
 		settings_uncover(popup_area.x, popup_area.y, popup_area.w, popup_area.h);

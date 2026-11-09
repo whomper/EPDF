@@ -459,7 +459,9 @@ def run_machine(a, machine):
             continue
         (bx, by), (bw, bh) = boxes[key]
         known = ("EMail 2.14 opens its pop-up below the button, the guidelines' 5.7 (and EHypView, and this) over it"
-                 if name == "email-6-connection-popup" else None)
+                 if name == "email-6-connection-popup" else
+                 "the releases pad their pop-up's words to 4 cells in; popup_m puts them 2 in (D15, 9 Nov 2026)"
+                 if name.endswith("-popup") else None)
         compare(name, dshot, real[name], (bx, by), box_r, bw, bh, out, tag, known)
     return rows
 
