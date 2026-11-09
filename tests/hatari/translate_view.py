@@ -116,7 +116,7 @@ def settings_while_translating(r):
         return r.console().split("EPDF languages ")[-1].split()[0] if r.console().count("EPDF languages ") > n else "none"
 
     def cancel(x, y):
-        r.click(x + 33 * 8 + 40, y + 16 * rh + rh // 2)
+        r.click(x + 33 * 8 + 40, y + 15 * rh + rh // 2)
         time.sleep(2)
 
     x, y = settings()

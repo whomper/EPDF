@@ -296,10 +296,10 @@ at first. This section is kept up to date: the build, the tests, what a release 
   Translate...; Off runs nothing of it. Rig: tests/hatari/translate_view.py (gateway/'s translategate.py
   stand-in and pdfgate.py; EPDF_PRG=build/aprof/EPDF.PRG for the turns). Then speed. The family's UI (Erez, 9 Nov 2026: "make sure EPDF UI aligns with the family"; the hub's
   review): Options (Settings... ^, , Font... ⇧^F, a line, Open on the Gateway), Help (EPDF help,
-  Keys...); Settings is EHypView's layout in src/gem/gatedlg.c (General: Translate into, a pop-up
-  over its button, Languages...; Secure: the Gateway's address and port; EConvert: Secure only),
-  the address edited in a copy (Cancel keeps it); a temporary copy, the hub's leave, until
-  common/ui/settings.c lands (branch hub/settings): then switch to it and delete ours. Settings
+  Keys...); Settings is common's settings_run() (AERA-Atari 07c5ab1; src/gem/gatedlg.c gives its pages:
+  General: Translate into, a set_value button whose act opens the Gateway's languages over it,
+  Languages...; Secure: the Gateway's address and port; EConvert: Secure only; 17 rows), Cancel
+  puts every value back; Keys... with common's dlgbuild. Settings
   stops the page being translated first (tr_stop: one connection at a time; the hub's Address
   Error); translate_view.py's direct mode checks it (TRV_DELAY: slowgate.py). EConvert's window is
   Erez's B2 (band, list with panebar and buttons at its right, lines, pop-up buttons, two bars),
