@@ -1534,6 +1534,7 @@ int main(void)
 	ap_id = appl_init();
 	if (ap_id < 0)
 		return 1;
+	key_state_init();	/* (keys typed while busy or starting keep their Shift and Control: common's gem.c) */
 	dlg_title = "EConvert";
 	vdi_h = graf_handle(&gl_wchar, &gl_hchar, &d, &d);
 	cw = gl_wchar;

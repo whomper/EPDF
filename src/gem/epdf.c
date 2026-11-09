@@ -1464,6 +1464,7 @@ int main(void)
 	ap_id = appl_init();
 	if (ap_id < 0)
 		return 1;
+	key_state_init();	/* (keys typed while busy or starting keep their Shift and Control: common's gem.c) */
 	if (dspjpeg_present())
 		pic_dsp = &dspjpeg_port_jpeg;	/* a Falcon: its DSP decodes the JPEGs it takes (EPDF dithers on the CPU) */
 	dlg_title = "EPDF";			/* dialogs in a window (MiNT, MagiC): 3.5 */
