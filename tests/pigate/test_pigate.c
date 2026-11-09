@@ -123,7 +123,7 @@ static int progress(void *u, int phase, long done, long total)
 
 int main(int argc, char **argv)
 {
-	PGOPT o = { "mono", NULL, "screen", 640, 640, 1 };
+	PGOPT o = { "mono", NULL, "screen", 640, 640, 1, NULL };
 	char err[200], q[256];
 	int rc, fails = 0;
 
