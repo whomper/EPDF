@@ -477,12 +477,12 @@ static void pop_drive(void)
 	int i;
 	for (i = 0; i < 26; i++)
 		if (map & (1L << i)) {
-			snprintf(lab[n], sizeof(lab[n]), "%c %c: ", dir_now[0] == 'A' + i ? '\x08' : ' ', 'A' + i);
+			snprintf(lab[n], sizeof(lab[n]), "%s%c:", dir_now[0] == 'A' + i ? "\x08" : "", 'A' + i);
 			p[n] = lab[n];
 			drv[n++] = (char)('A' + i);
 		}
 	below(O_DRIVE, &x, &y);
-	k = popup(x, y, p, n);
+	k = popup_m(x, y, p, n);
 	if (k >= 0) {
 		char d[4];
 		d[0] = drv[k];
@@ -502,23 +502,23 @@ static void pop_folders(char recent[FP_RECENT][FP_PATH])
 	for (i = 0; i < FP_RECENT && recent[i][0]; i++) {
 		size_t len = strlen(recent[i]);
 		if (len <= 38)
-			snprintf(lab[n], sizeof(lab[n]), "  %s ", recent[i]);
+			snprintf(lab[n], sizeof(lab[n]), "%s", recent[i]);
 		else
-			snprintf(lab[n], sizeof(lab[n]), "  ...%s ", recent[i] + len - 35);
+			snprintf(lab[n], sizeof(lab[n]), "...%s", recent[i] + len - 35);
 		p[n] = lab[n];
 		n++;
 	}
 	if (!n) {
 		static char lab0[44];
 		const char *none[1];
-		snprintf(lab0, sizeof(lab0), "~  %s ", spec->none);
+		snprintf(lab0, sizeof(lab0), "~%s", spec->none);
 		none[0] = lab0;
 		below(O_FOLDERS, &x, &y);
-		popup(x, y, none, 1);
+		popup_m(x, y, none, 1);
 		return;
 	}
 	below(O_FOLDERS, &x, &y);
-	k = popup(x, y, p, n);
+	k = popup_m(x, y, p, n);
 	if (k >= 0)
 		go(recent[k]);
 }
@@ -536,11 +536,11 @@ static void pop_type(void)
 	short x, y, k;
 	int i;
 	for (i = 0; i < dl.ntypes; i++) {
-		snprintf(lab[i], sizeof(lab[i]), "%c %s ", i == dl.type ? '\x08' : ' ', dl_type_name(&dl, i));
+		snprintf(lab[i], sizeof(lab[i]), "%s%s", i == dl.type ? "\x08" : "", dl_type_name(&dl, i));
 		p[i] = lab[i];
 	}
 	below(O_TYPE, &x, &y);
-	k = popup(x, y, p, (short)dl.ntypes);
+	k = popup_m(x, y, p, (short)dl.ntypes);
 	if (k >= 0 && k != dl.type) {
 		dl.type = k;
 		dl_filter(&dl);
@@ -560,11 +560,11 @@ static void pop_sort(void)
 	short x, y, k;
 	int i;
 	for (i = 0; i < DS_N; i++) {
-		snprintf(lab[i], sizeof(lab[i]), "%c %s ", i == dl.sort ? '\x08' : ' ', dl_sort_name(i));
+		snprintf(lab[i], sizeof(lab[i]), "%s%s", i == dl.sort ? "\x08" : "", dl_sort_name(i));
 		p[i] = lab[i];
 	}
 	below(O_SORT, &x, &y);
-	k = popup(x, y, p, DS_N);
+	k = popup_m(x, y, p, DS_N);
 	if (k >= 0 && k != dl.sort) {
 		dl.sort = k;
 		dl_sort(&dl);

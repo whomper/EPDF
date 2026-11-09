@@ -32,7 +32,7 @@ extern jmp_buf script_out;
 extern void (*refs_hook)(void);	/* called before each event: the test refreshes ref_* */
 extern short ref_tab[SMAXTAB + 1], ref_ok, ref_cancel;
 extern short cell_w, cell_h, ap_count, pre_key;
-extern int draws, bells, updates, update_low, dial_start, dial_finish, alerts, win_made, win_open, timers, popups;
+extern int draws, bells, updates, update_low, dial_start, dial_finish, alerts, win_made, win_open, timers, popups, pop_new;
 extern short last_draw[4];
 extern char win_name[40];
 extern short pop_x, pop_y, pop_n, pop_answer, pop_kept;

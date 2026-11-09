@@ -41,7 +41,8 @@ short popup_put_back = 1;
 int popups;
 short pop_x, pop_y, pop_n, pop_answer = -1, pop_kept = 1;
 char pop_lab[20][40];
-short popup(short x, short y, const char *const *labels, short n)
+int pop_new;				/* 1: the last call was popup_m's (the margin is popup's) */
+static short pop_run(short x, short y, const char *const *labels, short n)
 {
 	short i;
 	popups++;
@@ -58,6 +59,16 @@ short popup(short x, short y, const char *const *labels, short n)
 	popup_area.w = 200;
 	popup_area.h = n * (cell_h + 2) + 4;
 	return pop_answer;
+}
+short popup(short x, short y, const char *const *labels, short n)
+{
+	pop_new = 0;
+	return pop_run(x, y, labels, n);
+}
+short popup_m(short x, short y, const char *const *labels, short n)
+{
+	pop_new = 1;
+	return pop_run(x, y, labels, n);
 }
 
 short alert(short def, const char *fmt, ...)
