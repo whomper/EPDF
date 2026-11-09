@@ -26,6 +26,9 @@ static char tmpl_p[6], valid_p[6], text_p[6];
 static char lang_btn[24];		/* the Translate into button's words: the language's name */
 static int with_tr;			/* EPDF's: Translate into and Languages... (EConvert: none) */
 static LFIELD lf;
+static char edit[128];			/* the address as typed: the caller's only on OK (6.1) */
+
+void log_event(const char *what, const char *a, const char *b);	/* (the program's) */
 
 static void obj(short i, short type, short flags, long spec, short x, short y, short w, short h)
 {
@@ -100,24 +103,33 @@ static int run(char *host, int hostcap, unsigned short *port, char *to, int toca
 		built = with_tr;
 	}
 	snprintf(text_p, sizeof text_p, "%u", (unsigned)*port);
-	lf_init(&lf, tree, ADDR, host, hostcap, 0);
+	if (hostcap > (int)sizeof edit)
+		hostcap = (int)sizeof edit;
+	snprintf(edit, sizeof edit, "%s", host);	/* (Cancel: the hub's review, 9 Nov 2026) */
+	lf_init(&lf, tree, ADDR, edit, (short)(hostcap - 1), 0);
 	lf_end(&lf);
 	for (;;) {
 		dlg_name("Settings");
 		r = dlg_modal(tree, ADDR, CANCEL);
 		tree[r].ob_state &= ~SELECTED;
+		{
+			char at[16];
+
+			snprintf(at, sizeof at, "%d %d", tree[BOX].ob_x, tree[BOX].ob_y);
+			log_event("dialog", "settings", at);	/* (where it was: the rigs) */
+		}
 		if (r == TLANG && pick) {
 			/* (the address as typed so far: the languages are the Gateway's there) */
 			lf_forget(tree);
 			pick(to, tocap, lang_btn, (int)sizeof lang_btn);
-			lf_init(&lf, tree, ADDR, host, hostcap, 0);
+			lf_init(&lf, tree, ADDR, edit, (short)(hostcap - 1), 0);
 			lf_end(&lf);
 			continue;
 		}
 		if (r == TLANGS && languages) {
 			lf_forget(tree);
 			languages();
-			lf_init(&lf, tree, ADDR, host, hostcap, 0);
+			lf_init(&lf, tree, ADDR, edit, (short)(hostcap - 1), 0);
 			lf_end(&lf);
 			continue;
 		}
@@ -126,9 +138,19 @@ static int run(char *host, int hostcap, unsigned short *port, char *to, int toca
 	lf_forget(tree);
 	if (r != OK)
 		return 0;
+	snprintf(host, (size_t)hostcap, "%s", edit);
 	p = atol(text_p);
 	*port = (unsigned short)(p > 0 && p < 65536 ? p : GATE_PORT);
 	return 1;
+}
+
+const char *gate_dialog_host(void)
+{
+	char *e;
+
+	while ((e = strrchr(edit, ' ')) != NULL && e[1] == '\0')
+		*e = '\0';	/* (a field's trailing blanks) */
+	return edit;
 }
 
 int gate_dialog(char *host, int hostcap, unsigned short *port)

@@ -1057,6 +1057,17 @@ const char *lang_name(const char *code)
 
 /* Settings > Translate into: the languages the Gateway has installed, in a
    menu at the button (GET /languages) */
+/* the network for the Gateway's languages (Settings), started here as
+   tr_slice and gw_start start it; said when there is none */
+static int net_up(void)
+{
+	static int ready;
+
+	if (!ready && !(ready = net_init()))
+		alert(1, "[1][The Gateway is reached through|STinG, MiNTnet or MagiC-Net,|and none is running.][ OK ]");
+	return ready;
+}
+
 static int pick_language(char *to, int tocap, char *name, int namecap)
 {
 	char err[120];
@@ -1067,13 +1078,22 @@ static int pick_language(char *to, int tocap, char *name, int namecap)
 	long k;
 	short mx, my, mb, ks;
 
-	if (!gate_host[0]) {
+	const char *gh = gate_dialog_host();
+
+	if (!gh[0]) {
 		alert(1, "[1][Type the Gateway's address first.][ OK ]");
 		return 0;
 	}
+	if (gw_busy()) {
+		/* (the Gateway copy's connection is open, parked: one at a time) */
+		alert(1, "[1][EPDF is waiting for the Gateway|to convert a PDF. Ask again|when it has come.][ OK ]");
+		return 0;
+	}
+	if (!net_up())
+		return 0;
 	graf_mouse(BUSYBEE, NULL);
 	sb_reset(&lang_names);
-	k = translate_languages(gate_host, tr_port, &lang_names, err, sizeof err);
+	k = translate_languages(gh, tr_port, &lang_names, err, sizeof err);
 	graf_mouse(ARROW, NULL);
 	log_event("languages", k ? "ok" : "failed", NULL);
 	if (!k) {
@@ -1120,17 +1140,26 @@ static void languages_dialog(void)
 	static langs l;
 	int r;
 
-	if (!gate_host[0]) {
+	const char *gh = gate_dialog_host();
+
+	if (!gh[0]) {
 		alert(1, "[1][Type the Gateway's address first.][ OK ]");
 		return;
 	}
+	if (gw_busy()) {
+		/* (the Gateway copy's connection is open, parked: one at a time) */
+		alert(1, "[1][EPDF is waiting for the Gateway|to convert a PDF. Ask again|when it has come.][ OK ]");
+		return;
+	}
+	if (!net_up())
+		return;
 	memset(&l, 0, sizeof l);
-	l.host = gate_host;
+	l.host = gh;
 	l.port = tr_port;
 	r = langs_run(&l);
 	log_event("languages-dialog", r == 1 ? "ok" : r == 0 ? "cancel" : "failed", NULL);
 	if (r == 1 && l.job) {
-		langs_job_begin(&ljob, gate_host, tr_port, l.job, l.add_mb, tos_ms());
+		langs_job_begin(&ljob, gh, tr_port, l.job, l.add_mb, tos_ms());
 		ljob_on = 1;
 	}
 }
@@ -1139,6 +1168,13 @@ static int settings_dialog(void)
 {
 	char port[8], to[TR_LANG];
 	int was_on = tr_on();
+
+	/* the page being translated given up (it is asked again after): its
+	   job is parked inside a connection, and the dialog's questions to the
+	   Gateway (Translate into, Languages...) open one of their own on this
+	   stack, which conn.c can't have two of (the hub's review, 9 Nov 2026:
+	   an Address Error, 3 of 3) */
+	tr_stop();
 
 	snprintf(to, sizeof to, "%s", tr_to());
 	if (!gate_dialog_tr(gate_host, (int)sizeof gate_host, &gate_port, to, (int)sizeof to, lang_name(to),

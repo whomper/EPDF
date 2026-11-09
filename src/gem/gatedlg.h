@@ -14,5 +14,8 @@ int gate_dialog(char *host, int hostcap, unsigned short *port);
    "Languages..." (languages: the family's dialog, common's langs.c) */
 int gate_dialog_tr(char *host, int hostcap, unsigned short *port, char *to, int tocap, const char *to_name,
 		   int (*pick)(char *to, int tocap, char *name, int namecap), void (*languages)(void));
+/* while the dialog is open: the address as typed so far (pick and
+   languages ask the Gateway there; the caller's own only after OK) */
+const char *gate_dialog_host(void);
 
 #endif

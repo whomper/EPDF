@@ -58,7 +58,11 @@ def services(work):
     tglog, pdflog = os.path.join(work, "translategate.log"), os.path.join(work, "pdfgate.log")
     with open(os.path.join(work, "SOURCE"), "w") as f:
         f.write("rig\n")
-    procs = [subprocess.Popen([sys.executable, os.path.join(GW, "translategate.py"), "--bind", "127.0.0.1",
+    # (TRV_DELAY: seconds the stand-in takes a text, so a rig can act
+    # while a page is under way: slowgate.py)
+    slow = os.environ.get("TRV_DELAY")
+    tg = [os.path.join(HERE, "slowgate.py"), slow] if slow else [os.path.join(GW, "translategate.py")]
+    procs = [subprocess.Popen([sys.executable] + tg + ["--bind", "127.0.0.1",
                                "--port", str(tg_port), "--engine", "stand-in", "--state", state, "--models", work,
                                "--local", sock, "-v"], stdout=open(tglog, "w"), stderr=subprocess.STDOUT, env=env),
              subprocess.Popen([sys.executable, os.path.join(GW, "pdfgate.py"), "--bind", "127.0.0.1",
@@ -73,6 +77,62 @@ def requests(tglog):
     with open(tglog, errors="replace") as f:
         # (translategate notes each request by its sizes: "PAIR 200, N bytes in", "PAIR same, N bytes")
         return len(re.findall(r"translategate: 127\.0\.0\.1 \S+ (?:200, \d+ bytes in|same, \d+ bytes)", f.read()))
+
+
+def settings_while_translating(r):
+    """File > Settings... while a page is being translated, its "Translate
+    into" asked (the hub's review, 9 Nov 2026: an Address Error on TOS 4.04,
+    the job's connection and the dialog's at once), then Esc in the
+    Gateway's address (it empties it, 3.5) and Cancel, and "Translate into"
+    again: the address as it was (6.1: nothing kept until OK)"""
+    bad = []
+    end = time.time() + 120
+    while time.time() < end and "EPDF translate-piece" not in r.console():
+        time.sleep(0.2)
+    if "EPDF translate-piece" not in r.console():
+        return ["no translation under way to open Settings over"]
+    rh = 16
+
+    def settings():
+        n = r.console().count("EPDF dialog settings")
+        r.key("ctrl+comma")
+        time.sleep(3)
+        r.key("Undo")               # (where it is: its line when it closes)
+        e = time.time() + 30
+        while time.time() < e and r.console().count("EPDF dialog settings") <= n:
+            time.sleep(0.5)
+        r.key("ctrl+comma")
+        time.sleep(3)
+        return tuple(map(int, re.findall(r"EPDF dialog settings (\d+) (\d+)", r.console())[-1]))
+
+    def into(x, y):
+        n = r.console().count("EPDF languages ")
+        r.click(x + 18 * 8 + 40, y + 8 * rh + rh // 2)
+        e = time.time() + 30
+        while time.time() < e and r.console().count("EPDF languages ") <= n:
+            time.sleep(0.5)
+        time.sleep(2)
+        r.key("Escape")             # the pop-up closed, nothing chosen
+        time.sleep(3)
+        return r.console().split("EPDF languages ")[-1].split()[0] if r.console().count("EPDF languages ") > n else "none"
+
+    x, y = settings()
+    got = into(x, y)
+    if got != "ok":
+        bad.append("Translate into while translating: %s" % got)
+    r.key("Escape")                 # (the dialog again, the cursor in the address: emptied)
+    time.sleep(1)
+    r.key("Undo")                   # Cancel
+    time.sleep(2)
+    x, y = settings()
+    got = into(x, y)                # no address: "Type the Gateway's address first"
+    if got != "ok":
+        bad.append("after Esc and Cancel the address wasn't kept (Translate into: %s)" % got)
+        r.key("Return")
+        time.sleep(2)
+    r.key("Undo")
+    time.sleep(2)
+    return bad
 
 
 def run(work, machine, tg_port, pdf_port, tglog, mode, he_port=0):
@@ -104,6 +164,8 @@ def run(work, machine, tg_port, pdf_port, tglog, mode, he_port=0):
                 time.sleep(1)
             time.sleep(8)
         elif mode in ("direct", "hebrew"):
+            if mode == "direct":
+                bad += settings_while_translating(r)
             while time.time() < end and r.console().count("EPDF translated ") < 4:
                 time.sleep(1)
         else:
