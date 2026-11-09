@@ -285,10 +285,14 @@ static int add_folder(const char *dir)
    bars under their words; Convert (Stop). */
 enum {
 	BOX, BAND1, BAND2, ICON, LIST, L0, L1, L2, L3, L4, L5, L6,
-	B_ADD, B_FOLDER, B_REMOVE, B_CLEAR, B_OUT, SEP1,
-	T_PAGES, U_PAGES, T_PHOTOS, U_PHOTOS, T_ON, U_ON, SEP2,
+	M0, M1, M2, M3, M4, M5, M6, G0, G1, G2, G3, G4, G5, G6,
+	B_ADD, B_FOLDER, B_REMOVE, B_CLEAR, B_OUT, SEP1, SEP1W,
+	T_PAGES, U_PAGES, T_PHOTOS, U_PHOTOS, T_ON, U_ON, SEP2, SEP2W,
 	T_FILE, BAR1, T_BATCH, BAR2, B_GO, NOBJ
 };
+/* a row of the list: L (its ground and the name), M (the mark), G (the size
+   and what came of it, in grey) */
+#define NAME_W 15			/* the mark and the name's columns */
 #define LROWS 7				/* the list's rows */
 #define COLS 66
 #define ROWS 21
@@ -296,10 +300,41 @@ enum {
 #define LTEXT (LW - 3)			/* a row's characters (the pane bar at its right) */
 
 static OBJECT tree[NOBJ];
-static TEDINFO ted_b1, ted_b2, ted_u[3];
+static TEDINFO ted_b1, ted_b2, ted_u[3], ted_row[7], ted_mark[7], ted_rest[7];
 static BITBLK icon_blk;
 static char s_band1[COLS + 1], s_band2[COLS + 1], s_file[COLS + 1], s_batch[COLS + 1];
-static char s_row[LROWS][LTEXT + 1], s_u[3][28];
+static char s_row[LROWS][NAME_W + 1], s_mark[LROWS][2], s_rest[LROWS][LTEXT + 1], s_u[3][28];
+
+/* the mock-up's colours (Erez's B2, 9 Nov 2026: "the color coding is not
+   like the mockup"), each the nearest of the first 16 pens as this
+   screen has them (pen_nearest: the pens an object can name); on a mono
+   screen black and white */
+static short p_grey, p_navy, p_row, p_dark, p_green, p_blue, p_red;
+
+static void colours(void)
+{
+	if (planes < 2) {
+		p_grey = p_row = 0;
+		p_navy = p_dark = p_green = p_blue = p_red = 1;
+		return;
+	}
+	p_grey = pen_nearest(vdi_h, 16, 753, 753, 753, 0);	/* the window's ground (192) */
+	p_navy = pen_nearest(vdi_h, 16, 0, 0, 392, 1);		/* the band (0, 0, 100) */
+	p_row = pen_nearest(vdi_h, 16, 824, 882, 1000, 0);	/* the file under way (210, 225, 255) */
+	p_dark = pen_nearest(vdi_h, 16, 502, 502, 502, 1);	/* sizes, lines' shadow (128) */
+	p_green = pen_nearest(vdi_h, 16, 0, 667, 0, 1);	/* done */
+	p_blue = pen_nearest(vdi_h, 16, 0, 0, 784, 1);		/* under way */
+	p_red = pen_nearest(vdi_h, 16, 784, 0, 0, 1);		/* failed */
+	if (p_row == p_grey)
+		p_row = 0;		/* (no light blue near: the row stays white, its mark says it) */
+}
+
+/* a TEDINFO's colour word: its frame and ground pen, its text's pen (the
+   text drawn over the ground) */
+static short tcolour(short ground, short ink)
+{
+	return (short)((ground << 12) | (ink << 8) | 0x0070 | ground);
+}
 static int ltop, lsel = -1;		/* the list's first row shown; the file chosen (Remove) */
 static PANEBAR lbar;
 
@@ -363,12 +398,14 @@ static void popup_button(short i, short u, short x, short y, short w)
 
 static void build(void)
 {
-	short k, line = 0x00001171L, half = (short)(gl_hchar / 2);
+	short k, line, half = (short)(gl_hchar / 2);
 
-	obj(BOX, 0, G_BOX, 0, 0x00001100L, 0, 0, COLS, ROWS);
-	/* the band, two rows of the family's black (0x1071: white words) */
-	tedi(&ted_b1, s_band1, 0x1071);
-	tedi(&ted_b2, s_band2, 0x1071);
+	colours();
+	line = (short)(0x1070 | p_dark);	/* (a separator's grey line; black in mono) */
+	obj(BOX, 0, G_BOX, 0, 0x00001070L | p_grey, 0, 0, COLS, ROWS);
+	/* the band, two rows of navy (black in mono), white words */
+	tedi(&ted_b1, s_band1, tcolour(p_navy, 0));
+	tedi(&ted_b2, s_band2, tcolour(p_navy, 0));
 	obj(BAND1, BOX, G_BOXTEXT, 0, (long)&ted_b1, 0, 0, COLS, 1);
 	obj(BAND2, BOX, G_BOXTEXT, 0, (long)&ted_b2, 0, 1, COLS, 1);
 	icon_blk.bi_pdata = (void *)icon_bits;
@@ -376,16 +413,30 @@ static void build(void)
 	icon_blk.bi_hl = gl_hchar >= 16 ? ICON_H : ICON_H / 2;	/* (8-pixel rows: its top half) */
 	icon_blk.bi_color = 0;		/* (white on the band) */
 	obj(ICON, BOX, G_IMAGE, 0, (long)&icon_blk, 1, 0, ICON_W / 8, 2);
-	/* the list: white, framed, a row a file */
-	obj(LIST, BOX, G_BOX, 0, 0x00FF1100L, 1, (short)(2 | (half << 8)), LW, LROWS);
-	for (k = 0; k < LROWS; k++)
-		obj((short)(L0 + k), LIST, G_STRING, 0, (long)s_row[k], 0, k, LTEXT, 1);
+	if (planes >= 4)
+		tree[ICON].ob_flags |= HIDETREE;	/* (the colour icon drawn over the band: draw()) */
+	/* the list: white, framed in grey, a row a file */
+	obj(LIST, BOX, G_BOX, 0, 0x00FF0070L | ((long)p_dark << 12), 1, (short)(2 | (half << 8)), LW, LROWS);
+	for (k = 0; k < LROWS; k++) {
+		tedi(&ted_row[k], s_row[k], tcolour(0, 1));
+		obj((short)(L0 + k), LIST, G_BOXTEXT, 0, (long)&ted_row[k], 0, k, LTEXT, 1);
+	}
+	for (k = 0; k < LROWS; k++) {
+		tedi(&ted_mark[k], s_mark[k], (short)(1 << 8));	/* (transparent: the row's ground under it) */
+		obj((short)(M0 + k), LIST, G_TEXT, 0, (long)&ted_mark[k], 1, k, 1, 1);
+	}
+	for (k = 0; k < LROWS; k++) {
+		tedi(&ted_rest[k], s_rest[k], (short)(p_dark << 8));
+		obj((short)(G0 + k), LIST, G_TEXT, 0, (long)&ted_rest[k], NAME_W, k, LTEXT - NAME_W, 1);
+	}
 	obj(B_ADD, BOX, G_BUTTON, SELECTABLE | EXIT, (long)"Add files...", COLS - 16, (short)(2 | (half << 8)), 15, 1);
 	obj(B_FOLDER, BOX, G_BUTTON, SELECTABLE | EXIT, (long)"Add folder...", COLS - 16, (short)(4 | (0 << 8)), 15, 1);
 	obj(B_REMOVE, BOX, G_BUTTON, SELECTABLE | EXIT, (long)"Remove", COLS - 16, (short)(5 | (half << 8)), 15, 1);
 	obj(B_CLEAR, BOX, G_BUTTON, SELECTABLE | EXIT, (long)"Clear", COLS - 16, 7, 15, 1);
 	obj(B_OUT, BOX, G_BUTTON, SELECTABLE | EXIT, (long)"Write to...", COLS - 16, (short)(8 | (half << 8)), 15, 1);
+	/* the separators etched: a grey line, a white one under it (the mock-up's) */
 	obj(SEP1, BOX, G_BOX, 0, line, 1, (short)(10 | ((half + 2) << 8)), COLS - 2, (short)(0 | (1 << 8)));
+	obj(SEP1W, BOX, G_BOX, 0, 0x00000070L, 1, (short)(10 | ((half + 3) << 8)), COLS - 2, (short)(0 | (1 << 8)));
 	obj(T_PAGES, BOX, G_STRING, 0, (long)"Whole pages:", 2, 11 | (half << 8), 12, 1);
 	popup_button(U_PAGES, 0, 15, (short)(11 | (half << 8)), 18);
 	obj(T_PHOTOS, BOX, G_STRING, 0, (long)"Photos:", 36, 11 | (half << 8), 7, 1);
@@ -393,10 +444,11 @@ static void build(void)
 	obj(T_ON, BOX, G_STRING, 0, (long)"Convert on:", 2, 13, 11, 1);
 	popup_button(U_ON, 2, 15, 13, 18);
 	obj(SEP2, BOX, G_BOX, 0, line, 1, (short)(14 | ((half + 2) << 8)), COLS - 2, (short)(0 | (1 << 8)));
+	obj(SEP2W, BOX, G_BOX, 0, 0x00000070L, 1, (short)(14 | ((half + 3) << 8)), COLS - 2, (short)(0 | (1 << 8)));
 	obj(T_FILE, BOX, G_STRING, 0, (long)s_file, 2, (short)(15 | (half << 8)), COLS - 4, 1);
-	obj(BAR1, BOX, G_BOX, 0, 0x00FF1100L, 2, (short)(16 | (half << 8)), COLS - 4, 1);
+	obj(BAR1, BOX, G_BOX, 0, 0x00FF0070L | ((long)p_dark << 12), 2, (short)(16 | (half << 8)), COLS - 4, 1);
 	obj(T_BATCH, BOX, G_STRING, 0, (long)s_batch, 2, (short)(17 | ((half + 4) << 8)), COLS - 4, 1);
-	obj(BAR2, BOX, G_BOX, 0, 0x00FF1100L, 2, (short)(18 | ((half + 4) << 8)), COLS - 4, 1);
+	obj(BAR2, BOX, G_BOX, 0, 0x00FF0070L | ((long)p_dark << 12), 2, (short)(18 | ((half + 4) << 8)), COLS - 4, 1);
 	obj(B_GO, BOX, G_BUTTON, SELECTABLE | EXIT | DEFAULT, (long)"Convert", COLS - 15, ROWS - 1, 13, 1);
 	link_tree();
 	rsrc_obfix_all(tree, NOBJ);
@@ -409,7 +461,8 @@ static void build(void)
 	tree[BAR1].ob_height = tree[BAR2].ob_height = (short)(gl_hchar * 5 / 8);
 	tree[BOX].ob_height += (short)(gl_hchar / 2);	/* (air under Convert) */
 	for (k = 0; k < LROWS; k++)
-		tree[L0 + k].ob_y++;
+		tree[L0 + k].ob_y++, tree[M0 + k].ob_y++, tree[G0 + k].ob_y++;
+	dlg_3d(tree);			/* (the buttons the AES's 3D where it has one: 5.6) */
 }
 
 /* ---------------------------------------------------------------- the work */
@@ -666,26 +719,33 @@ static const char *const photos_names[] = { "256 colours (fast)", "JPEG (small)"
 static const char *const on_names[] = { "This Atari", "The Gateway" };
 
 /* a file's row: its mark, name, size and what came of it */
-static void row_text(char *s, int i)
+/* row k shows file i: its mark (coloured), name, size and what came of it
+   (grey); the file under way on the mock-up's light blue */
+static void row_text(int k, int i)
 {
 	char size[16], what[40] = "";
 	char mark = '\xFA';		/* (to do: the middle dot) */
+	short ink = p_dark, ground = 0;
 
 	size_words(size, sizeof size, files[i].bytes);
 	if (files[i].state == 1) {
 		char a[16], b[16];
 
 		mark = '\x08';		/* (the check mark) */
+		ink = p_green;
 		size_words(a, sizeof a, files[i].bytes);
 		size_words(b, sizeof b, files[i].out_bytes);
 		snprintf(what, sizeof what, "%s \x03 %s", a, b);
 	} else if (files[i].state == 2) {
 		mark = 'x';
+		ink = p_red;
 		snprintf(what, sizeof what, "%.30s", files[i].why[0] ? files[i].why : "not converted");
 	} else if (files[i].state == 3)
 		snprintf(what, sizeof what, "stopped");
 	else if (working && i == cur) {
 		mark = '\x03';		/* (under way: the arrow) */
+		ink = p_blue;
+		ground = p_row;
 		if (gate_phase == PG_SEND)
 			snprintf(what, sizeof what, "sending");
 		else if (gate_phase == PG_WORK)
@@ -695,8 +755,19 @@ static void row_text(char *s, int i)
 		else if (cur_total >= 1000 && !on_gateway)
 			snprintf(what, sizeof what, "page %ld of %ld", cur_done / 1000 + 1, cur_total / 1000);
 	}
-	snprintf(s, LTEXT + 1, " %c %-12.12s %8s  %-*.*s", mark, base_of(files[i].path), size,
-		 LTEXT - 27, LTEXT - 27, what);
+	snprintf(s_row[k], sizeof s_row[k], "   %-12.12s", base_of(files[i].path));
+	s_mark[k][0] = mark;
+	s_mark[k][1] = '\0';
+	snprintf(s_rest[k], sizeof s_rest[k], "%8s  %-*.*s", size, LTEXT - NAME_W - 10, LTEXT - NAME_W - 10, what);
+	ted_row[k].te_color = tcolour(ground, 1);
+	ted_mark[k].te_color = (short)(ink << 8);
+}
+
+/* row k with no file: empty, white */
+static void row_empty(int k)
+{
+	s_row[k][0] = s_mark[k][0] = s_rest[k][0] = '\0';
+	ted_row[k].te_color = tcolour(0, 1);
 }
 
 static void rows_text(void)
@@ -711,10 +782,15 @@ static void rows_text(void)
 		int i = ltop + k;
 
 		if (i < nfiles)
-			row_text(s_row[k], i);
+			row_text(k, i);
 		else
-			memset(s_row[k], ' ', LTEXT), s_row[k][LTEXT] = '\0';
+			row_empty(k);
 		tree[L0 + k].ob_state = (short)(i == lsel && i < nfiles ? SELECTED : 0);
+		if (i == lsel && i < nfiles) {
+			ted_mark[k].te_color = 0;	/* (white on the chosen row's black bar) */
+			ted_rest[k].te_color = 0;
+		} else
+			ted_rest[k].te_color = (short)(p_dark << 8);
 	}
 }
 
@@ -796,7 +872,7 @@ static void progress_texts(void)
 	snprintf(s_batch, sizeof s_batch, "%-*.*s %s", n, n, l, a);
 	/* the file's row says the same (its page) */
 	if (cur >= ltop && cur < ltop + LROWS)
-		row_text(s_row[cur - ltop], cur);
+		row_text(cur - ltop, cur);
 }
 
 /* the file under way changed: the one before it is done (its row says
@@ -889,6 +965,16 @@ static void draw(const GRECT *clip, short start)
 			short p[4];
 
 			objc_draw(tree, start, 8, c.x, c.y, c.w, c.h);
+			if (planes >= 4 && gl_hchar >= 16) {
+				/* the colour icon over the band (a raster copy keeps to no
+				   clip: drawn where its whole square is in this one) */
+				short ix, iy;
+
+				objc_offset(tree, ICON, &ix, &iy);
+				iy = (short)(tree[BOX].ob_y + (2 * gl_hchar - ICON_H) / 2);
+				if (ix >= c.x && iy >= c.y && ix + ICON_W <= c.x + c.w && iy + ICON_H <= c.y + c.h)
+					about_icon16(icon16_px, ix, iy, 1, 1, 0);
+			}
 			p[0] = c.x;
 			p[1] = c.y;
 			p[2] = (short)(c.x + c.w - 1);
@@ -1379,6 +1465,10 @@ static void click(short mx, short my)
 			choose(o);
 		break;
 	default:
+		if (o >= M0 && o < M0 + LROWS)
+			o = (short)(L0 + o - M0);	/* (a row's mark or its grey words: the row) */
+		else if (o >= G0 && o < G0 + LROWS)
+			o = (short)(L0 + o - G0);
 		if (o >= L0 && o < L0 + LROWS && ltop + o - L0 < nfiles) {
 			int was = lsel;
 

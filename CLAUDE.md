@@ -309,7 +309,11 @@ at first. This section is kept up to date: the build, the tests, what a release 
   guide's first page (D12); jobs say "45%", "12 KB of 3.4 MB", "2 min left" (D35); "Copied to the
   clipboard." / "Couldn't write the clipboard." (D50); the Find dialog on common's dlgbuild (band,
   Cancel then Find, 10 wide); every GEM object built -DDLG_CLICK (C16); EConvert keeps B2 (D34).
-  tests/hatari/fontdlg.py opens Font... from the menu (gui.py types keys only). A page in bands re-reads the page once a band (18
+  tests/hatari/fontdlg.py opens Font... from the menu (gui.py types keys only). Erez's photos of 2.4 (9 Nov): a page in 16 colours
+  takes a colour near a pen as that pen, its error dropped (src/rovl/pens.c snap_pen: flat fills and grey
+  text were dithered into specks); a zoom stops another size's page drawing at once
+  (doc_pic_stop_page_unless: 62 -> 29 s to the sharp page on Falcon:16); EConvert's window in the B2
+  mock-up's colours, each the nearest of the 16 pens (pen_nearest; mono black and white). A page in bands re-reads the page once a band (18
   bands: 4 to 15 times slower): draw it whole where memory allows.
 - **The road to 1.0, and EConvert (Erez, 31 Oct 2026):**
   - **1.0 is the text view, complete:** 0.2 speed on an 8 MHz ST (the guidelines' times), 0.3 big

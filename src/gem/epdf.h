@@ -80,6 +80,7 @@ int doc_prepared(void);			/* a converted PDF (EConvert's) */
 int doc_page_drawable(void);
 int doc_drawn(void);			/* its pages drawn as printed by render.ovl (stage 2) */
 int doc_pic_drawing(void);		/* the picture being made is a page drawn */
+void doc_pic_stop_page_unless(long obj, int w, int h);	/* a zoom: another page's drawing stopped */
 extern char doc_font_dir[200];
 int doc_has_pages(void);		/* ... with its pages whole (View > Pages) */
 int doc_pages_mode(void);		/* the view shows them */

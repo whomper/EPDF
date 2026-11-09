@@ -681,6 +681,17 @@ static void page_pic_stop(void)
 	log_event("picture", "page-stopped", NULL);
 }
 
+/* a page being drawn that isn't obj at w x h stopped at once, its slot let
+   go: a zoom wants its own page now (Erez, 9 Nov 2026: "as soon as the
+   user zooms in, the current image viewing process need to stop and the
+   zoomed in image viewing must start"); it is drawn again when it is
+   wanted again */
+void doc_pic_stop_page_unless(long obj, int w, int h)
+{
+	if (rpic && rpic->obj >= PICS_PAGE && !(rpic->obj == obj && rpic->w == w && rpic->h == h))
+		page_pic_stop();
+}
+
 int doc_pic_drawing(void)
 {
 	return rpic && rpic->obj >= PICS_PAGE;

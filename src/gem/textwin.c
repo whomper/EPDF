@@ -1097,6 +1097,7 @@ void win_zoom_end(void)
 	zoom.on = 0;
 	zoom.pct = 0;
 	zoom_pre_free();
+	doc_pic_stop_page_unless(zoom.base.obj, zoom.base.w, zoom.base.h);	/* (a zoomed page still drawing gives way) */
 	if (has_menu_states)
 		has_menu_states();
 	win_draw_all();
@@ -1217,6 +1218,7 @@ static void zoom_set_pic(const DVPIC *p)
 
 	zoom_pre_free();
 	zoom.p = *p;
+	doc_pic_stop_page_unless(p->obj, p->w, p->h);	/* (the page drawing at another size gives way at once) */
 	b = pics_get(zoom.base.obj, zoom.base.w, zoom.base.h, zoom.base.flip);
 	if (p->obj >= PICS_PAGE && b && b->state == PICS_READY && (long)Malloc(-1L) >= 2 * bytes + 128 * 1024L) {
 		unsigned long t0 = tos_ms();
