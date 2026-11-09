@@ -68,7 +68,8 @@ void doc_pic_drop_ahead(void);	/* a picture ahead stopped for one shown */
    rows made of all (*of 0: not made a row at a time) */
 long doc_reading(int *prog);
 int doc_pic_progress(long *page, long *made, long *of);
-const char *doc_status(void);		/* the About box's line */
+const char *doc_status(void);
+void epdf_net_line(char *out, int n);	/* the About box's connection line, or "" */		/* the About box's line */
 const char *doc_page_text(long n, long *len);	/* NULL when not read yet */
 long doc_page_len(long n);		/* -1 when not read yet; nothing read */
 #include "docview.h"

@@ -41,6 +41,7 @@
 #include "badge.h"
 #include "gwopen.h"
 #include "trview.h"
+#include "aboutline.h"
 #include "charset.h"
 #include "bidi.h"
 #include "translate.h"
@@ -60,7 +61,7 @@ static char start_dir[160];		/* EPDF.PRG's folder: EPDF.INF, CRASH.LOG, EPDF.TXC
 static char inf_path[180], cache_path[180];
 static INF inf;
 static int lines_mode;
-/* File > Open on the Gateway (Erez, 7 Nov 2026): a PDF that isn't
+/* Options > Open on the Gateway (Erez, 7 Nov 2026): a PDF that isn't
    converted is converted by the Gateway while it is shown (gwopen.c) */
 static int gw_on;
 static unsigned short tr_port = TR_PORT;	/* translategate's */
@@ -204,7 +205,7 @@ static void open_doc(const char *p)
 static int settings_dialog(void);
 
 /* the document open isn't converted: the Gateway converts it while it is
-   shown (File > Open on the Gateway ticked) */
+   shown (Options > Open on the Gateway ticked) */
 static void gateway_begin(void)
 {
 	int r;
@@ -943,6 +944,9 @@ static void command(int c)
 	case CMD_QUIT:
 		quit_now = 1;
 		break;
+	case CMD_KEYS:
+		keys_dialog();
+		break;
 	case CMD_GUIDE:
 		if (help_key(start_dir, "epdf.hyp", NULL, "About"))
 			about_box();
@@ -1011,7 +1015,6 @@ static void command(int c)
 	}
 }
 
-/* File > Settings... (^,): where the Gateway is; 1 when OK */
 /* a language's name for the page heads and Settings, by its code (the
    Gateway's own names where it gave them: lang_names) */
 static SBUF lang_names;			/* "CODE<TAB>NAME" lines, the last GET /languages */
@@ -1057,23 +1060,58 @@ const char *lang_name(const char *code)
 
 /* Settings > Translate into: the languages the Gateway has installed, in a
    menu at the button (GET /languages) */
-static int pick_language(char *to, int tocap, char *name, int namecap)
+/* the About box's first line (1.3): how EPDF reaches the Gateway, left
+   out while nothing of EPDF's uses it */
+void epdf_net_line(char *out, int n)
+{
+	static int probed;
+	long page;
+
+	out[0] = '\0';
+	if (!gate_host[0] && !gw_on && !tr_on())
+		return;
+	if (!probed)
+		probed = 1, net_init();	/* (what is there: nothing is opened) */
+	about_net_line(out, n, net_stack(), gate_host[0] ? ABOUT_GATEWAY : ABOUT_NO_GATEWAY,
+		       gw_busy() || tr_page(&page) ? ABOUT_ONLINE : ABOUT_READY);
+}
+
+/* the network for the Gateway's languages (Settings), started here as
+   tr_slice and gw_start start it; said when there is none */
+static int net_up(void)
+{
+	static int ready;
+
+	if (!ready && !(ready = net_init()))
+		alert(1, "[1][The Gateway is reached through|STinG, MiNTnet or MagiC-Net,|and none is running.][ OK ]");
+	return ready;
+}
+
+static int pick_language(char *to, int tocap, char *name, int namecap, short bx, short by)
 {
 	char err[120];
 	const char *lab[TR_LANGS_MAX];
 	char codes[TR_LANGS_MAX][TR_LANG];
 	char names[TR_LANGS_MAX][TR_LANGNAME];
-	short n = 0, r;
+	short n = 0, r, sel = 0;
 	long k;
-	short mx, my, mb, ks;
 
-	if (!gate_host[0]) {
-		alert(1, "[1][Type the Gateway's address first.][ OK ]");
+	const char *gh = gate_dialog_host();
+
+	if (!gh[0]) {
+		alert(1, "[1][Type the Gateway's address first:|the Secure page.][ OK ]");
 		return 0;
 	}
+	if (gw_busy()) {
+		/* (the Gateway copy's connection is open, parked: one at a time) */
+		alert(1, "[1][EPDF is waiting for the Gateway|to convert a PDF. Ask again|when it has come.][ OK ]");
+		return 0;
+	}
+	if (!net_up())
+		return 0;
 	graf_mouse(BUSYBEE, NULL);
 	sb_reset(&lang_names);
-	k = translate_languages(gate_host, tr_port, &lang_names, err, sizeof err);
+	k = translate_languages(gh, tr_port, &lang_names, err, sizeof err);
 	graf_mouse(ARROW, NULL);
 	log_event("languages", k ? "ok" : "failed", NULL);
 	if (!k) {
@@ -1089,8 +1127,10 @@ static int pick_language(char *to, int tocap, char *name, int namecap)
 			snprintf(codes[n], sizeof codes[n], "%.*s", (int)(t - l), l);
 			if (translate_code_ok(codes[n])) {
 				snprintf(names[n], sizeof names[n], "  %s ", lang_name(codes[n]));
-				if (!strcmp(codes[n], to))
+				if (!strcmp(codes[n], to)) {
 					names[n][0] = '\x08';	/* (the one chosen: ticked) */
+					sel = n;
+				}
 				lab[n] = names[n];
 				n++;
 			}
@@ -1101,12 +1141,13 @@ static int pick_language(char *to, int tocap, char *name, int namecap)
 		alert(1, "[1][The Gateway has no languages installed:|see Languages....][ OK ]");
 		return 0;
 	}
-	graf_mkstate(&mx, &my, &mb, &ks);
-	r = popup(mx, my, lab, n);
+	/* over its button, the row chosen on it, as the AES's own pop-ups
+	   (5.7; EHypView's over_button: rows of ch + 2, from 2 pixels down) */
+	r = popup(bx, (short)(by - 3 - sel * (ch + 2)), lab, n);
 	if (r < 0)
 		return 0;
 	snprintf(to, (size_t)tocap, "%s", codes[r]);
-	snprintf(name, (size_t)namecap, "%.11s", lang_name(codes[r]));
+	snprintf(name, (size_t)namecap, "%s", lang_name(codes[r]));
 	return 1;
 }
 
@@ -1120,17 +1161,26 @@ static void languages_dialog(void)
 	static langs l;
 	int r;
 
-	if (!gate_host[0]) {
-		alert(1, "[1][Type the Gateway's address first.][ OK ]");
+	const char *gh = gate_dialog_host();
+
+	if (!gh[0]) {
+		alert(1, "[1][Type the Gateway's address first:|the Secure page.][ OK ]");
 		return;
 	}
+	if (gw_busy()) {
+		/* (the Gateway copy's connection is open, parked: one at a time) */
+		alert(1, "[1][EPDF is waiting for the Gateway|to convert a PDF. Ask again|when it has come.][ OK ]");
+		return;
+	}
+	if (!net_up())
+		return;
 	memset(&l, 0, sizeof l);
-	l.host = gate_host;
+	l.host = gh;
 	l.port = tr_port;
 	r = langs_run(&l);
 	log_event("languages-dialog", r == 1 ? "ok" : r == 0 ? "cancel" : "failed", NULL);
 	if (r == 1 && l.job) {
-		langs_job_begin(&ljob, gate_host, tr_port, l.job, l.add_mb, tos_ms());
+		langs_job_begin(&ljob, gh, tr_port, l.job, l.add_mb, tos_ms());
 		ljob_on = 1;
 	}
 }
@@ -1139,6 +1189,13 @@ static int settings_dialog(void)
 {
 	char port[8], to[TR_LANG];
 	int was_on = tr_on();
+
+	/* the page being translated given up (it is asked again after): its
+	   job is parked inside a connection, and the dialog's questions to the
+	   Gateway (Translate into, Languages...) open one of their own on this
+	   stack, which conn.c can't have two of (the hub's review, 9 Nov 2026:
+	   an Address Error, 3 of 3) */
+	tr_stop();
 
 	snprintf(to, sizeof to, "%s", tr_to());
 	if (!gate_dialog_tr(gate_host, (int)sizeof gate_host, &gate_port, to, (int)sizeof to, lang_name(to),

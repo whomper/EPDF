@@ -84,7 +84,7 @@ def run(work, machine, converted):
         park(r)
         r.still()
         r.shot("text")
-        r.menu(184, 76)                         # View > Pages
+        r.menu(184, 44)                         # View > Pages
         if not wait(r, "EPDF pages 1", 1, 30):
             bad.append("View > Pages didn't come on")
             raise RuntimeError

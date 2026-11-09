@@ -185,7 +185,7 @@ def run(work, machine):
         # items 16 pixels a row from y 20. x 150 was Edit's title (its
         # separator clicked: the row measured nothing, and a menu left so
         # took the About box's click on TOS 4 with NVDI, the hub, 1 Nov)
-        menus = [menu_act(r, "View > The page's lines", speed.WINDOW, 184, 60),
+        menus = [menu_act(r, "View > The page's lines", speed.WINDOW, 184, 28),
                  menu_act(r, "About box", r.about, 36, 28)]
         r.act("About box closed", speed.WINDOW, lambda: r.key("Escape"))
         bad = r.report()

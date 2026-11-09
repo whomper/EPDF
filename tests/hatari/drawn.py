@@ -69,7 +69,7 @@ def run(work, machine):
         dropped = r.shot("view-menu")
         if differ(text, dropped) < 500:
             bad.append("the View menu didn't drop (%d pixels changed)" % differ(text, dropped))
-        r.click(204, 76)
+        r.click(204, 44)
         t0 = time.time()
         if st:
             time.sleep(4)
@@ -120,7 +120,7 @@ def run(work, machine):
             while time.time() < end and "EPDF picture ready" not in r.console().split("EPDF page-shown")[-1]:
                 time.sleep(1)
             time.sleep(2)
-            r.menu(184, 76)
+            r.menu(184, 44)
             time.sleep(3)
             park(r)
             r.still()

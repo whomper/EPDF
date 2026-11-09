@@ -48,9 +48,9 @@ ACTIONS = {
     "start": ("the start", lambda r: r.key("Home")),
     "selall": ("Select all", lambda r: r.key("ctrl+a")),
     "copy": ("Copy", lambda r: r.key("ctrl+c")),      # (after selall: the selection copied)
-    "lines": ("View > The page's lines", lambda r: r.menu(184, 60)),
+    "lines": ("View > The page's lines", lambda r: r.menu(184, 28)),
     "about": ("About box", lambda r: r.menu(36, 28)),
-    "pages": ("View > Pages", lambda r: r.menu(184, 76)),     # (a converted PDF: GEMPROF_PDF)
+    "pages": ("View > Pages", lambda r: r.menu(184, 44)),     # (a converted PDF: GEMPROF_PDF)
 }
 
 

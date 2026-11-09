@@ -121,9 +121,13 @@ static void translate_page(long n)
 	}
 	pf_idle = NULL;
 	if (r < 0) {
-		snprintf(why, sizeof why, "%s", tr.err);
-		why_new = !conn_stop;	/* (Esc: no alert) */
-		halted = 1;
+		/* (stopped from here, tr_stop: the page asked again later, nothing
+		   halted; Esc halts the document itself, tr_halt) */
+		if (!conn_stop) {
+			snprintf(why, sizeof why, "%s", tr.err);
+			why_new = 1;
+			halted = 1;
+		}
 		job_state = TR_FAILED;
 	} else if (tr.same) {
 		job_state = TR_SAME;

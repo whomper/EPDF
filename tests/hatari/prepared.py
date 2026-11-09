@@ -72,7 +72,7 @@ def run(work, machine):
         text = r.shot("text")
         # View: the menu bar's " View " title at 160-207; its items 16 pixels
         # a row from y 20 (Font..., a line, The page's lines, Pages)
-        r.menu(184, 76)
+        r.menu(184, 44)
         time.sleep(3)
         r.still()
         pages = r.shot("pages")
@@ -80,7 +80,7 @@ def run(work, machine):
             bad.append("View > Pages: no \"pages 1\"")
         if differ(text, pages) < 2000:
             bad.append("View > Pages: the window didn't change")
-        r.menu(184, 76)
+        r.menu(184, 44)
         time.sleep(3)
         park(r)
         r.still()

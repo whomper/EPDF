@@ -294,7 +294,16 @@ at first. This section is kept up to date: the build, the tests, what a release 
   /Translation (pdfgate's translate=CODE with Open on the Gateway: nothing asked by EPDF), Settings'
   Translate into and Languages... (gatedlg.c's gate_dialog_tr, common's langs.c), the right-click
   Translate...; Off runs nothing of it. Rig: tests/hatari/translate_view.py (gateway/'s translategate.py
-  stand-in and pdfgate.py; EPDF_PRG=build/aprof/EPDF.PRG for the turns). Then speed. A page in bands re-reads the page once a band (18
+  stand-in and pdfgate.py; EPDF_PRG=build/aprof/EPDF.PRG for the turns). Then speed. The family's UI (Erez, 9 Nov 2026: "make sure EPDF UI aligns with the family"; the hub's
+  review): Options (Settings... ^, , Font... ⇧^F, a line, Open on the Gateway), Help (EPDF help,
+  Keys...); Settings is EHypView's layout in src/gem/gatedlg.c (General: Translate into, a pop-up
+  over its button, Languages...; Secure: the Gateway's address and port; EConvert: Secure only),
+  the address edited in a copy (Cancel keeps it); a temporary copy, the hub's leave, until
+  common/ui/settings.c lands (branch hub/settings): then switch to it and delete ours. Settings
+  stops the page being translated first (tr_stop: one connection at a time; the hub's Address
+  Error); translate_view.py's direct mode checks it (TRV_DELAY: slowgate.py). EConvert's window is
+  Erez's B2 (band, list with panebar and buttons at its right, lines, pop-up buttons, two bars),
+  iconifiable. Not released until Erez has seen the shots. A page in bands re-reads the page once a band (18
   bands: 4 to 15 times slower): draw it whole where memory allows.
 - **The road to 1.0, and EConvert (Erez, 31 Oct 2026):**
   - **1.0 is the text view, complete:** 0.2 speed on an 8 MHz ST (the guidelines' times), 0.3 big

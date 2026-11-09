@@ -43,6 +43,9 @@
 #include "pigate.h"
 #include "conn.h"
 #include "gatedlg.h"
+#include "popup.h"
+#include "panebar.h"
+#include "iconify.h"
 #include "icon.h"
 #include "icon16.h"
 #include "icon256.h"
@@ -211,6 +214,7 @@ static struct {
 	char path[160];
 	long bytes;
 	int state;			/* 0 to do, 1 done, 2 failed, 3 stopped */
+	long out_bytes;			/* the converted PDF's size (done) */
 	char why[120];
 } files[MAXF];
 static int nfiles;
@@ -246,6 +250,7 @@ static int add_file(const char *p)
 	strcpy(files[nfiles].path, p);
 	files[nfiles].bytes = n;
 	files[nfiles].state = 0;
+	files[nfiles].out_bytes = 0;
 	files[nfiles].why[0] = '\0';
 	nfiles++;
 	return 1;
@@ -271,18 +276,32 @@ static int add_folder(const char *dir)
 
 /* ---------------------------------------------------------------- the window's tree */
 
+/* The window (Erez, 9 Nov 2026: "Go with B but use the list management
+   of A ... a visual separator just beneath that area ... the same
+   separator as the one at the bottom"): a black band with the icon, the
+   name and what the batch is; the files in a list, its buttons at the
+   right; a line; the settings as pop-up buttons (the family's, 5.7: over
+   the button, the choice ticked); a line; the file's and the batch's
+   bars under their words; Convert (Stop). */
 enum {
-	BOX, T_FILES, B_ADD, B_FOLDER, B_CLEAR, T_OUT, B_OUT,
-	T_PAGES, G_PAGES, P_NONE, P_MONO, P_COLOUR,
-	T_PHOTOS, G_PHOTOS, F_256, F_JPEG,
-	T_ON, G_ON, O_ATARI, O_GATE,
+	BOX, BAND1, BAND2, ICON, LIST, L0, L1, L2, L3, L4, L5, L6,
+	B_ADD, B_FOLDER, B_REMOVE, B_CLEAR, B_OUT, SEP1,
+	T_PAGES, U_PAGES, T_PHOTOS, U_PHOTOS, T_ON, U_ON, SEP2,
 	T_FILE, BAR1, T_BATCH, BAR2, B_GO, NOBJ
 };
-#define COLS 58
+#define LROWS 7				/* the list's rows */
+#define COLS 66
 #define ROWS 21
+#define LW (COLS - 19)			/* the list's width */
+#define LTEXT (LW - 3)			/* a row's characters (the pane bar at its right) */
 
 static OBJECT tree[NOBJ];
-static char s_files[COLS + 1], s_out[COLS + 1], s_file[COLS + 1], s_batch[COLS + 1];
+static TEDINFO ted_b1, ted_b2, ted_u[3];
+static BITBLK icon_blk;
+static char s_band1[COLS + 1], s_band2[COLS + 1], s_file[COLS + 1], s_batch[COLS + 1];
+static char s_row[LROWS][LTEXT + 1], s_u[3][28];
+static int ltop, lsel = -1;		/* the list's first row shown; the file chosen (Remove) */
+static PANEBAR lbar;
 
 static void obj(short i, short parent, short type, short flags, long spec, short x, short y, short w, short h)
 {
@@ -322,46 +341,75 @@ static void link_tree(void)
 	tree[NOBJ - 1].ob_flags |= LASTOB;
 }
 
+static void tedi(TEDINFO *t, char *s, short color)
+{
+	memset(t, 0, sizeof *t);
+	t->te_ptext = s;
+	t->te_ptmplt = "";
+	t->te_pvalid = "";
+	t->te_font = 3;
+	t->te_color = color;
+	t->te_txtlen = (short)(strlen(s) + 1);
+	t->te_tmplen = 1;
+}
+
+/* a pop-up button: its choice and the system font's down arrow */
+static void popup_button(short i, short u, short x, short y, short w)
+{
+	tedi(&ted_u[u], s_u[u], 0x1180);
+	ted_u[u].te_thickness = -1;
+	obj(i, BOX, G_BOXTEXT, TOUCHEXIT, (long)&ted_u[u], x, y, w, 1);
+}
+
 static void build(void)
 {
+	short k, line = 0x00001171L, half = (short)(gl_hchar / 2);
+
 	obj(BOX, 0, G_BOX, 0, 0x00001100L, 0, 0, COLS, ROWS);
-	obj(T_FILES, BOX, G_STRING, 0, (long)s_files, 2, 1, COLS - 4, 1);
-	obj(B_ADD, BOX, G_BUTTON, SELECTABLE | EXIT, (long)"Add files...", 2, 3, 14, 1);
-	obj(B_FOLDER, BOX, G_BUTTON, SELECTABLE | EXIT, (long)"Add folder...", 18, 3, 15, 1);
-	obj(B_CLEAR, BOX, G_BUTTON, SELECTABLE | EXIT, (long)"Clear", 35, 3, 9, 1);
-	obj(T_OUT, BOX, G_STRING, 0, (long)s_out, 2, 5, COLS - 16, 1);
-	obj(B_OUT, BOX, G_BUTTON, SELECTABLE | EXIT, (long)"Write to...", COLS - 15, 5, 13, 1);
-	obj(T_PAGES, BOX, G_STRING, 0, (long)"Whole pages:", 2, 7, 13, 1);
-	obj(G_PAGES, BOX, G_IBOX, 0, 0, 16, 7, COLS - 18, 1);
-	obj(P_NONE, G_PAGES, G_BUTTON, SELECTABLE | RBUTTON, (long)"None", 0, 0, 8, 1);
-	obj(P_MONO, G_PAGES, G_BUTTON, SELECTABLE | RBUTTON, (long)"Mono", 10, 0, 8, 1);
-	obj(P_COLOUR, G_PAGES, G_BUTTON, SELECTABLE | RBUTTON, (long)"Mono and colour", 20, 0, 18, 1);
-	obj(T_PHOTOS, BOX, G_STRING, 0, (long)"Photos:", 2, 9, 13, 1);
-	obj(G_PHOTOS, BOX, G_IBOX, 0, 0, 16, 9, COLS - 18, 1);
-	obj(F_256, G_PHOTOS, G_BUTTON, SELECTABLE | RBUTTON, (long)"256 colours (fast)", 0, 0, 20, 1);
-	obj(F_JPEG, G_PHOTOS, G_BUTTON, SELECTABLE | RBUTTON, (long)"JPEG (small)", 22, 0, 16, 1);
-	obj(T_ON, BOX, G_STRING, 0, (long)"Convert on:", 2, 11, 13, 1);
-	obj(G_ON, BOX, G_IBOX, 0, 0, 16, 11, COLS - 18, 1);
-	obj(O_ATARI, G_ON, G_BUTTON, SELECTABLE | RBUTTON, (long)"This Atari", 0, 0, 14, 1);
-	obj(O_GATE, G_ON, G_BUTTON, SELECTABLE | RBUTTON, (long)"Gateway", 16, 0, 12, 1);
-	obj(T_FILE, BOX, G_STRING, 0, (long)s_file, 2, 13, COLS - 4, 1);
-	obj(BAR1, BOX, G_IBOX, 0, 0, 2, 14, COLS - 4, 1);
-	obj(T_BATCH, BOX, G_STRING, 0, (long)s_batch, 2, 16, COLS - 4, 1);
-	obj(BAR2, BOX, G_IBOX, 0, 0, 2, 17, COLS - 4, 1);
-	obj(B_GO, BOX, G_BUTTON, SELECTABLE | EXIT | DEFAULT, (long)"Convert", COLS - 14, 19, 12, 1);
-	if (!has_030)
-		tree[O_ATARI].ob_state |= DISABLED;	/* (an ST's converter: none) */
+	/* the band, two rows of the family's black (0x1071: white words) */
+	tedi(&ted_b1, s_band1, 0x1071);
+	tedi(&ted_b2, s_band2, 0x1071);
+	obj(BAND1, BOX, G_BOXTEXT, 0, (long)&ted_b1, 0, 0, COLS, 1);
+	obj(BAND2, BOX, G_BOXTEXT, 0, (long)&ted_b2, 0, 1, COLS, 1);
+	icon_blk.bi_pdata = (void *)icon_bits;
+	icon_blk.bi_wb = ICON_W / 8;
+	icon_blk.bi_hl = gl_hchar >= 16 ? ICON_H : ICON_H / 2;	/* (8-pixel rows: its top half) */
+	icon_blk.bi_color = 0;		/* (white on the band) */
+	obj(ICON, BOX, G_IMAGE, 0, (long)&icon_blk, 1, 0, ICON_W / 8, 2);
+	/* the list: white, framed, a row a file */
+	obj(LIST, BOX, G_BOX, 0, 0x00FF1100L, 1, (short)(2 | (half << 8)), LW, LROWS);
+	for (k = 0; k < LROWS; k++)
+		obj((short)(L0 + k), LIST, G_STRING, 0, (long)s_row[k], 0, k, LTEXT, 1);
+	obj(B_ADD, BOX, G_BUTTON, SELECTABLE | EXIT, (long)"Add files...", COLS - 16, (short)(2 | (half << 8)), 15, 1);
+	obj(B_FOLDER, BOX, G_BUTTON, SELECTABLE | EXIT, (long)"Add folder...", COLS - 16, (short)(4 | (0 << 8)), 15, 1);
+	obj(B_REMOVE, BOX, G_BUTTON, SELECTABLE | EXIT, (long)"Remove", COLS - 16, (short)(5 | (half << 8)), 15, 1);
+	obj(B_CLEAR, BOX, G_BUTTON, SELECTABLE | EXIT, (long)"Clear", COLS - 16, 7, 15, 1);
+	obj(B_OUT, BOX, G_BUTTON, SELECTABLE | EXIT, (long)"Write to...", COLS - 16, (short)(8 | (half << 8)), 15, 1);
+	obj(SEP1, BOX, G_BOX, 0, line, 1, (short)(10 | ((half + 2) << 8)), COLS - 2, (short)(0 | (1 << 8)));
+	obj(T_PAGES, BOX, G_STRING, 0, (long)"Whole pages:", 2, 11 | (half << 8), 12, 1);
+	popup_button(U_PAGES, 0, 15, (short)(11 | (half << 8)), 18);
+	obj(T_PHOTOS, BOX, G_STRING, 0, (long)"Photos:", 36, 11 | (half << 8), 7, 1);
+	popup_button(U_PHOTOS, 1, 44, (short)(11 | (half << 8)), 21);
+	obj(T_ON, BOX, G_STRING, 0, (long)"Convert on:", 2, 13, 11, 1);
+	popup_button(U_ON, 2, 15, 13, 18);
+	obj(SEP2, BOX, G_BOX, 0, line, 1, (short)(14 | ((half + 2) << 8)), COLS - 2, (short)(0 | (1 << 8)));
+	obj(T_FILE, BOX, G_STRING, 0, (long)s_file, 2, (short)(15 | (half << 8)), COLS - 4, 1);
+	obj(BAR1, BOX, G_BOX, 0, 0x00FF1100L, 2, (short)(16 | (half << 8)), COLS - 4, 1);
+	obj(T_BATCH, BOX, G_STRING, 0, (long)s_batch, 2, (short)(17 | ((half + 4) << 8)), COLS - 4, 1);
+	obj(BAR2, BOX, G_BOX, 0, 0x00FF1100L, 2, (short)(18 | ((half + 4) << 8)), COLS - 4, 1);
+	obj(B_GO, BOX, G_BUTTON, SELECTABLE | EXIT | DEFAULT, (long)"Convert", COLS - 15, ROWS - 1, 13, 1);
 	link_tree();
 	rsrc_obfix_all(tree, NOBJ);
 	tree[BOX].ob_state = 0;
-}
-
-static void set_radio(short first, short last, short on)
-{
-	short i;
-
-	for (i = first; i <= last; i++)
-		tree[i].ob_state = (short)(i == on ? tree[i].ob_state | SELECTED : tree[i].ob_state & ~SELECTED);
+	/* the icon in the band's middle, its words after it */
+	tree[ICON].ob_y = (short)((2 * gl_hchar - icon_blk.bi_hl) / 2);
+	tree[ICON].ob_width = ICON_W;
+	tree[ICON].ob_height = icon_blk.bi_hl;
+	tree[LIST].ob_height += 2;	/* (a pixel of white above and below the rows) */
+	tree[BAR1].ob_height = tree[BAR2].ob_height = (short)(gl_hchar * 5 / 8);
+	tree[BOX].ob_height += (short)(gl_hchar / 2);	/* (air under Convert) */
+	for (k = 0; k < LROWS; k++)
+		tree[L0 + k].ob_y++;
 }
 
 /* ---------------------------------------------------------------- the work */
@@ -523,6 +571,7 @@ static void worker(void)
 			r = cv_convert(files[i].path, outp, &o, &st, err, sizeof err);
 done_one:
 			files[i].state = r == 0 ? 1 : r == -2 ? 3 : 2;
+			files[i].out_bytes = r == 0 ? file_size(outp) : 0;
 			if (r == 0)
 				n_ok++;
 			else if (r == -1) {
@@ -569,39 +618,6 @@ static GRECT work_area(void)
 	return r;
 }
 
-static void texts(void)
-{
-	long kb = 0;
-	int i;
-
-	for (i = 0; i < nfiles; i++)
-		kb += files[i].bytes / 1024;
-	{
-		static int logged = -1;	/* the list's count for the rigs, when it changes */
-
-		if (nfiles != logged) {
-			char q[8];
-
-			snprintf(q, sizeof q, "%d", nfiles);
-			log_event("files", q, NULL);
-			logged = nfiles;
-		}
-	}
-	if (!nfiles)
-		snprintf(s_files, sizeof s_files, "Files to convert: none yet");
-	else
-		snprintf(s_files, sizeof s_files, "Files to convert: %d (%ld KB)", nfiles, kb);
-	snprintf(s_out, sizeof s_out, "Write to: %.40s", out_dir[0] ? out_dir : "(a folder to choose)");
-	if (!working) {
-		s_file[0] = s_batch[0] = '\0';
-		tree[B_GO].ob_spec = (long)"Convert";
-	} else
-		tree[B_GO].ob_spec = (long)"Stop";
-	set_radio(P_NONE, P_COLOUR, (short)(P_NONE + pages_set));
-	set_radio(F_256, F_JPEG, (short)(F_256 + photos_set));
-	set_radio(O_ATARI, O_GATE, (short)(on_gateway ? O_GATE : O_ATARI));
-}
-
 /* "45 %, 2 min left" from the share done (thousandths) and the time it took */
 static void left(char *s, long n, long share, unsigned long since)
 {
@@ -634,25 +650,161 @@ static long share_batch(void)
 	return ((bytes_done >> 10) + (cur_bytes >> 10) * share_file() / 1000) * 1000L / ((batch_bytes >> 10) + 1);
 }
 
+/* "4.7 MB", "820 KB" */
+static void size_words(char *s, size_t n, long bytes)
+{
+	if (bytes >= 1024L * 1024L)
+		snprintf(s, n, "%ld.%ld MB", bytes / (1024L * 1024L), bytes % (1024L * 1024L) * 10 / (1024L * 1024L));
+	else
+		snprintf(s, n, "%ld KB", (bytes + 1023) / 1024);
+}
+
+static const char *const pages_names[] = { "None", "Mono", "Mono and colour" };
+static const char *const photos_names[] = { "256 colours (fast)", "JPEG (small)" };
+static const char *const on_names[] = { "This Atari", "The Gateway" };
+
+/* a file's row: its mark, name, size and what came of it */
+static void row_text(char *s, int i)
+{
+	char size[16], what[40] = "";
+	char mark = '\xFA';		/* (to do: the middle dot) */
+
+	size_words(size, sizeof size, files[i].bytes);
+	if (files[i].state == 1) {
+		char a[16], b[16];
+
+		mark = '\x08';		/* (the check mark) */
+		size_words(a, sizeof a, files[i].bytes);
+		size_words(b, sizeof b, files[i].out_bytes);
+		snprintf(what, sizeof what, "%s \x03 %s", a, b);
+	} else if (files[i].state == 2) {
+		mark = 'x';
+		snprintf(what, sizeof what, "%.30s", files[i].why[0] ? files[i].why : "not converted");
+	} else if (files[i].state == 3)
+		snprintf(what, sizeof what, "stopped");
+	else if (working && i == cur) {
+		mark = '\x03';		/* (under way: the arrow) */
+		if (gate_phase == PG_SEND)
+			snprintf(what, sizeof what, "sending");
+		else if (gate_phase == PG_WORK)
+			snprintf(what, sizeof what, gate_waiting ? "waiting" : "on the Gateway");
+		else if (gate_phase == PG_RECV)
+			snprintf(what, sizeof what, "receiving");
+		else if (cur_total >= 1000 && !on_gateway)
+			snprintf(what, sizeof what, "page %ld of %ld", cur_done / 1000 + 1, cur_total / 1000);
+	}
+	snprintf(s, LTEXT + 1, " %c %-12.12s %8s  %-*.*s", mark, base_of(files[i].path), size,
+		 LTEXT - 27, LTEXT - 27, what);
+}
+
+static void rows_text(void)
+{
+	int k;
+
+	if (ltop > nfiles - LROWS)
+		ltop = nfiles - LROWS;
+	if (ltop < 0)
+		ltop = 0;
+	for (k = 0; k < LROWS; k++) {
+		int i = ltop + k;
+
+		if (i < nfiles)
+			row_text(s_row[k], i);
+		else
+			memset(s_row[k], ' ', LTEXT), s_row[k][LTEXT] = '\0';
+		tree[L0 + k].ob_state = (short)(i == lsel && i < nfiles ? SELECTED : 0);
+	}
+}
+
+static void texts(void)
+{
+	long bytes = 0;
+	int i;
+	char a[16];
+
+	for (i = 0; i < nfiles; i++)
+		bytes += files[i].bytes;
+	{
+		static int logged = -1;	/* the list's count for the rigs, when it changes */
+
+		if (nfiles != logged) {
+			char q[8];
+
+			snprintf(q, sizeof q, "%d", nfiles);
+			log_event("files", q, NULL);
+			logged = nfiles;
+		}
+	}
+	snprintf(s_band1, sizeof s_band1, "      EConvert");
+	size_words(a, sizeof a, bytes);
+	if (!nfiles)
+		snprintf(s_band2, sizeof s_band2, "      No PDFs yet \xFA %s", on_gateway ? "on the Gateway" : "on this Atari");
+	else
+		snprintf(s_band2, sizeof s_band2, "      %d PDF%s, %s \xFA into %.24s \xFA %s", nfiles, nfiles == 1 ? "" : "s", a,
+			 out_dir[0] ? out_dir : "(Write to...)", on_gateway ? "on the Gateway" : "on this Atari");
+	ted_b2.te_txtlen = (short)(strlen(s_band2) + 1);
+	rows_text();
+	if (lsel >= nfiles)
+		lsel = -1;
+	if (working || lsel < 0)
+		tree[B_REMOVE].ob_state |= DISABLED;
+	else
+		tree[B_REMOVE].ob_state &= ~DISABLED;
+	snprintf(s_u[0], sizeof s_u[0], " %-16s\x02", pages_names[pages_set]);
+	snprintf(s_u[1], sizeof s_u[1], " %-19s\x02", photos_names[photos_set]);
+	snprintf(s_u[2], sizeof s_u[2], " %-16s\x02", on_names[on_gateway]);
+	if (!working) {
+		snprintf(s_file, sizeof s_file, "The file");
+		snprintf(s_batch, sizeof s_batch, "The batch");
+		tree[B_GO].ob_spec = (long)"Convert";
+	} else
+		tree[B_GO].ob_spec = (long)"Stop";
+}
+
 static void progress_texts(void)
 {
-	char a[40];
+	char a[40], l[COLS + 1];
+	int w = COLS - 4, n;
 
 	if (!working)
 		return;
 	left(a, sizeof a, share_file(), t_file);
 	/* the three phases (guideline 7.3, Erez 7 Nov 2026) */
 	if (gate_phase == PG_SEND || gate_phase == PG_RECV)
-		snprintf(a, sizeof a, "%s the Gateway... %ld KB", gate_phase == PG_SEND ? "Sending to" : "Receiving from",
-			 (gate_part + 1023) / 1024);
+		snprintf(l, sizeof l, "%.12s  %s the Gateway... %ld KB", base_of(files[cur].path),
+			 gate_phase == PG_SEND ? "Sending to" : "Receiving from", (gate_part + 1023) / 1024);
 	else if (gate_phase == PG_WORK)
-		snprintf(a, sizeof a, gate_waiting ? "Waiting for the Gateway" : "The Gateway is converting...");
-	if (gate_phase >= 0)	/* (the phase's words take the name's room) */
-		snprintf(s_file, sizeof s_file, "File %d of %d: %s", cur + 1, nfiles, a);
+		snprintf(l, sizeof l, "%.12s  %s", base_of(files[cur].path),
+			 gate_waiting ? "Waiting for the Gateway" : "The Gateway is converting...");
+	else if (cur_total >= 1000)
+		snprintf(l, sizeof l, "%.12s  page %ld of %ld", base_of(files[cur].path), cur_done / 1000 + 1,
+			 cur_total / 1000);
 	else
-		snprintf(s_file, sizeof s_file, "File %d of %d: %.24s  %s", cur + 1, nfiles, base_of(files[cur].path), a);
+		snprintf(l, sizeof l, "%.12s", base_of(files[cur].path));
+	n = w - (int)strlen(a) - 1;
+	snprintf(s_file, sizeof s_file, "%-*.*s %s", n, n, l, a);
 	left(a, sizeof a, share_batch(), t_batch);
-	snprintf(s_batch, sizeof s_batch, "The batch: %s", a);
+	snprintf(l, sizeof l, "The batch  %d of %d", cur + 1, nfiles);
+	n = w - (int)strlen(a) - 1;
+	snprintf(s_batch, sizeof s_batch, "%-*.*s %s", n, n, l, a);
+	/* the file's row says the same (its page) */
+	if (cur >= ltop && cur < ltop + LROWS)
+		row_text(s_row[cur - ltop], cur);
+}
+
+/* the file under way changed: the one before it is done (its row says
+   so), the new one in view */
+static int shown_cur = -1;
+
+static int list_follow(void)
+{
+	if (!working || cur == shown_cur)
+		return 0;
+	shown_cur = cur;
+	if (cur >= ltop + LROWS)
+		ltop = cur - LROWS + 1;
+	rows_text();
+	return 1;
 }
 
 static void bar(short o, long share, const GRECT *clip)
@@ -663,7 +815,7 @@ static void bar(short o, long share, const GRECT *clip)
 	(void)clip;
 	objc_offset(tree, o, &x, &y);
 	if (to > 0)
-		progbar_fill(vdi_h, x, (short)(y + tree[o].ob_height / 4), tree[o].ob_width, (short)(tree[o].ob_height / 2), 0, (short)to);
+		progbar_fill(vdi_h, x, y, tree[o].ob_width, tree[o].ob_height, 0, (short)to);
 }
 
 static int meet(const GRECT *a, GRECT *b)
@@ -681,8 +833,42 @@ static int meet(const GRECT *a, GRECT *b)
 	return 1;
 }
 
+/* the list's pane bar, at its right, when it has more files than rows */
+static int list_bar(void)
+{
+	short x, y;
+
+	objc_offset(tree, LIST, &x, &y);
+	lbar.r.w = pb_width();
+	lbar.r.x = (short)(x + tree[LIST].ob_width - lbar.r.w);
+	lbar.r.y = y;
+	lbar.r.h = tree[LIST].ob_height;
+	lbar.total = nfiles;
+	lbar.shown = LROWS;
+	lbar.top = ltop;
+	lbar.across = 0;
+	return nfiles > LROWS;
+}
+
+/* iconified (5.1): the icon, and how far the batch has got under it */
+static int iconified;
+
+static const char *icon_status(void)
+{
+	static char st[8];
+
+	if (!working)
+		return nfiles ? "ready" : "";
+	snprintf(st, sizeof st, "%ld %%", share_batch() / 10);
+	return st;
+}
+
 static void draw(const GRECT *clip, short start)
 {
+	if (iconified) {
+		icon_redraw(win, clip, icon_bits, icon16_px, icon_status());
+		return;
+	}
 	GRECT a = work_area(), r;
 
 	tree[BOX].ob_x = a.x;
@@ -706,6 +892,8 @@ static void draw(const GRECT *clip, short start)
 				bar(BAR2, share_batch(), &c);
 			}
 			vs_clip(vdi_h, 0, p);
+			if (list_bar())
+				pb_draw(&lbar, &c);
 		}
 		wind_get(win, WF_NEXTXYWH, &r.x, &r.y, &r.w, &r.h);
 	}
@@ -716,6 +904,8 @@ static void redraw_obj(short o)
 {
 	GRECT g;
 
+	if (iconified)
+		return;		/* (its icon: redraw_progress) */
 	objc_offset(tree, o, &g.x, &g.y);
 	g.w = tree[o].ob_width;
 	g.h = tree[o].ob_height;
@@ -731,6 +921,12 @@ static void redraw_progress(void)
 	GRECT g;
 	short y2;
 
+	if (iconified) {
+		wind_update(BEG_UPDATE);
+		icon_redraw(win, NULL, icon_bits, icon16_px, icon_status());
+		wind_update(END_UPDATE);
+		return;
+	}
 	objc_offset(tree, T_FILE, &g.x, &g.y);
 	objc_offset(tree, BAR2, &g.w, &y2);
 	g.w = tree[T_FILE].ob_width;
@@ -749,11 +945,23 @@ static void redraw_progress(void)
 	draw(&g, BOX);
 #endif
 	wind_update(END_UPDATE);
+	if (list_follow())
+		redraw_obj(LIST);
+	else if (cur >= ltop && cur < ltop + LROWS)
+		redraw_obj((short)(L0 + cur - ltop));
 }
 
 /* ---------------------------------------------------------------- the commands */
 
 static void begin(void);
+
+/* the list, its buttons and the band (what a change to the files moves) */
+static void redraw_list(void)
+{
+	redraw_obj(BAND2);
+	redraw_obj(LIST);
+	redraw_obj(B_REMOVE);
+}
 
 static int pick(const char *title, char *dir, long ndir, char *name, long nname)
 {
@@ -787,7 +995,7 @@ static void cmd_add(void)
 	snprintf(p, sizeof p, "%s\\%s", in_dir, name);
 	if (add_file(p)) {
 		texts();
-		redraw_obj(T_FILES);
+		redraw_list();
 	}
 }
 
@@ -801,7 +1009,7 @@ static void cmd_folder(void)
 	if (!add_folder(in_dir))
 		alert(1, "[1][No PDF in that folder|could be added.][ OK ]");
 	texts();
-	redraw_obj(T_FILES);
+	redraw_list();
 }
 
 static void cmd_out(void)
@@ -817,7 +1025,7 @@ static void cmd_out(void)
 	strcpy(out_dir, d);
 	setting("WRITETO", out_dir, "the folder the converted PDFs are written to");
 	texts();
-	redraw_obj(T_OUT);
+	redraw_obj(BAND2);
 }
 
 static int settings_dialog(void);
@@ -898,6 +1106,7 @@ static void finish_button(void)
 static void finish_progress(void)
 {
 	working = 0;
+	shown_cur = -1;
 	texts();
 	redraw_progress();
 	log_event("batch-done", stop_now ? "stopped" : "done", NULL);
@@ -938,42 +1147,56 @@ static void finished(void)
 			files[j++] = files[i];
 	nfiles = j;
 	texts();
-	redraw_obj(T_FILES);
+	redraw_list();
 }
 
 static void about_box(void)
 {
 	static char mem[100];
+	static char net[100];
 	ABOUT a = { "EConvert", app_version, "PDFs prepared for EPDF on every Atari",
-		    { mem, NULL, NULL }, { 0, 0, 0 }, icon_bits, icon16_px, icon16_rgb, icon256_px, icon256_rgb };
+		    { net, mem, NULL }, { 0, 0, 0 }, icon_bits, icon16_px, icon16_rgb, icon256_px, icon256_rgb };
 
 	about_mem_line(mem, (int)sizeof mem);
-	if (!mem[0])
+	/* the connection (1.3), when the batch goes to the Gateway */
+	net[0] = '\0';
+	if (on_gateway) {
+		if (!net_ready)
+			net_ready = net_init();
+		about_net_line(net, (int)sizeof net, net_stack(), gate_host[0] ? ABOUT_GATEWAY : ABOUT_NO_GATEWAY,
+			       working ? ABOUT_ONLINE : ABOUT_READY);
+	}
+	if (!net[0]) {
+		a.status[0] = mem;
+		a.status[1] = NULL;
+	}
+	if (!a.status[0][0])
 		a.status[0] = NULL;
 	log_event("dialog", "about", app_version);
 	about_show(&a);
 }
 
-enum { CMD_NONE, CMD_ABOUT, CMD_ADD, CMD_FOLDER, CMD_CLEAR, CMD_OUT, CMD_GO, CMD_QUIT, CMD_GUIDE, CMD_SETTINGS };
+enum { CMD_NONE, CMD_ABOUT, CMD_ADD, CMD_FOLDER, CMD_REMOVE, CMD_CLEAR, CMD_OUT, CMD_GO, CMD_QUIT, CMD_GUIDE, CMD_SETTINGS };
 
 static const MBAR_ITEM desk_items[] = { { "About EConvert...", NULL, CMD_ABOUT }, { NULL, NULL, CMD_NONE } };
 static const MBAR_ITEM file_items[] = {
 	{ "Add files...", "^O", CMD_ADD },
 	{ "Add folder...", NULL, CMD_FOLDER },
+	{ "Remove", NULL, CMD_REMOVE },
 	{ "Clear the list", NULL, CMD_CLEAR },
 	{ "-", NULL, CMD_NONE },
 	{ "Write to...", NULL, CMD_OUT },
 	{ "Convert", "^R", CMD_GO },
 	{ "-", NULL, CMD_NONE },
-	{ "Settings...", "^,", CMD_SETTINGS },
-	{ "-", NULL, CMD_NONE },
 	{ "Quit", "^Q", CMD_QUIT },
 	{ NULL, NULL, CMD_NONE } };
-static const MBAR_ITEM help_items[] = { { "EConvert in the EPDF guide", NULL, CMD_GUIDE }, { NULL, NULL, CMD_NONE } };
-static const MBAR_TITLE titles[] = { { " EConvert ", desk_items }, { " File ", file_items }, { " Help ", help_items },
-				     { NULL, NULL } };
+/* Options as the family's: Settings... (^,) first (the hub's review, 9 Nov 2026) */
+static const MBAR_ITEM options_items[] = { { "Settings...", "^,", CMD_SETTINGS }, { NULL, NULL, CMD_NONE } };
+static const MBAR_ITEM help_items[] = { { "EConvert help", "Help", CMD_GUIDE }, { NULL, NULL, CMD_NONE } };
+static const MBAR_TITLE titles[] = { { " EConvert ", desk_items }, { " File ", file_items }, { " Options ", options_items },
+				     { " Help ", help_items }, { NULL, NULL } };
 
-/* File > Settings... (^,): where the Gateway is; 1 when OK */
+/* Options > Settings... (^,): where the Gateway is; 1 when OK */
 static int settings_dialog(void)
 {
 	char port[8];
@@ -1003,11 +1226,25 @@ static void command(int c)
 	case CMD_FOLDER:
 		cmd_folder();
 		break;
+	case CMD_REMOVE:
+		if (!working && lsel >= 0 && lsel < nfiles) {
+			int i;
+
+			for (i = lsel; i < nfiles - 1; i++)
+				files[i] = files[i + 1];
+			nfiles--;
+			if (lsel >= nfiles)
+				lsel = nfiles - 1;
+			texts();
+			redraw_list();
+		}
+		break;
 	case CMD_CLEAR:
 		if (!working) {
 			nfiles = 0;
+			lsel = -1;
 			texts();
-			redraw_obj(T_FILES);
+			redraw_list();
 		}
 		break;
 	case CMD_OUT:
@@ -1042,9 +1279,76 @@ static void command(int c)
 	}
 }
 
+/* the list scrolled by n rows (its pane bar) */
+static int list_scroll(long n)
+{
+	int was = ltop;
+
+	ltop += (int)n;
+	texts();
+	if (ltop == was)
+		return 0;
+	redraw_obj(LIST);
+	return 1;
+}
+
+static int list_goto(long t)
+{
+	return list_scroll(t - ltop);
+}
+
+/* a pop-up button's choices, over it with the one chosen on it and
+   ticked (5.7, as EPDF's Settings and EHypView's) */
+static void choose(short o)
+{
+	static char lab[3][28];
+	const char *l[3];
+	const char *const *names = o == U_PAGES ? pages_names : o == U_PHOTOS ? photos_names : on_names;
+	short n = o == U_PAGES ? 3 : 2, sel = (short)(o == U_PAGES ? pages_set : o == U_PHOTOS ? photos_set : on_gateway);
+	short x, y, k, r;
+
+	for (k = 0; k < n; k++) {
+		/* (an ST converts only on the Gateway: This Atari greyed) */
+		snprintf(lab[k], sizeof lab[k], "%s%c %s", o == U_ON && k == 0 && !has_030 ? "~" : "",
+			 k == sel ? '\x08' : ' ', names[k]);
+		l[k] = lab[k];
+	}
+	objc_offset(tree, o, &x, &y);
+	r = popup(x, (short)(y - 3 - sel * (ch + 2)), l, n);
+	if (!popup_put_back) {
+		GRECT g = { popup_area.x, popup_area.y, popup_area.w, popup_area.h };
+
+		wind_update(BEG_UPDATE);
+		draw(&g, BOX);
+		wind_update(END_UPDATE);
+	}
+	if (r < 0 || r == sel)
+		return;
+	if (o == U_PAGES) {
+		pages_set = r;
+		setting("PAGES", pages_set == CV_PAGES_NONE ? "none" : pages_set == CV_PAGES_COLOUR ? "colour" : "mono",
+			"the whole pages a converted PDF carries: none, mono, colour (mono and colour)");
+	} else if (o == U_PHOTOS) {
+		photos_set = r;
+		setting("PHOTOS", photos_set == CV_PHOTOS_JPEG ? "jpeg" : "indexed",
+			"the photos: indexed (256 colours, fast on every Atari) or jpeg (small)");
+	} else {
+		on_gateway = r == 1;
+		setting("CONVERT", on_gateway ? "gateway" : "atari",
+			"where the PDFs are converted: atari (this Falcon or TT) or gateway");
+		redraw_obj(BAND2);
+	}
+	texts();
+	redraw_obj(o);
+}
+
 static void click(short mx, short my)
 {
-	short o = objc_find(tree, BOX, 8, mx, my);
+	short o;
+
+	if (iconified)
+		return;
+	o = objc_find(tree, BOX, 8, mx, my);
 
 	/* a button as GEM's: shown pressed, and taken only when let go on it
 	   (a click that wasn't the user's, or one moved off, does nothing:
@@ -1062,32 +1366,25 @@ static void click(short mx, short my)
 	case B_CLEAR: command(CMD_CLEAR); break;
 	case B_OUT: command(CMD_OUT); break;
 	case B_GO: command(CMD_GO); break;
-	case P_NONE: case P_MONO: case P_COLOUR:
-		if (!working) {
-			pages_set = o - P_NONE;
-			setting("PAGES", pages_set == CV_PAGES_NONE ? "none" : pages_set == CV_PAGES_COLOUR ? "colour" : "mono",
-				"the whole pages a converted PDF carries: none, mono, colour (mono and colour)");
-			texts();
-			redraw_obj(G_PAGES);
-		}
+	case B_REMOVE: command(CMD_REMOVE); break;
+	case U_PAGES: case U_PHOTOS: case U_ON:
+		if (!working)
+			choose(o);
 		break;
-	case O_ATARI: case O_GATE:
-		if (!working && !(tree[o].ob_state & DISABLED)) {
-			on_gateway = o == O_GATE;
-			setting("CONVERT", on_gateway ? "gateway" : "atari",
-				"where the PDFs are converted: atari (this Falcon or TT) or gateway");
+	default:
+		if (o >= L0 && o < L0 + LROWS && ltop + o - L0 < nfiles) {
+			int was = lsel;
+
+			lsel = lsel == ltop + o - L0 ? -1 : ltop + o - L0;	/* (a click again: none) */
 			texts();
-			redraw_obj(G_ON);
-		}
-		break;
-	case F_256: case F_JPEG:
-		if (!working) {
-			photos_set = o - F_256;
-			setting("PHOTOS", photos_set == CV_PHOTOS_JPEG ? "jpeg" : "indexed",
-				"the photos: indexed (256 colours, fast on every Atari) or jpeg (small)");
-			texts();
-			redraw_obj(G_PHOTOS);
-		}
+			if (was >= ltop && was < ltop + LROWS)
+				redraw_obj((short)(L0 + was - ltop));
+			if (lsel >= 0)
+				redraw_obj(o);
+			redraw_obj(B_REMOVE);
+		} else if (list_bar() && mx >= lbar.r.x && mx < lbar.r.x + lbar.r.w && my >= lbar.r.y &&
+			   my < lbar.r.y + lbar.r.h)
+			pb_click(&lbar, mx, my, list_scroll, list_goto);
 		break;
 	}
 }
@@ -1112,6 +1409,10 @@ static void key(short kstate, short k)
 		case 'U': command(CMD_QUIT); return;
 		}
 	}
+	if (scan == 0x53 && !working) {	/* Delete: Remove */
+		command(CMD_REMOVE);
+		return;
+	}
 	if (ascii == 27 && working)
 		stop_now = 1;		/* Esc: Stop */
 	else if ((ascii == 13 || scan == 0x72) && !working)
@@ -1127,7 +1428,7 @@ static void add_args(const char *s)
 		n += add_file(f);
 	if (n && win >= 0) {
 		texts();
-		redraw_obj(T_FILES);
+		redraw_list();
 	}
 }
 
@@ -1171,6 +1472,21 @@ static void message(const short *msg)
 	}
 	case WM_TOPPED:
 		wind_set(win, WF_TOP, win, 0, 0, 0);
+		break;
+	case WM_ICONIFY:
+	case WM_ALLICONIFY:
+		if (!iconified) {
+			wind_set(win, WF_ICONIFY, msg[4], msg[5], msg[6], msg[7]);
+			iconified = 1;
+			log_event("iconified", NULL, NULL);
+		}
+		break;
+	case WM_UNICONIFY:
+		if (iconified) {
+			wind_set(win, WF_UNICONIFY, msg[4], msg[5], msg[6], msg[7]);
+			iconified = 0;
+			log_event("uniconified", NULL, NULL);
+		}
 		break;
 	case WM_MOVED:
 		wind_set(win, WF_CURRXYWH, msg[4], msg[5], msg[6], msg[7]);
@@ -1256,7 +1572,7 @@ int main(void)
 	texts();
 	if (mbar_build(&menu, titles, gl_wchar, gl_hchar, scr_w, scr_h) == 0)
 		has_menu = menu_bar(menu.tree, 1) != 0;
-	wind_calc(0, NAME | CLOSER | MOVER, 0, 0, tree[BOX].ob_width, tree[BOX].ob_height, &d, &d, &w, &h);
+	wind_calc(0, icon_kind(NAME | CLOSER | MOVER), 0, 0, tree[BOX].ob_width, tree[BOX].ob_height, &d, &d, &w, &h);
 	x = (short)(desk_x + (desk_w - w) / 2);
 	y = (short)(desk_y + (desk_h - h) / 2);
 	{
@@ -1276,7 +1592,7 @@ int main(void)
 			}
 		}
 	}
-	win = wind_create(NAME | CLOSER | MOVER, x, y, w, h);
+	win = wind_create(icon_kind(NAME | CLOSER | MOVER), x, y, w, h);
 	if (win < 0) {
 		alert(1, "[3][No window is free.|Close one and start EConvert again.][ OK ]");
 		quit_now = 1;

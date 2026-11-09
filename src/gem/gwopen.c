@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright (C) 2026 AERA | Erez Yaary */
 /*
- * gwopen.c - File > Open on the Gateway (Erez, 7 Nov 2026): a PDF that
+ * gwopen.c - Options > Open on the Gateway (Erez, 7 Nov 2026): a PDF that
  * isn't converted is shown as it is (the text view) while the Gateway
  * converts it; the converted copy comes into a file of EPDF's own beside
  * the program (gate1.pdf or gate2.pdf, the one not open) and EPDF takes it

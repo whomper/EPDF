@@ -46,15 +46,13 @@ page at a time while you read, starting with the page you are on; a page it hasn
 gives way to you at once.
 
 - **File:** Open... (^O), Save Optimised... (a converted PDF written where you choose, as it is:
-  nothing is converted again; greyed for a PDF that isn't converted), Open on the Gateway
-  (ticked: see [The Gateway](#the-gateway)), Settings... (^,), Quit (^Q).
+  nothing is converted again; greyed for a PDF that isn't converted), Quit (^Q).
 - **Edit:** Copy (^C) puts the text you selected on the clipboard (a big selection is copied a
   page at a time, with its progress in the status bar; Esc stops it); Select all (^A); Find... (^F)
   looks for a word or a phrase, whatever its case, across the lines it was set on; Find next (^G)
   and Find previous (⇧^G) look again. A search goes round the whole document, reading pages it
   hasn't read yet first, and says in the status bar where it found the text.
-- **View:** Font... (⇧^F): the system font in its two sizes, or a fixed-width GDOS font, kept in
-  `EPDF.INF`. **The page's lines**: ticked, each line is as it is on the page; not ticked (as EPDF
+- **View:** **The page's lines**: ticked, each line is as it is on the page; not ticked (as EPDF
   starts), the lines of a paragraph are joined and wrapped to the window, so the text reads at any
   window width. **Pages**: each page whole, as it is printed: on a Falcon or a TT any PDF (see
   below), on an ST a converted PDF's; greyed where there are none. **Zoom in** (the keypad's +)
@@ -67,7 +65,12 @@ gives way to you at once.
   chosen in Settings (see [Translating](#translating)).
 - **Page:** the previous and the next page (^Left, ^Right), the first and the last (^Clr/Home,
   ⇧^Clr/Home).
-- **Help:** this guide.
+- **Options:** Settings... (^,): two pages, **General** (the language View > Translate translates
+  into, and Languages...: see [Translating](#translating)) and **Secure** (the Gateway's address
+  and port: see [The Gateway](#the-gateway)). Font... (⇧^F): the system font in its two sizes, or
+  a fixed-width GDOS font, kept in `EPDF.INF`. Open on the Gateway (ticked: see
+  [The Gateway](#the-gateway)).
+- **Help:** EPDF help (Help): this guide. Keys...: EPDF's keys.
 
 **Pictures** stand where they are on the page, as wide as the window lets them (a point of the
 page a pixel at most), in the screen's colours. A frame stands in the picture's place until it is
@@ -132,8 +135,8 @@ Each setting has a note above it in the file:
 - `WINDOW=` the window's place and size, as you left it;
 - `FOLDER=` the folder **File > Open...** shows first: the one you last opened a document from;
 - `LINES=` 1 when **View > The page's lines** is ticked;
-- `GATEWAY=` 1 when **File > Open on the Gateway** is ticked;
-- `GATE=` and `GATEPORT=` the Gateway's address and port (**File > Settings...**).
+- `GATEWAY=` 1 when **Options > Open on the Gateway** is ticked;
+- `GATE=` and `GATEPORT=` the Gateway's address and port (**Options > Settings...**, Secure).
 
 A line EPDF doesn't know is kept as it is.
 
@@ -143,8 +146,8 @@ The Gateway (AERA-Gateway, on a Raspberry Pi at home) can convert PDFs for EPDF 
 an Atari can, and for every Atari, an ST included. On the Raspberry Pi, `sudo aera-gateway install
 pdf --allow ATARI_IP` sets it up. On the Atari you need STinG, MiNTnet or MagiC-Net.
 
-- **File > Settings...** (^,): **Through the Gateway:** its address and port (8380).
-- **File > Open on the Gateway:** ticked, a PDF you open that isn't converted yet is shown as it
+- **Options > Settings...** (^,), **Secure**: the Gateway's address and port (8380).
+- **Options > Open on the Gateway:** ticked, a PDF you open that isn't converted yet is shown as it
   is, while the Gateway converts it; the status bar says "Converting on the Gateway" (or "Waiting
   for the Gateway", while it converts another Atari's), and when the converted PDF has come, EPDF
   shows it in its place, with View > Pages. Nothing is written beside the PDF: the converted PDF
@@ -156,7 +159,7 @@ pdf --allow ATARI_IP` sets it up. On the Atari you need STinG, MiNTnet or MagiC-
 EPDF translates the text view through the Gateway's translation service (translategate, on the
 Raspberry Pi with AERA-Gateway: `sudo aera-gateway install translate`).
 
-- **File > Settings...** (^,): **Translate into** shows the languages the Gateway has installed:
+- **Options > Settings...** (^,), **General**: **Translate into** shows the languages the Gateway has installed:
   choose one. **Languages...** shows every language the Gateway offers, with its size, and
   installs or removes them (the Gateway does it in the background; the status bar follows it).
 - **View > Translate**: ticked, each page's text is shown translated, the page in view first, then
@@ -180,16 +183,20 @@ Atari, an ST too, it can have the Gateway convert them instead.
 
 - **Install:** copy the `econvert` folder (`ECONVERT.PRG` and its `fonts` folder) anywhere. It
   keeps its settings in `ECONVERT.INF` beside itself.
-- **The batch:** **Add files...** (^O) adds a PDF; **Add folder...** adds every PDF in the folder
-  you pick a file in; **Clear** empties the list. You can also drop PDFs on its window or on
-  `ECONVERT.PRG`.
+- **The batch:** the list shows each PDF, its size and how it went (✓ converted, with its size
+  before and after; ► under way, with its page). **Add files...** (^O) adds a PDF; **Add
+  folder...** adds every PDF in the folder you pick a file in; **Remove** (Delete) takes out the
+  one you clicked; **Clear** empties the list. You can also drop PDFs on its window or on
+  `ECONVERT.PRG`. The band at the top says how many PDFs there are, where they go and where they
+  are converted.
 - **Write to...** chooses the folder the converted PDFs go to, with their own names: a folder of
   their own, not the PDFs' own.
+- **Whole pages**, **Photos** and **Convert on** are buttons that open their choices over them.
 - **Whole pages:** None, Mono (black and white, for every Atari), or Mono and colour (16 colours
   as well, for a Falcon or a TT; a page with little colour gets the black and white one only).
 - **Photos:** 256 colours (fast on every Atari) or JPEG (smaller files, but slow to show on an
   8 MHz ST). Charts and pictures of few colours are kept exact either way.
-- **Convert on:** This Atari, or the Gateway (its address and port in **File > Settings...**, ^,;
+- **Convert on:** This Atari, or the Gateway (its address and port in **Options > Settings...**, ^,;
   until you set them there, EPDF's, from `EPDF.INF` in the folder above). On an ST only the Gateway. The Gateway's converted PDFs are the same as the Falcon's.
 - **Convert** (Return, ^R) works through the batch. Two bars show the file and the whole batch,
   each with how far it has got and about how long is left. **Stop** (Esc) stops at once; the file
