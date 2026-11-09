@@ -1316,12 +1316,12 @@ static void choose(short o)
 
 	for (k = 0; k < n; k++) {
 		/* (an ST converts only on the Gateway: This Atari greyed) */
-		snprintf(lab[k], sizeof lab[k], "%s%c %s", o == U_ON && k == 0 && !has_030 ? "~" : "",
-			 k == sel ? '\x08' : ' ', names[k]);
+		snprintf(lab[k], sizeof lab[k], "%s%s", o == U_ON && k == 0 && !has_030 ? "~" :
+			 k == sel ? "\x08" : "", names[k]);	/* (popup_m: the box adds the margin, D15) */
 		l[k] = lab[k];
 	}
 	objc_offset(tree, o, &x, &y);
-	r = popup(x, (short)(y - 3 - sel * (ch + 2)), l, n);
+	r = popup_m(x, (short)(y - 3 - sel * (ch + 2)), l, n);
 	if (!popup_put_back) {
 		GRECT g = { popup_area.x, popup_area.y, popup_area.w, popup_area.h };
 

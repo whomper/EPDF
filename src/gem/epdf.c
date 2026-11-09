@@ -826,17 +826,17 @@ static void translate_selection(void)
 static void context_menu(short mx, short my)
 {
 	static const struct { const char *label; int cmd; } all[] = {
-		{ "  Copy                   ^C ", CMD_COPY },
-		{ "  Translate...              ", CMD_TRSEL },
-		{ "  Select all             ^A ", CMD_SELALL },
+		{ "Copy                  ^C", CMD_COPY },
+		{ "Translate...            ", CMD_TRSEL },
+		{ "Select all            ^A", CMD_SELALL },
 		{ "-", CMD_NONE },
-		{ "  Find...                ^F ", CMD_FIND },
-		{ "  Find next              ^G ", CMD_FINDNEXT },
+		{ "Find...               ^F", CMD_FIND },
+		{ "Find next             ^G", CMD_FINDNEXT },
 		{ "-", CMD_NONE },
-		{ "  Previous page       ^Left ", CMD_PREV },
-		{ "  Next page          ^Right ", CMD_NEXT },
+		{ "Previous page      ^Left", CMD_PREV },
+		{ "Next page         ^Right", CMD_NEXT },
 		{ "-", CMD_NONE },
-		{ "  The page's lines          ", CMD_LINES }
+		{ "The page's lines        ", CMD_LINES }
 	};
 	enum { N = sizeof all / sizeof all[0] };
 	static char alt[N][40];
@@ -855,13 +855,16 @@ static void context_menu(short mx, short my)
 			grey = 1;
 		lab[i] = all[i].label;
 		if (grey || (c == CMD_LINES && lines_mode)) {
-			alt[i][0] = grey ? '~' : '\x08';	/* greyed, or ticked (popup.h) */
-			strncpy(alt[i] + 1, all[i].label + (grey ? 0 : 1), sizeof alt[i] - 2);
+			/* greyed, or ticked: the mark before the words (popup.h's
+			   popup_m: the box adds the margin, D15) */
+			alt[i][0] = grey ? '~' : '\x08';
+			strncpy(alt[i] + 1, all[i].label, sizeof alt[i] - 2);
+			alt[i][sizeof alt[i] - 1] = '\0';
 			lab[i] = alt[i];
 		}
 	}
 	log_event("menu", "popup", NULL);
-	r = popup(mx, my, lab, N);
+	r = popup_m(mx, my, lab, N);
 	if (r >= 0 && all[r].cmd != CMD_NONE)
 		command(all[r].cmd);
 }
@@ -1130,11 +1133,10 @@ static int pick_language(char *to, int tocap, char *name, int namecap, short bx,
 		if (t && t - l < TR_LANG && t > l) {
 			snprintf(codes[n], sizeof codes[n], "%.*s", (int)(t - l), l);
 			if (translate_code_ok(codes[n])) {
-				snprintf(names[n], sizeof names[n], "  %s ", lang_name(codes[n]));
-				if (!strcmp(codes[n], to)) {
-					names[n][0] = '\x08';	/* (the one chosen: ticked) */
+				snprintf(names[n], sizeof names[n], "%s%s", strcmp(codes[n], to) ? "" : "\x08",
+					 lang_name(codes[n]));	/* (the one chosen: ticked) */
+				if (!strcmp(codes[n], to))
 					sel = n;
-				}
 				lab[n] = names[n];
 				n++;
 			}
@@ -1147,7 +1149,7 @@ static int pick_language(char *to, int tocap, char *name, int namecap, short bx,
 	}
 	/* over its button, the row chosen on it, as the AES's own pop-ups
 	   (5.7; EHypView's over_button: rows of ch + 2, from 2 pixels down) */
-	r = popup(bx, (short)(by - 3 - sel * (ch + 2)), lab, n);
+	r = popup_m(bx, (short)(by - 3 - sel * (ch + 2)), lab, n);
 	if (r < 0)
 		return 0;
 	snprintf(to, (size_t)tocap, "%s", codes[r]);
