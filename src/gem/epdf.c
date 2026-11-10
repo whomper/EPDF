@@ -1738,9 +1738,13 @@ int main(void)
 			}
 		}
 	}
+	/* each step of the way out into the log at once (the hub, 10 Nov 2026:
+	   bombs as EFTP and EMail quit, no CRASH.LOG; the next ones show where) */
 	log_event("quit", NULL, NULL);
 	window_place_save();
+	log_event("quit", "settings saved", NULL);
 	win_close();
+	log_event("quit", "the window closed", NULL);
 	if (has_menu)
 		menu_bar(menu.tree, 0);
 	mbar_free(&menu);
@@ -1755,8 +1759,12 @@ int main(void)
 	font_exit();
 	inf_free(&inf);
 	av_exit();
+	log_event("quit", "the document, pictures, fonts and the Gateway given back", NULL);
 	crash_remove();
+	log_event("quit", "crash catcher off; hooked over it:", crash_over());
 	v_clsvwk(vdi_h);
+	log_event("quit", "the VDI given back", NULL);
 	appl_exit();
+	log_event("quit", "out of the AES", NULL);
 	return 0;
 }

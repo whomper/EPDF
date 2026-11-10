@@ -24,6 +24,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TOP = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 import erz  # noqa: E402
+import quitcheck  # noqa: E402
 from pdfgen import make_pdf, book  # noqa: E402
 import importlib.util  # noqa: E402
 _spec = importlib.util.spec_from_file_location("aera_speed", os.path.join(TOP, "common", "tests", "speed", "speed.py"))
@@ -89,6 +90,7 @@ def run(work, machine):
         again = r.shot("text-again")
         if differ(text, again) > 0:
             bad.append("back to the text: %d pixels differ from the first" % differ(text, again))
+        bad += quitcheck.quit(r, "EPDF")
         print("%s: %s  (%s)" % (r.describe(), "ok" if not bad else "; ".join(bad), r.shots))
     finally:
         r.stop()
