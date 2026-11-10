@@ -602,9 +602,8 @@ static int on_the_gateway(const char *in, const char *out, char *err, int errlen
 {
 	PGOPT po;
 	int pw, iw, r;
-	/* (colour only: the Gateway's pdfgate knows none, mono and colour so
-	   far, so colour, the mono pages with it) */
-	static const char *pages[] = { "none", "mono", "colour", "colour" };
+	/* (colouronly: AERA-Gateway 1.42 and later) */
+	static const char *pages[] = { "none", "mono", "colour", "colouronly" };
 
 	memset(&po, 0, sizeof po);
 	po.pages = pages[pages_set];

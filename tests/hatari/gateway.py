@@ -19,6 +19,7 @@ starts with CONVERT=gateway and two PDFs; Return converts. Checked:
   its own with the sizes EConvert sent ("gateway-sizes" in its log);
 - an ST shows This Atari disabled (shot), and converts nothing itself;
 - the Gateway's log names no file;
+- GW_PAGES=colouronly: EConvert's Colour pages reach the converter as such;
 - a Gateway that isn't there: the alert, and the files stay in the list.
 Then EPDF with Open on the Gateway ticked (GATEWAY=1): a book opened is
 shown, converted by the Gateway meanwhile into EPDF's own copy beside the
@@ -94,8 +95,8 @@ def run(work, machine, port, there=True):
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
         showcase.cut(os.path.join(r.hd, names[0]))     # (pictures, drawings, fonts: the hub's cut)
         make_pdf(os.path.join(r.hd, names[1]), book(5))
-        r.write("ECONV/ECONVERT.INF", "WRITETO=C:\\OUT\nCONVERT=gateway\nGATE=127.0.0.1\nGATEPORT=%d\n" %
-                (port if there else 1))
+        r.write("ECONV/ECONVERT.INF", "WRITETO=C:\\OUT\nCONVERT=gateway\nGATE=127.0.0.1\nGATEPORT=%d\nPAGES=%s\n" %
+                (port if there else 1, PAGES))
         r.write("LAUNCH.TXT", "C:\\ECONV\\ECONVERT.PRG\nC:\\%s C:\\%s\n" % names)
         r.start("C:\\LAUNCH.PRG")
         end = time.time() + 120
@@ -131,7 +132,7 @@ def run(work, machine, port, there=True):
                     break
                 got = os.path.join(r.hd, "OUT", n)
                 want = os.path.join(r.work, "direct-" + n)
-                subprocess.run([os.path.join(TOP, "build", "econvert"), "--fonts", FONTS, "--pages", "mono",
+                subprocess.run([os.path.join(TOP, "build", "econvert"), "--fonts", FONTS, "--pages", PAGES,
                                 "--photos", "indexed", "--pictures", "screen", "--page-width", sizes[0][0],
                                 "--picture-width", sizes[0][1], os.path.join(r.hd, n), want],
                                check=True, stdout=subprocess.DEVNULL)
@@ -155,6 +156,7 @@ def direct_same(src, sizes, got, work, pages="mono"):
     return os.path.exists(got) and open(got, "rb").read() == open(want, "rb").read()
 
 
+PAGES = os.environ.get("GW_PAGES", "mono")    # EConvert's whole pages (colouronly: Gateway 1.42)
 RATE = int(os.environ.get("GW_RATE", "0")) or None    # bytes a second on the serial line: the phases' shots
 
 

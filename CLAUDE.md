@@ -330,8 +330,8 @@ at first. This section is kept up to date: the build, the tests, what a release 
   the list's), Stop 140 -> 175 (the end drawn in the window, not an alert). Whole pages: Colour
   (CV_PAGES_COLOUR_ONLY, INF "colouronly", --pages colouronly; Erez: "What if I just want color
   pages"): a page with colour gets /Colour only, one without its /Mono; EPDF on a mono screen
-  shows /Colour dithered. pdfgate knows none/mono/colour only: Gateway mode sends colour (mono
-  and colour) until AERA-Gateway takes colouronly.
+  shows /Colour dithered. Through the Gateway pages=colouronly (AERA-Gateway 1.42, EPDF 2.9;
+  gateway.py with GW_PAGES=colouronly).
 - **The road to 1.0, and EConvert (Erez, 31 Oct 2026):**
   - **1.0 is the text view, complete:** 0.2 speed on an 8 MHz ST (the guidelines' times), 0.3 big
     documents on ST-1 (streamed content, pictures' memory), 0.4 pictures (DSP JPEG on the Falcon, the
