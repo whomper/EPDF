@@ -4,7 +4,7 @@
 """View > Pages for any PDF (stage 2): the page as printed, drawn by
 render.ovl beside EPDF.PRG on a Falcon or TT, on common's speed rig:
 
-    drawn.py WORK [MACHINE...]        (default: Falcon-4:16 ST:mono)
+    drawn.py WORK [MACHINE...]        (default: Erez's configuration, erz.py, and ST:mono)
 
 The showcase (showcase.py: text, fonts, a table, a chart, photos, a scan),
 with render.ovl and the standard fonts (fonts\\) beside EPDF.PRG, opened
@@ -24,6 +24,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOP = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
+import erz  # noqa: E402
 import showcase  # noqa: E402
 from prepared import differ, park  # noqa: E402
 import importlib.util  # noqa: E402
@@ -143,7 +144,8 @@ def main(argv):
     if not argv:
         sys.exit(__doc__)
     bad = []
-    for m in argv[1:] or ["Falcon-4:16", "ST:mono"]:
+    erz.setup()
+    for m in argv[1:] or [erz.MACHINE, "ST:mono"]:
         bad += run(argv[0], m)
     return 1 if bad else 0
 

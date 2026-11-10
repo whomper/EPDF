@@ -4,7 +4,7 @@
 """A converted PDF (EConvert's, docs/CONVERTED-PDF.md) in EPDF, on common's
 speed rig (common/tests/speed/speed.py, its Rig on an X display):
 
-    prepared.py WORK [MACHINE...]        (default: ST:mono Falcon:16)
+    prepared.py WORK [MACHINE...]        (default: ST:mono and Erez's configuration, erz.py)
 
 A book with a chart is made (pdfgen.py), converted by build/econvert (mono
 and colour pages; PAGES=colouronly: colour only, which a mono screen shows
@@ -23,6 +23,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOP = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
+import erz  # noqa: E402
 from pdfgen import make_pdf, book  # noqa: E402
 import importlib.util  # noqa: E402
 _spec = importlib.util.spec_from_file_location("aera_speed", os.path.join(TOP, "common", "tests", "speed", "speed.py"))
@@ -98,7 +99,8 @@ def main(argv):
     if not argv:
         sys.exit(__doc__)
     bad = []
-    for m in argv[1:] or ["ST:mono", "Falcon:16"]:
+    erz.setup()
+    for m in argv[1:] or ["ST:mono", erz.MACHINE]:
         bad += run(argv[0], m)
     return 1 if bad else 0
 

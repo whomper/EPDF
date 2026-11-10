@@ -5,7 +5,7 @@
 "when selecting a file to convert, and then selecting the target, it
 forgets the file and says there are 0 files to convert"):
 
-    econv_fsel.py WORK [MACHINE...]        (default: Falcon:16)
+    econv_fsel.py WORK [MACHINE...]        (default: Erez's configuration, erz.py)
 
 EConvert started with no files; Add files..., a PDF double-clicked in the
 file selector; Write to..., up to the drive, OUT opened, OK; then
@@ -27,6 +27,7 @@ import importlib.util
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOP = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
+import erz  # noqa: E402
 from pdfgen import make_pdf, book  # noqa: E402
 _spec = importlib.util.spec_from_file_location("aera_speed", os.path.join(TOP, "common", "tests", "speed", "speed.py"))
 speed = importlib.util.module_from_spec(_spec)
@@ -112,7 +113,8 @@ def main(argv):
     if not argv:
         sys.exit(__doc__)
     bad = 0
-    for m in argv[1:] or ["Falcon:16"]:
+    erz.setup()
+    for m in argv[1:] or [erz.MACHINE]:
         bad += bool(run(argv[0], m))
     return bad
 

@@ -4,7 +4,7 @@
 """render.ovl, the page as printed drawn on a Falcon or TT (stage 2), as
 EPDF.PRG loads it (ROVLTEST.PRG: src/gem/rdraw.c built for the 68000):
 
-    rovl.py WORK [MACHINE...]        (Falcon-4:16 and ST:mono)
+    rovl.py WORK [MACHINE...]        (Erez's configuration, erz.py, and ST:mono)
 
 The showcase (showcase.py: text, fonts, a table, a chart, photos baseline,
 progressive and CMYK, a PNG with alpha, a scan) drawn 600 wide:
@@ -27,6 +27,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOP = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
+import erz  # noqa: E402
 sys.path.insert(0, os.path.join(TOP, "common", "tools"))
 import machines  # noqa: E402
 import showcase  # noqa: E402
@@ -96,7 +97,8 @@ def main(argv):
     pdf = os.path.join(work, "show.pdf")
     showcase.make(pdf)
     bad = 0
-    specs = argv[1:] or ["Falcon-4:16", "ST:mono"]
+    erz.setup()
+    specs = argv[1:] or [erz.MACHINE, "ST:mono"]
     for spec in specs:
         if spec.startswith("ST"):
             desc, lines, _ = run(work, spec, pdf, "")

@@ -410,7 +410,11 @@ at first. This section is kept up to date: the build, the tests, what a release 
 - **Build and test:** see the Makefile's header. `make` builds `binary/EPDF.PRG` (host tools under
   `build/`); `make test` runs the host tests (layout, store, view, INF, search, CCITT, the object table, a page set a glyph at a time: `tests/glyphwise.py`) and checks the
   programs (`tools/nofpu.sh`, `common/tools/oddaccess.py`). Before a push that touches the GEM side:
-  `make gui-test` (`tests/hatari/gui.py`, ST:mono; also Falcon:16). A change to drawing, a loop over
+  `make gui-test` (`tests/hatari/gui.py`, ST:mono; also Erez's configuration). Erez's configuration
+  (the hub, 10 Nov 2026: Falcon-4:256 with TOS 4.04 and NVDI, common's machines.ERZ_MACHINE,
+  `tests/hatari/erz.py`) is the Falcon of prepared.py, econv.py, econv_fsel.py, drawn.py, rovl.py and
+  translate_view.py; zoom.py keeps Falcon:16 and Falcon:256. With no TOS images or NVDI here it is the
+  same machine on EmuTOS: a stand-in. A change to drawing, a loop over
   the data or the start: `make speed-test` (`tests/hatari/speed.py`, build/aprof: EPDF as released
   with `gem.c` `-DAES_PROFILE=20`), its stretches on ST and Falcon-4 in the commit; `build/times/EPDF.PRG`
   adds `textwin.c`'s `-DEPDF_TIMES` marks to break a stretch down (they cost a page 25 ms on an ST).

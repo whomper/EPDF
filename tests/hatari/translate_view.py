@@ -6,7 +6,7 @@ TRANSLATION-SERVICE.md), on common's speed rig, against gateway/'s own
 translategate.py (its stand-in engine: "de: " and capitals) and pdfgate.py
 with translateclient.py, on 127.0.0.1:
 
-    translate_view.py WORK [MACHINE...]        (default: ST:mono Falcon-4:16)
+    translate_view.py WORK [MACHINE...]        (default: ST:mono and Erez's configuration, erz.py)
 
 - Off (TRANSLATE=0): a book read whole; no "translate-piece", no
   "translated", nothing asked of translategate (its log: no request), the
@@ -36,6 +36,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOP = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
+import erz  # noqa: E402
 from pdfgen import make_pdf, book  # noqa: E402
 from prepared import differ, park  # noqa: E402
 import importlib.util  # noqa: E402
@@ -272,7 +273,8 @@ def main(argv):
     he.start()
     modes = [m for m in os.environ.get("TRV_MODES", "off direct gateway hebrew").split()]
     try:
-        for m in argv[1:] or ["ST:mono", "Falcon-4:16"]:
+        erz.setup()
+        for m in argv[1:] or ["ST:mono", erz.MACHINE]:
             for mode in modes:
                 bad += run(work, m, tg_port, pdf_port, logs[0], mode, he.port)
     finally:

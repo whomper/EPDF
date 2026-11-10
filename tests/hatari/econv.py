@@ -4,7 +4,7 @@
 """EConvert's window in Hatari, on common's speed rig (common/tests/speed/
 speed.py, its Rig on an X display):
 
-    econv.py WORK [MACHINE] [FILE.pdf]     (default Falcon-4:16, the showcase's cut made here)
+    econv.py WORK [MACHINE] [FILE.pdf]     (default Erez's configuration, erz.py; the showcase's cut made here)
 
 ECONVERT.PRG is started through LAUNCH.PRG with the PDF (it comes into the
 batch), writes to C:\\OUT (econvert.inf), Return converts. Checked: the
@@ -22,6 +22,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOP = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
+import erz  # noqa: E402
 from pdfgen import make_pdf, book  # noqa: E402
 import showcase  # noqa: E402
 import importlib.util  # noqa: E402
@@ -112,7 +113,8 @@ def run(work, machine, src):
 def main(argv):
     if not argv:
         sys.exit(__doc__)
-    machine = argv[1] if len(argv) > 1 else "Falcon-4:16"
+    erz.setup()
+    machine = argv[1] if len(argv) > 1 else erz.MACHINE
     src = argv[2] if len(argv) > 2 else None
     return 1 if run(argv[0], machine, src) else 0
 
