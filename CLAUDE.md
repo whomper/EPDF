@@ -313,7 +313,11 @@ at first. This section is kept up to date: the build, the tests, what a release 
   takes a colour near a pen as that pen, its error dropped (src/rovl/pens.c snap_pen: flat fills and grey
   text were dithered into specks); a zoom stops another size's page drawing at once
   (doc_pic_stop_page_unless: 62 -> 29 s to the sharp page on Falcon:16); EConvert's window in the B2
-  mock-up's colours, each the nearest of the 16 pens (pen_nearest; mono black and white). A page in bands re-reads the page once a band (18
+  mock-up's colours, each the nearest of the 16 pens (pen_nearest; mono black and white). Erez's machine is 256 colours (10 Nov):
+  render.ovl's pens (snap and Floyd-Steinberg) take 2 to 256 pens and 1 to 8 planes (pens.c's tables of
+  shorts, 128 KB; pack() a plane at a time past 4), so a page in 256 colours no longer goes through
+  common's dither (EDOS page 1 on Falcon:256: shown 22.5 -> 8.1 s, at 150 % 48.5 -> 16.6 s). The UI's
+  colours stay within pens 0-15 (pen_nearest's rule): EConvert's navy band is TOS's blue there. A page in bands re-reads the page once a band (18
   bands: 4 to 15 times slower): draw it whole where memory allows.
 - **The road to 1.0, and EConvert (Erez, 31 Oct 2026):**
   - **1.0 is the text view, complete:** 0.2 speed on an 8 MHz ST (the guidelines' times), 0.3 big

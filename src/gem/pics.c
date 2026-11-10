@@ -632,7 +632,7 @@ int pics_rows(PDOC *d, PICE *e, int nplanes, PIC_PAL *pl, int *why)
 	if (e->obj >= PICS_PAGE) {
 		/* a page drawn as printed: its rows dithered as a photo's */
 		how = pics_page_rows ? pics_page_rows(e->obj - PICS_PAGE, e->w, e->h, sink_row, sink_planes,
-						      nplanes <= 4 && !e->flip ? pl : NULL, nplanes, &k, why) : -1;
+						      nplanes <= 8 && !e->flip ? pl : NULL, nplanes, &k, why) : -1;	/* (render.ovl's pens: 256 colours too, Erez's) */
 		if (how < 0) {
 			*why = PIC_UNSUPPORTED;
 			how = 0;

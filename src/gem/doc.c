@@ -604,10 +604,10 @@ static int page_rows(long n, int w, int h, void (*row)(void *u, long y, const un
 		}
 		draw_rows = 1;
 		rows_t0 = tos_ms();
-		if (pal && pal->n >= 2 && pal->n <= 16 && planes >= 1 && planes <= 4 && o->size >= (short)sizeof(ROVL) && !pn)
+		if (pal && pal->n >= 2 && pal->n <= 256 && planes >= 1 && planes <= 8 && o->size >= (short)sizeof(ROVL) && !pn)
 			pn = malloc((size_t)((w + 15) / 16 * 2) * planes * 8);
 		for (i = 0; i < pg.rows && y < h; i++, y++) {
-			/* 2 to 16 colours: eight rows at a time dithered by
+			/* 2 to 256 colours: eight rows at a time dithered by
 			   render.ovl into the screen's planes (common's dither as
 			   68000 code took 35 s of a page's 39 on Falcon-4, and dotted
 			   the white: 248; the pens put into planes a pixel at a

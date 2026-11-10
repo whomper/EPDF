@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright (C) 2026 AERA | Erez Yaary */
 /*
- * pens.c - a page drawn by render.ovl to the screen's 2 to 16 pens:
+ * pens.c - a page drawn by render.ovl to the screen's 2 to 256 pens:
  * Floyd-Steinberg's error diffusion, each colour's nearest pen worked out
  * once (a table of 32 K, by its 15 bits) rather than searched for at
  * each pixel, and white kept white: a pixel of 0xFFFF is the white pen
@@ -22,10 +22,10 @@
 #include <string.h>
 #include "pens.h"
 
-static signed char *inv;		/* 15-bit colour -> its nearest pen + 1 (0: not yet) */
-static signed char *snap;		/* 15-bit colour -> its pen + 1 when near one, -1 not near, 0 not yet */
+static short *inv;			/* 15-bit colour -> its nearest pen + 1 (0: not yet) */
+static short *snap;			/* 15-bit colour -> its pen + 1 when near one, -1 not near, 0 not yet */
 #define SNAP_D (9L * 28 * 28)		/* "near": 28 a channel, weighted as nearest() weighs */
-static unsigned char pal_of[16][3];
+static unsigned char pal_of[256][3];
 static int n_of;
 static short *err;			/* the next row's errors, r g b a pixel (w + 2 of them) */
 static int err_w;
@@ -59,7 +59,7 @@ static int snap_pen(unsigned c, const unsigned char (*pal)[3], int n)
 		int dr = r - pal[k][0], dg = g - pal[k][1], db = b - pal[k][2];
 		long d = (long)dr * dr * 3 + (long)dg * dg * 4 + (long)db * db * 2;
 
-		snap[key] = (signed char)(d < SNAP_D ? k + 1 : -1);
+		snap[key] = (short)(d < SNAP_D ? k + 1 : -1);
 	}
 	return snap[key] > 0 ? snap[key] - 1 : -1;
 }
@@ -108,7 +108,7 @@ static __attribute__((noinline)) void fs_run(const unsigned short *s, const shor
 			b = clamp((int)((c & 31) << 3 | ((c >> 2) & 7)) + ((e[2] + t.cb) >> 4));
 			key = (r >> 3) << 10 | (g >> 3) << 5 | (b >> 3);
 			if (!inv[key])
-				inv[key] = (signed char)(nearest(pal, np, r | 4, g | 4, b | 4) + 1);
+				inv[key] = (short)(nearest(pal, np, r | 4, g | 4, b | 4) + 1);
 			k = inv[key] - 1;
 			pn[i] = (unsigned char)k;
 			er = r - pal[k][0];
@@ -139,6 +139,18 @@ static void pack(const unsigned char *pn, int n, int planes, long rb, unsigned c
 	uint32_t acc = 0;
 	int i, p;
 
+	if (planes > 4) {
+		/* 256 colours: a bit a plane a pixel (the four planes' long
+		   below holds 4) */
+		for (p = 0; p < planes; p++, o += rb) {
+			unsigned b = 0;
+
+			for (i = 0; i < 8; i++)
+				b = b << 1 | (i < n ? (pn[i] >> p) & 1 : 0);
+			*o = (unsigned char)b;
+		}
+		return;
+	}
 	for (i = 0; i < 8; i++)
 		acc = acc << 1 | (i < n ? c2p[pn[i] & 15] : 0);
 	for (p = 0; p < planes; p++, o += rb)
@@ -159,19 +171,19 @@ int pens_planes(const unsigned short *px, int w, int rows, int ytop, const unsig
 	unsigned char *pn;
 	long rb = (w + 15) / 16 * 2;
 
-	if (n < 2 || n > 16 || w <= 0)
+	if (n < 2 || n > 256 || w <= 0 || planes > 8)
 		return -1;
 	if (!c2p[15])
 		for (i = 0; i < 16; i++)
 			c2p[i] = (uint32_t)(i & 1) << 24 | (uint32_t)((i >> 1) & 1) << 16 | (uint32_t)((i >> 2) & 1) << 8 |
 				 (uint32_t)((i >> 3) & 1);
-	if (!inv && !(inv = malloc(32768)))
+	if (!inv && !(inv = malloc(32768 * sizeof *inv)))
 		return -1;
-	if (!snap && !(snap = malloc(32768)))
+	if (!snap && !(snap = malloc(32768 * sizeof *snap)))
 		return -1;
 	if (n != n_of || memcmp(pal_of, pal, (size_t)n * 3)) {
-		memset(inv, 0, 32768);
-		memset(snap, 0, 32768);
+		memset(inv, 0, 32768 * sizeof *inv);
+		memset(snap, 0, 32768 * sizeof *snap);
 		memcpy(pal_of, pal, (size_t)n * 3);
 		n_of = n;
 	}

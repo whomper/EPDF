@@ -163,7 +163,7 @@ static int rv_pens(void *doc, const unsigned char (*pal)[3], int n, int planes, 
 {
 	RCANVAS *c = &((RDOC *)doc)->r.c;
 
-	if (y < 0 || rows <= 0 || y + rows > c->rows || !c->px || planes < 1 || planes > 4)
+	if (y < 0 || rows <= 0 || y + rows > c->rows || !c->px || planes < 1 || planes > 8)
 		return -1;
 	return pens_planes(c->px + (long)y * c->w, c->w, rows, c->y0 + y, pal, n, planes, out);
 }
