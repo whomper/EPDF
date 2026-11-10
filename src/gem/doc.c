@@ -120,7 +120,8 @@ static struct {
 static void pages_note(long n, const PPREP *pp)
 {
 	char b[48];
-	int col = pp->colour >= 0 && planes >= 4;
+	/* (colour only: a mono screen shows the colour page, dithered) */
+	int col = pp->colour >= 0 && (planes >= 4 || pp->mono < 0);
 	long obj = col ? pp->colour : pp->mono, w = col ? pp->colour_w : pp->mono_w, h = col ? pp->colour_h : pp->mono_h;
 	int k = 0;
 

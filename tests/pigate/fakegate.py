@@ -25,7 +25,7 @@ import tempfile
 import urllib.parse
 
 OPTS = {
-    "pages": ("--pages", ("none", "mono", "colour")),
+    "pages": ("--pages", ("none", "mono", "colour", "colouronly")),
     "photos": ("--photos", ("indexed", "jpeg")),
     "pictures": ("--pictures", ("page", "screen")),
     "page_width": ("--page-width", None),

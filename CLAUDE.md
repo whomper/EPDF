@@ -321,6 +321,17 @@ at first. This section is kept up to date: the build, the tests, what a release 
   and 251 set to the mock-up's colours while it runs and given back at its end and in crash_quit
   (pens_take/pens_give; guidelines 5.2's own-theme pens, the hub 10 Nov), painted over the tree (paint256). A page in bands re-reads the page once a band (18
   bands: 4 to 15 times slower): draw it whole where memory allows.
+  EConvert 2.8 (Erez, 10 Nov 2026): the batch's end said in the window (the batch's line: "Stopped: 1
+  converted in 0:34"), tips on its buttons (common's tooltip), WM_BOTTOMED; the progress drawn flicker
+  free and fast ("The converter UI statistics flicker every second"): only the letters that changed
+  (span/cells, text.c's text_n: TOS's VDI is slow with a clip tight round text) and the bar's new
+  part, off the screen through common's offdraw; draw() notes what a redraw drew (note_drawn); at
+  the end only the rows that changed. Falcon-4 (EmuTOS): the job's turns 135 -> 85 (the first tick,
+  the list's), Stop 140 -> 175 (the end drawn in the window, not an alert). Whole pages: Colour
+  (CV_PAGES_COLOUR_ONLY, INF "colouronly", --pages colouronly; Erez: "What if I just want color
+  pages"): a page with colour gets /Colour only, one without its /Mono; EPDF on a mono screen
+  shows /Colour dithered. pdfgate knows none/mono/colour only: Gateway mode sends colour (mono
+  and colour) until AERA-Gateway takes colouronly.
 - **The road to 1.0, and EConvert (Erez, 31 Oct 2026):**
   - **1.0 is the text view, complete:** 0.2 speed on an 8 MHz ST (the guidelines' times), 0.3 big
     documents on ST-1 (streamed content, pictures' memory), 0.4 pictures (DSP JPEG on the Falcon, the

@@ -54,16 +54,15 @@ def run(work, machine):
             time.sleep(1)
         r.still()
         # the window centred on a 640 x 480 screen (as econv.py's shots show
-        # it): "None" of the whole pages at 247,228, "Mono" at 327,228
-        r.act("a setting clicked", speed.KEY, lambda: r.click(247, 212))
-        r.act("its tick back", speed.KEY, lambda: r.click(327, 212))
+        # it, B2): the Whole pages pop-up button at 250,280; Esc closes it
+        r.act("a pop-up opened", speed.KEY, lambda: r.click(250, 280))
+        r.act("its choices closed", speed.WINDOW, lambda: r.key("Escape"))
         r.act("About box", r.about, lambda: r.menu(40, 28))
         r.act("About box closed", speed.WINDOW, lambda: r.key("Escape"))
         # (not the file selector: its time open is the AES's and the user's,
         # and counts in the stretch until EConvert's next event call)
         r.act("Convert", speed.KEY, lambda: r.key("Return"), job=True)
         r.act("Stop", speed.KEY, lambda: r.key("Escape"))
-        r.act("its alert closed", speed.WINDOW, lambda: r.key("Return"))
         bad = r.report()
     finally:
         r.stop()

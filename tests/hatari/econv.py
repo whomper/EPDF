@@ -10,7 +10,7 @@ ECONVERT.PRG is started through LAUNCH.PRG with the PDF (it comes into the
 batch), writes to C:\\OUT (econvert.inf), Return converts. Checked: the
 batch done ("batch-done done"), the converted file there and a converted
 PDF (its catalog's /AERA), Stop (Esc) while a second batch works leaving no
-file behind. Shots: the window before, during (the bars) and after.
+file behind, and the result said in the window ("Stopped: 1 converted"). Shots: the window before, during (the bars) and after.
 On an ST EConvert starts with This Atari greyed (Gateway only): econv.py WORK ST:mono
 checks it starts; tests/hatari/gateway.py converts there.
 """
@@ -82,7 +82,7 @@ def run(work, machine, src):
         while time.time() < end and "ECONVERT batch-done" not in r.console():
             time.sleep(1)
         time.sleep(3)
-        r.shot("stopped-alert")
+        r.shot("stopped")
         con = r.console()
         if "ECONVERT batch-done stopped" not in con:
             bad.append("Stop didn't stop the batch: %s" % [l for l in con.splitlines() if "ECONVERT" in l][-3:])
@@ -96,7 +96,10 @@ def run(work, machine, src):
         for l in con.splitlines():
             if "ECONVERT converted" in l:
                 print("  " + l.strip())
-        r.key("Return")             # the alert closed
+        # the batch's end in the window, no alert (Erez, 10 Nov 2026): the result
+        # line under the bars, IN.PDF still in the list with its tick
+        if "ECONVERT result Stopped: 1 converted" not in con:
+            bad.append("no result line: %s" % [l for l in con.splitlines() if "ECONVERT result" in l])
         time.sleep(2)
         r.still()
         r.shot("after")

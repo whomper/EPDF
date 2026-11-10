@@ -192,8 +192,9 @@ Atari, an ST too, it can have the Gateway convert them instead.
 - **Write to...** chooses the folder the converted PDFs go to, with their own names: a folder of
   their own, not the PDFs' own.
 - **Whole pages**, **Photos** and **Convert on** are buttons that open their choices over them.
-- **Whole pages:** None, Mono (black and white, for every Atari), or Mono and colour (16 colours
-  as well, for a Falcon or a TT; a page with little colour gets the black and white one only).
+- **Whole pages:** None, Mono (black and white, for every Atari), Colour (16 colours, for a Falcon
+  or a TT: quicker to make, and an ST shows them in black and white), or Mono and colour (both; a
+  page with little colour gets the black and white one only).
 - **Photos:** 256 colours (fast on every Atari) or JPEG (smaller files, but slow to show on an
   8 MHz ST). Charts and pictures of few colours are kept exact either way.
 - **Convert on:** This Atari, or the Gateway (its address and port in **Options > Settings...**, ^,;

@@ -7,7 +7,8 @@ speed rig (common/tests/speed/speed.py, its Rig on an X display):
     prepared.py WORK [MACHINE...]        (default: ST:mono Falcon:16)
 
 A book with a chart is made (pdfgen.py), converted by build/econvert (mono
-and colour pages), and opened through LAUNCH.PRG. Checked: every page read
+and colour pages; PAGES=colouronly: colour only, which a mono screen shows
+dithered), and opened through LAUNCH.PRG. Checked: every page read
 from its prepared text ("page" events, no "failed"), the Optimised badge on
 the heads (the shot, text.png), View > Pages laid out and drawn (the
 "pages 1" event, pages.png, a picture's row: the screen changes) and back
@@ -55,7 +56,7 @@ def run(work, machine):
         if os.environ.get("PREPARED_PDF"):      # a converted file of one's own
             shutil.copy(os.environ["PREPARED_PDF"], os.path.join(r.hd, "CONV.PDF"))
         else:
-            subprocess.run([os.path.join(TOP, "build", "econvert"), "--pages", "colour", src, os.path.join(r.hd, "CONV.PDF")],
+            subprocess.run([os.path.join(TOP, "build", "econvert"), "--pages", os.environ.get("PAGES", "colour"), src, os.path.join(r.hd, "CONV.PDF")],
                            check=True, stdout=subprocess.DEVNULL)
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\CONV.PDF\n")
         r.start("C:\\LAUNCH.PRG")

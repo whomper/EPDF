@@ -16,7 +16,7 @@ The document catalog has an entry `/AERA`, a dictionary:
 | `/Type` | `/AERAPrepared` |
 | `/Version` | `1`. A reader that doesn't know the version reads the file as a standard PDF. |
 | `/Creator` | a string: the program and its version, `(EConvert 1.1)` |
-| `/Prepared` | an array of names, what every page carries: `/Text`, `/Pictures`, `/Drawings`, and `/PageMono` and `/PageColour` when the batch made them |
+| `/Prepared` | an array of names, what every page carries: `/Text`, `/Pictures`, `/Drawings`, and `/PageMono` and `/PageColour` when the batch made them (colour only: `/PageColour` alone, and a page without colour still has its `/Mono`) |
 | `/Photos` | `/Indexed` (256 colours, the default) or `/JPEG`: how the photos are stored (EConvert's per-batch setting) |
 | `/Source` | a dictionary on the original: `/Name` (its file name), `/Bytes` (its size), `/Pages` (its page count) |
 | `/Translate` | only in a file translated by the Gateway (below): a dictionary, `/To` the language the text was translated into, an ISO 639-1 name (`/en`, `/he`, ...) |
@@ -33,7 +33,7 @@ Each page dictionary has an entry `/AERA`, a dictionary:
 | Key | Value |
 |---|---|
 | `/Text` | a stream (FlateDecode): the page's text as EPDF stores it (below) |
-| `/Mono` | when the batch made it: the page whole as a picture, 1 bit a pixel, as wide as EPDF's text column in a window the size of the converting machine's desktop (640 before EConvert 1.3) |
+| `/Mono` | when the batch made it (with colour only: on a page without colour): the page whole as a picture, 1 bit a pixel, as wide as EPDF's text column in a window the size of the converting machine's desktop (640 before EConvert 1.3) |
 | `/Colour` | when the batch made it: the page whole in 16 colours, 4 bits a pixel, as wide as `/Mono` |
 | `/Double` | where the converting machine had the memory: `/Mono` at twice its width, shown when the page is clicked in View > Pages |
 | `/Translation` | in a translated file (the catalog's `/AERA /Translate`): a stream (FlateDecode), the page's text translated into `/To` (below) |

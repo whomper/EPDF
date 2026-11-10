@@ -46,6 +46,8 @@
 #include "popup.h"
 #include "panebar.h"
 #include "iconify.h"
+#include "tooltip.h"
+#include "offdraw.h"
 #include "icon.h"
 #include "icon16.h"
 #include "icon256.h"
@@ -140,7 +142,8 @@ static void settings_read(void)
 	} else
 		inf_parse(&inf, inf_head, (long)strlen(inf_head));
 	if ((v = inf_get(&inf, "PAGES")) != NULL)
-		pages_set = !strcmp(v, "none") ? CV_PAGES_NONE : !strcmp(v, "colour") ? CV_PAGES_COLOUR : CV_PAGES_MONO;
+		pages_set = !strcmp(v, "none") ? CV_PAGES_NONE : !strcmp(v, "colour") ? CV_PAGES_COLOUR :
+			    !strcmp(v, "colouronly") ? CV_PAGES_COLOUR_ONLY : CV_PAGES_MONO;
 	if ((v = inf_get(&inf, "PHOTOS")) != NULL)
 		photos_set = !strcmp(v, "jpeg") ? CV_PHOTOS_JPEG : CV_PHOTOS_INDEXED;
 	if ((v = inf_get(&inf, "WRITETO")) != NULL && strlen(v) < sizeof out_dir)
@@ -218,6 +221,10 @@ static struct {
 	char why[120];
 } files[MAXF];
 static int nfiles;
+/* how the last batch went, under the bars until the list changes (Erez,
+   10 Nov 2026: the result in the window, not an alert; the list keeps every
+   file with its mark until Clear) */
+static char s_result[80];
 
 static const char *base_of(const char *p)
 {
@@ -247,6 +254,7 @@ static int add_file(const char *p)
 			return 0;
 	if (nfiles >= MAXF || strlen(p) >= sizeof files[0].path || (n = file_size(p)) < 0)
 		return 0;
+	s_result[0] = '\0';	/* (the list changed: the last batch's line goes) */
 	strcpy(files[nfiles].path, p);
 	files[nfiles].bytes = n;
 	files[nfiles].state = 0;
@@ -594,7 +602,9 @@ static int on_the_gateway(const char *in, const char *out, char *err, int errlen
 {
 	PGOPT po;
 	int pw, iw, r;
-	static const char *pages[] = { "none", "mono", "colour" };
+	/* (colour only: the Gateway's pdfgate knows none, mono and colour so
+	   far, so colour, the mono pages with it) */
+	static const char *pages[] = { "none", "mono", "colour", "colour" };
 
 	memset(&po, 0, sizeof po);
 	po.pages = pages[pages_set];
@@ -746,7 +756,9 @@ static void size_words(char *s, size_t n, long bytes)
 		snprintf(s, n, "%ld KB", (bytes + 1023) / 1024);
 }
 
-static const char *const pages_names[] = { "None", "Mono", "Mono and colour" };
+/* by CV_PAGES_*; the pop-up's order: None, Mono, Colour, Mono and colour */
+static const char *const pages_names[] = { "None", "Mono", "Mono and colour", "Colour" };
+static const short pages_order[] = { CV_PAGES_NONE, CV_PAGES_MONO, CV_PAGES_COLOUR_ONLY, CV_PAGES_COLOUR };
 static const char *const photos_names[] = { "256 colours (fast)", "JPEG (small)" };
 static const char *const on_names[] = { "This Atari", "The Gateway" };
 
@@ -865,7 +877,7 @@ static void texts(void)
 	snprintf(s_u[2], sizeof s_u[2], " %-16s\x02", on_names[on_gateway]);
 	if (!working) {
 		snprintf(s_file, sizeof s_file, "The file");
-		snprintf(s_batch, sizeof s_batch, "The batch");
+		snprintf(s_batch, sizeof s_batch, "%s", s_result[0] ? s_result : "The batch");
 		tree[B_GO].ob_spec = (long)"Convert";
 	} else
 		tree[B_GO].ob_spec = (long)"Stop";
@@ -1030,6 +1042,99 @@ static void paint256(void)
 	words(x, y, s_rest[k], p_dark);
 }
 
+/* 0 while a piece is drawn off the screen (offdraw.h): the caller has the
+   mouse hidden from off_begin to off_end, so draw() leaves it alone */
+static int draw_mouse = 1;
+
+/* a holds b whole; a and b meet */
+static int holds(const GRECT *a, const GRECT *b)
+{
+	return a->x <= b->x && a->y <= b->y && a->x + a->w >= b->x + b->w && a->y + a->h >= b->y + b->h;
+}
+
+static int meets(const GRECT *a, const GRECT *b)
+{
+	return a->x < b->x + b->w && b->x < a->x + a->w && a->y < b->y + b->h && b->y < a->y + a->h;
+}
+
+/* set: draw() draws only these objects, each without its children (the
+   window's whole tree walked for a strip of the progress was 35-40 ms of
+   the AES's on Falcon-4, three strips a second) */
+static const short *draw_only;
+static short draw_only_n;
+
+/* the file's and the batch's strips as last drawn: their words, padded,
+   and how much of their bar (PB_FULLths; -1 not known) */
+static char shown_txt[2][COLS + 1];
+static short strip_now(int k, char *now, short *to, GRECT *g, short *bx, short *by);
+static short shown_to[2] = { -1, -1 };
+static char shown_rest[LTEXT + 1];	/* the file under way's row's words as last drawn */
+
+/* a line of the system font's letters at x, y (n of them, now) drawn within
+   clip: was takes the letters drawn whole, a letter drawn in part is
+   marked not known (0xFF); 0 the line's height not drawn whole */
+static int note_line(const GRECT *clip, short x, short y, const char *now, char *was, short n)
+{
+	short c0, c1, i;
+
+	if (clip->y > y || clip->y + clip->h < y + gl_hchar)
+		return clip->y >= y + gl_hchar || clip->y + clip->h <= y;	/* (not met: as it was) */
+	c0 = clip->x <= x ? 0 : (short)((clip->x - x) / gl_wchar);
+	c1 = (short)((clip->x + clip->w - x + gl_wchar - 1) / gl_wchar);
+	if (c1 > n)
+		c1 = n;
+	for (i = c0; i < c1; i++) {
+		short l = (short)(x + i * gl_wchar);
+
+		was[i] = l >= clip->x && l + gl_wchar <= clip->x + clip->w ? now[i] : (char)0xFF;
+	}
+	return 1;
+}
+
+/* what a redraw within clip leaves shown: the strips' words and bars, the
+   row under way's words (strip() and redraw_progress() draw from these
+   only what changed) */
+static void note_drawn(const GRECT *clip)
+{
+	int k;
+
+	for (k = 0; k < 2; k++) {
+		short to, bx, by, n;
+		char now[COLS + 1];
+		GRECT g, b;
+
+		n = strip_now(k, now, &to, &g, &bx, &by);
+		if (!meets(clip, &g) || shown_to[k] < 0) {
+			if (holds(clip, &g)) {
+				memcpy(shown_txt[k], now, sizeof now);
+				shown_to[k] = to;
+			}
+			continue;
+		}
+		b.x = (short)(bx - 1);
+		b.y = (short)(by - 1);
+		b.w = (short)(tree[k ? BAR2 : BAR1].ob_width + 2);
+		b.h = (short)(tree[k ? BAR2 : BAR1].ob_height + 2);
+		if (!note_line(clip, g.x, g.y, now, shown_txt[k], n) || (to != shown_to[k] && meets(clip, &b)))
+			shown_to[k] = -1;
+	}
+	if (working && cur >= ltop && cur < ltop + LROWS && shown_rest[0]) {
+		short n = (short)strlen(s_rest[cur - ltop]), x, y;
+
+		objc_offset(tree, (short)(G0 + cur - ltop), &x, &y);
+		if ((short)strlen(shown_rest) != n || !note_line(clip, x, y, s_rest[cur - ltop], shown_rest, n))
+			shown_rest[0] = '\0';
+	} else if (working && cur >= ltop && cur < ltop + LROWS) {
+		GRECT g;
+
+		objc_offset(tree, (short)(G0 + cur - ltop), &g.x, &g.y);
+		g.w = tree[G0 + cur - ltop].ob_width;
+		g.h = tree[G0 + cur - ltop].ob_height;
+		if (holds(clip, &g))
+			snprintf(shown_rest, sizeof shown_rest, "%s", s_rest[cur - ltop]);
+	}
+}
+
 static void draw(const GRECT *clip, short start)
 {
 	if (iconified) {
@@ -1037,6 +1142,9 @@ static void draw(const GRECT *clip, short start)
 		return;
 	}
 	GRECT a = work_area(), r;
+
+	if (!draw_only)
+		note_drawn(clip);
 
 	tree[BOX].ob_x = a.x;
 	tree[BOX].ob_y = a.y;
@@ -1048,14 +1156,21 @@ static void draw(const GRECT *clip, short start)
 		vs_color(vdi_h, PEN_ROW, pens_want[1]);
 	}
 	wind_get(win, WF_FIRSTXYWH, &r.x, &r.y, &r.w, &r.h);
-	graf_mouse(M_OFF, 0);
+	if (draw_mouse)
+		graf_mouse(M_OFF, 0);
 	while (r.w && r.h) {
 		GRECT c = r;
 
 		if (meet(clip, &c)) {
 			short p[4];
 
-			objc_draw(tree, start, 8, c.x, c.y, c.w, c.h);
+			if (draw_only) {
+				short i;
+
+				for (i = 0; i < draw_only_n; i++)
+					objc_draw(tree, draw_only[i], 0, c.x, c.y, c.w, c.h);
+			} else
+				objc_draw(tree, start, 8, c.x, c.y, c.w, c.h);
 			if (own_pens) {
 				short p[4];
 
@@ -1089,10 +1204,12 @@ static void draw(const GRECT *clip, short start)
 			vs_clip(vdi_h, 0, p);
 			if (list_bar())
 				pb_draw(&lbar, &c);
+
 		}
 		wind_get(win, WF_NEXTXYWH, &r.x, &r.y, &r.w, &r.h);
 	}
-	graf_mouse(M_ON, 0);
+	if (draw_mouse)
+		graf_mouse(M_ON, 0);
 }
 
 static void redraw_obj(short o)
@@ -1102,8 +1219,11 @@ static void redraw_obj(short o)
 	if (iconified)
 		return;		/* (its icon: redraw_progress) */
 	objc_offset(tree, o, &g.x, &g.y);
-	g.w = tree[o].ob_width;
-	g.h = tree[o].ob_height;
+	/* 3 pixels more at the right and the foot: TOS's VDI draws text the
+	   slow way where the clip ends less than 2 past it (text.h; the list
+	   45 -> ... ms on Falcon-4), and what is there is the tree's too */
+	g.w = (short)(tree[o].ob_width + 3);
+	g.h = (short)(tree[o].ob_height + 3);
 	wind_update(BEG_UPDATE);
 	draw(&g, BOX);
 	wind_update(END_UPDATE);
@@ -1111,10 +1231,160 @@ static void redraw_obj(short o)
 
 /* the file's line and bar to the batch's, one rectangle drawn once
    (four objects drawn one by one were 80 ms of a Falcon's turn) */
+
+/* g drawn off the screen and shown in one copy (offdraw.h: Erez, 10 Nov
+   2026, "The converter UI statistics flicker every second"): the ground,
+   the words and the bar of a row all come at once. Where TOS's own screen
+   can't be borrowed (MiNT, MagiC, NVDI that won't follow it, a piece too
+   tall) it is drawn on the screen as before */
+static void draw_steady(const GRECT *g, const short *objs, short n)
+{
+	draw_only = objs;
+	draw_only_n = n;
+	wind_update(BEG_UPDATE);
+	graf_mouse(M_OFF, 0);
+	draw_mouse = 0;
+	if (g->h <= OFF_ROWS && off_begin(vdi_h, g->x, g->y, g->w, g->h)) {
+		draw(g, BOX);
+		off_end();
+	} else
+		draw(g, BOX);
+	draw_mouse = 1;
+	draw_only = NULL;
+	graf_mouse(M_ON, 0);
+	wind_update(END_UPDATE);
+}
+
+/* where now and was (n letters each) differ: [*a, *e) */
+static void span(const char *now, const char *was, short n, short *a, short *e)
+{
+	short i = 0, j = n;
+
+	while (i < n && now[i] == was[i])
+		i++;
+	while (j > i && now[j - 1] == was[j - 1])
+		j--;
+	*a = i;
+	*e = j;
+}
+
+/* the letters a..e of a line of the system font at x, y on ground in ink,
+   drawn off the screen and shown in one copy; was takes them. The caller
+   holds wind_update and has the mouse hidden */
+static void cells(short x, short y, char *now, char *was, short a, short e, short ground, short ink)
+{
+	short w = (short)((e - a) * gl_wchar), p[4];
+	int off;
+
+	if (a >= e)
+		return;
+	x = (short)(x + a * gl_wchar);
+	off = off_begin(vdi_h, x, y, w, gl_hchar);
+	p[0] = x;
+	p[1] = y;
+	p[2] = (short)(x + w - 1);
+	p[3] = (short)(y + gl_hchar - 1);
+	box256(x, y, w, gl_hchar, ground);
+	/* (text.c's: TOS's VDI draws text the slow way with a clip tight round
+	   it, 25 ms a line here) */
+	text_clip(vdi_h, p);
+	vswr_mode(vdi_h, 2);
+	vst_color(vdi_h, ink);
+	vst_effects(vdi_h, 0);
+	vst_alignment(vdi_h, 0, 5);
+	text_n(vdi_h, x, y, now + a, e - a);
+	vswr_mode(vdi_h, 1);
+	text_noclip(vdi_h);
+	if (off)
+		off_end();
+	memcpy(was + a, now + a, (size_t)(e - a));
+}
+
+/* the window wholly on top over g (its first rectangle holds it) */
+static int on_top(const GRECT *g)
+{
+	GRECT r;
+
+	wind_get(win, WF_FIRSTXYWH, &r.x, &r.y, &r.w, &r.h);
+	return holds(&r, g);
+}
+
+/* a strip, the words over their bar: only the letters that changed (the
+   system font's cells, on the window's ground, drawn off the screen and
+   shown in one copy) and the bar's new part. The AES's G_STRING drawn
+   whole was 25-30 ms of a Falcon-4's turn each, two strips a second. The
+   whole strip (draw_steady) when it isn't known or the window isn't
+   wholly on top there */
+/* strip k's words padded to its width (n letters), its share in
+   PB_FULLths, and its rectangle with the bar's place */
+static short strip_now(int k, char *now, short *to, GRECT *g, short *bx, short *by)
+{
+	short t = k ? T_BATCH : T_FILE, b = k ? BAR2 : BAR1, n = tree[t].ob_width / gl_wchar, i;
+	long share = k ? share_batch() : share_file();
+	const char *s = (const char *)tree[t].ob_spec;
+
+	if (n > COLS)
+		n = COLS;
+	for (i = 0; i < n && s[i]; i++)
+		now[i] = s[i];
+	for (; i < n; i++)
+		now[i] = ' ';
+	now[n] = '\0';
+	*to = (short)(share > 1000 ? PB_FULL : share < 0 ? 0 : share * PB_FULL / 1000);
+	if (!working)
+		*to = 0;
+	objc_offset(tree, t, &g->x, &g->y);
+	objc_offset(tree, b, bx, by);
+	g->w = tree[t].ob_width;
+	g->h = (short)(*by + tree[b].ob_height + 2 - g->y);
+	return n;
+}
+
+static void strip(int k)
+{
+	static short objs[2][3] = { { BOX, T_FILE, BAR1 }, { BOX, T_BATCH, BAR2 } };
+	short b = k ? BAR2 : BAR1, to, a, e, bx, by, n;
+	char now[COLS + 1];
+	GRECT g;
+
+	n = strip_now(k, now, &to, &g, &bx, &by);
+	if (shown_to[k] < 0 || !on_top(&g)) {
+		draw_steady(&g, objs[k], 3);
+		memcpy(shown_txt[k], now, (size_t)n + 1);
+		shown_to[k] = to;
+		return;
+	}
+	span(now, shown_txt[k], n, &a, &e);
+	if (a == e && to == shown_to[k])
+		return;
+	wind_update(BEG_UPDATE);
+	graf_mouse(M_OFF, 0);
+	cells(g.x, g.y, now, shown_txt[k], a, e, p_grey, 1);
+	if (to < shown_to[k]) {
+		/* (a new file, or the batch's end: the bar emptied, and filled
+		   again, in one copy) */
+		short bw = tree[b].ob_width, bh = tree[b].ob_height;
+		int off = off_begin(vdi_h, bx, by, bw, bh);
+
+		box256(bx, by, bw, bh, 0);
+		if (to > 0)
+			progbar_fill(vdi_h, bx, by, bw, bh, 0, to);
+		if (off)
+			off_end();
+		shown_to[k] = to;
+	}
+	if (working && to > shown_to[k]) {
+		/* (growing: drawn over its white, no ground first) */
+		progbar_fill(vdi_h, bx, by, tree[b].ob_width, tree[b].ob_height, shown_to[k], to);
+		shown_to[k] = to;
+	}
+	graf_mouse(M_ON, 0);
+	wind_update(END_UPDATE);
+}
+
 static void redraw_progress(void)
 {
-	GRECT g;
-	short y2;
+	short row_objs[3];
 
 	if (iconified) {
 		wind_update(BEG_UPDATE);
@@ -1122,28 +1392,39 @@ static void redraw_progress(void)
 		wind_update(END_UPDATE);
 		return;
 	}
-	objc_offset(tree, T_FILE, &g.x, &g.y);
-	objc_offset(tree, BAR2, &g.w, &y2);
-	g.w = tree[T_FILE].ob_width;
-	g.h = (short)(y2 + tree[BAR2].ob_height - g.y);
-	wind_update(BEG_UPDATE);
-#ifdef TURN_DEBUG
-	{
-		unsigned long t0 = tos_ms();
-		char q[24];
-
-		draw(&g, BOX);
-		snprintf(q, sizeof q, "%lu ms", tos_ms() - t0);
-		log_event("bar-draw", q, NULL);
-	}
-#else
-	draw(&g, BOX);
-#endif
-	wind_update(END_UPDATE);
+	/* the file's words and bar, then the batch's */
+	strip(0);
+	strip(1);
 	if (list_follow())
-		redraw_obj(LIST);
-	else if (cur >= ltop && cur < ltop + LROWS)
-		redraw_obj((short)(L0 + cur - ltop));
+		redraw_obj(LIST);	/* (the file under way changed; draw() notes its row) */
+	else if (cur >= ltop && cur < ltop + LROWS && strcmp(s_rest[cur - ltop], shown_rest)) {
+		/* the row only when its words changed (its page): drawn at every
+		   tick it made a batch's turns 135 ms on Falcon-4; and of it only
+		   the letters that changed (the AES's three objects were 70-80 ms) */
+		short k = (short)(cur - ltop), n = (short)strlen(s_rest[k]), a, e;
+		GRECT rg;
+
+		objc_offset(tree, (short)(L0 + k), &rg.x, &rg.y);
+		rg.w = tree[L0 + k].ob_width;
+		rg.h = tree[L0 + k].ob_height;
+		if (shown_rest[0] && (short)strlen(shown_rest) == n && lsel != cur && rg.h == gl_hchar && on_top(&rg)) {
+			short gx, gy;
+
+			objc_offset(tree, (short)(G0 + k), &gx, &gy);
+			span(s_rest[k], shown_rest, n, &a, &e);
+			wind_update(BEG_UPDATE);
+			graf_mouse(M_OFF, 0);
+			cells(gx, gy, s_rest[k], shown_rest, a, e, own_pens ? PEN_ROW : p_row, p_dark);
+			graf_mouse(M_ON, 0);
+			wind_update(END_UPDATE);
+		} else {
+			row_objs[0] = (short)(L0 + k);
+			row_objs[1] = (short)(M0 + k);
+			row_objs[2] = (short)(G0 + k);
+			draw_steady(&rg, row_objs, 3);
+			snprintf(shown_rest, sizeof shown_rest, "%s", s_rest[k]);
+		}
+	}
 }
 
 /* ---------------------------------------------------------------- the commands */
@@ -1230,6 +1511,7 @@ static void begin(void)
 	int i, there = 0;
 	char p[200];
 
+	s_result[0] = '\0';
 	if (!nfiles) {
 		alert(1, "[1][Add the PDFs to convert first:|Add files... or Add folder...][ OK ]");
 		return;
@@ -1300,8 +1582,32 @@ static void finish_button(void)
    the whole window was 135 ms of a Falcon's turn) */
 static void finish_progress(void)
 {
+	int i, n_bad = 0;
+	unsigned long t = (tos_ms() - t_batch) / 1000UL;
+	char took[16];
+
 	working = 0;
 	shown_cur = -1;
+	shown_rest[0] = '\0';
+	for (i = 0; i < nfiles; i++)
+		if (files[i].state == 2)
+			n_bad++;
+	if (gate_off) {
+		log_event("gateway-off", gate_why, NULL);
+		for (i = 0; i < nfiles; i++)
+			if (files[i].state == 2 && !strcmp(files[i].why, gate_why)) {
+				files[i].state = 0;	/* (not its fault: kept, to try again) */
+				n_bad--;
+			}
+	}
+	snprintf(took, sizeof took, "%lu:%02lu", t / 60, t % 60);
+	if (stop_now)
+		snprintf(s_result, sizeof s_result, "Stopped: %d converted in %s", n_ok, took);
+	else if (n_bad > 0)
+		snprintf(s_result, sizeof s_result, "%d converted, %d failed in %s", n_ok, n_bad, took);
+	else
+		snprintf(s_result, sizeof s_result, "%d converted in %s", n_ok, took);
+	log_event("result", s_result, NULL);
 	texts();
 	redraw_progress();
 	log_event("batch-done", stop_now ? "stopped" : "done", NULL);
@@ -1315,34 +1621,35 @@ static void finish_progress(void)
 #endif
 }
 
-/* its third: what came of it, and the files done off the list (the
-   failed ones stay) */
+/* its third: what came of it, said under the bars ("3 converted, 1 failed
+   in 4:12"; Erez, 10 Nov 2026: in the window, no alert), every file left in
+   the list with its mark. Only a Gateway that doesn't answer is an alert:
+   the user has something to do */
 static void finished(void)
 {
-	int i, j, failed = -1;
+	if (gate_off)
+		redraw_list();
+	else {
+		/* only the file that was under way has a new row (the ones
+		   before it had theirs as the batch went: 110 -> ... ms of the
+		   end's one turn on Falcon-4); Remove and the band as they are
+		   now */
+		int i;
 
-	for (i = 0; i < nfiles && failed < 0; i++)
-		if (files[i].state == 2)
-			failed = i;
-	if (gate_off) {
-		log_event("gateway-off", gate_why, NULL);
+		for (i = cur - 1; i <= cur; i++)
+			if (i >= ltop && i < ltop + LROWS && i < nfiles) {
+				short o[3] = { (short)(L0 + i - ltop), (short)(M0 + i - ltop), (short)(G0 + i - ltop) };
+				GRECT g;
+
+				objc_offset(tree, o[0], &g.x, &g.y);
+				g.w = tree[o[0]].ob_width;
+				g.h = tree[o[0]].ob_height;
+				draw_steady(&g, o, 3);
+			}
+		redraw_obj(B_REMOVE);
+	}
+	if (gate_off)
 		alert(1, "[1][The Gateway at %.24s doesn't answer. Check that it is on and that the PDF converter is installed on it.][ OK ]", gate_host);
-		for (i = 0; i < nfiles; i++)
-			if (files[i].state == 2 && !strcmp(files[i].why, gate_why))
-				files[i].state = 0;	/* (not its fault: kept, to try again) */
-	} else if (failed >= 0)
-		alert(1, "[1][%d converted.|%.30s couldn't be:|%.30s][ OK ]", n_ok, base_of(files[failed].path),
-		      files[failed].why);
-	else if (stop_now)
-		alert(1, "[1][Stopped. %d converted;|the one under way was left out.][ OK ]", n_ok);
-	else
-		alert(1, "[1][%d converted.][ OK ]", n_ok);
-	for (i = j = 0; i < nfiles; i++)
-		if (files[i].state != 1)
-			files[j++] = files[i];
-	nfiles = j;
-	texts();
-	redraw_list();
 }
 
 static void about_box(void)
@@ -1425,6 +1732,7 @@ static void command(int c)
 		if (!working && lsel >= 0 && lsel < nfiles) {
 			int i;
 
+			s_result[0] = '\0';
 			for (i = lsel; i < nfiles - 1; i++)
 				files[i] = files[i + 1];
 			nfiles--;
@@ -1438,6 +1746,7 @@ static void command(int c)
 		if (!working) {
 			nfiles = 0;
 			lsel = -1;
+			s_result[0] = '\0';
 			texts();
 			redraw_list();
 		}
@@ -1496,16 +1805,20 @@ static int list_goto(long t)
    ticked (5.7, as EPDF's Settings and EHypView's) */
 static void choose(short o)
 {
-	static char lab[3][28];
-	const char *l[3];
+	static char lab[4][28];
+	const char *l[4];
 	const char *const *names = o == U_PAGES ? pages_names : o == U_PHOTOS ? photos_names : on_names;
-	short n = o == U_PAGES ? 3 : 2, sel = (short)(o == U_PAGES ? pages_set : o == U_PHOTOS ? photos_set : on_gateway);
+	short n = o == U_PAGES ? 4 : 2, sel = (short)(o == U_PHOTOS ? photos_set : on_gateway);
 	short x, y, k, r;
 
+	if (o == U_PAGES)
+		for (k = 0; k < n; k++)
+			if (pages_order[k] == pages_set)
+				sel = k;
 	for (k = 0; k < n; k++) {
 		/* (an ST converts only on the Gateway: This Atari greyed) */
 		snprintf(lab[k], sizeof lab[k], "%s%s", o == U_ON && k == 0 && !has_030 ? "~" :
-			 k == sel ? "\x08" : "", names[k]);	/* (popup_m: the box adds the margin, D15) */
+			 k == sel ? "\x08" : "", names[o == U_PAGES ? pages_order[k] : k]);	/* (popup_m: the box adds the margin, D15) */
 		l[k] = lab[k];
 	}
 	objc_offset(tree, o, &x, &y);
@@ -1520,9 +1833,11 @@ static void choose(short o)
 	if (r < 0 || r == sel)
 		return;
 	if (o == U_PAGES) {
-		pages_set = r;
-		setting("PAGES", pages_set == CV_PAGES_NONE ? "none" : pages_set == CV_PAGES_COLOUR ? "colour" : "mono",
-			"the whole pages a converted PDF carries: none, mono, colour (mono and colour)");
+		static const char *const inf[] = { "none", "mono", "colour", "colouronly" };
+
+		pages_set = pages_order[r];
+		setting("PAGES", inf[pages_set],
+			"the whole pages a converted PDF carries: none, mono, colour (mono and colour), colouronly");
 	} else if (o == U_PHOTOS) {
 		photos_set = r;
 		setting("PHOTOS", photos_set == CV_PHOTOS_JPEG ? "jpeg" : "indexed",
@@ -1535,6 +1850,40 @@ static void choose(short o)
 	}
 	texts();
 	redraw_obj(o);
+}
+
+/* the family's tooltip (D18) on the window's buttons: what each does, its key */
+static int win_tip(short x, short y, char *out, int size)
+{
+	short o, top, d;
+	const char *t = NULL;
+
+	wind_get(0, WF_TOP, &top, &d, &d, &d);
+	if (win < 0 || iconified || top != win || wind_find(x, y) != win)
+		return 0;
+	o = objc_find(tree, BOX, 8, x, y);
+	switch (o) {
+	case B_ADD: t = "Add PDFs to the list (^O)"; break;
+	case B_FOLDER: t = "Add every PDF in a folder"; break;
+	case B_REMOVE: t = "Take the file chosen out of the list (Delete)"; break;
+	case B_CLEAR: t = "Empty the list"; break;
+	case B_OUT: t = "The folder the converted PDFs are written to"; break;
+	case B_GO: t = working ? "Stop (Esc)" : "Convert the PDFs in the list (Return)"; break;
+	case U_PAGES: t = "Each page whole as a picture: none, mono, or mono and colour"; break;
+	case U_PHOTOS: t = "Photos in 256 colours (fast to show) or as JPEG (small)"; break;
+	case U_ON: t = "Convert on this Atari, or send the PDFs to the Gateway"; break;
+	}
+	if (!t)
+		return 0;
+	snprintf(out, (size_t)size, "%s", t);
+	return 1;
+}
+
+static void tip_repaint(const GRECT *r)
+{
+	wind_update(BEG_UPDATE);
+	draw(r, BOX);
+	wind_update(END_UPDATE);
 }
 
 static void click(short mx, short my)
@@ -1672,6 +2021,9 @@ static void message(const short *msg)
 	case WM_TOPPED:
 		wind_set(win, WF_TOP, win, 0, 0, 0);
 		break;
+	case WM_BOTTOMED:
+		wind_set(win, WF_BOTTOM, win, 0, 0, 0);	/* (to the back: 5.1) */
+		break;
 	case WM_ICONIFY:
 	case WM_ALLICONIFY:
 		if (!iconified) {
@@ -1728,6 +2080,7 @@ int main(void)
 	if (ap_id < 0)
 		return 1;
 	key_state_init();	/* (keys typed while busy or starting keep their Shift and Control: common's gem.c) */
+	tip_init(tip_repaint);	/* (the buttons' tooltips: D18) */
 	dlg_title = "EConvert";
 	vdi_h = graf_handle(&gl_wchar, &gl_hchar, &d, &d);
 	cw = gl_wchar;
@@ -1814,11 +2167,17 @@ int main(void)
 		log_event("started", app_version, m);
 	}
 	while (!quit_now || working) {
-		short which, flags = MU_MESAG | MU_KEYBD | MU_BUTTON;
+		short which, flags = MU_MESAG | MU_KEYBD | MU_BUTTON | MU_M1 | MU_TIMER;
+		static short hx = -1, hy = -1;
+		short kd;
 
-		if (working)
-			flags |= MU_TIMER;
-		which = evnt_multi_(flags, 1, 1, 1, 0, msg, &ev);
+		/* (a still pointer costs nothing: woken when it leaves its pixel; the
+		   timer a tip's wait when idle, at once while a batch runs) */
+		evnt_set_m1(1, hx, hy, 1, 1);
+		which = evnt_multi_(flags, 1, 1, 1, working ? 0 : tip_wait(1000), msg, &ev);
+		if (which & MU_M1)
+			graf_mkstate(&hx, &hy, &kd, &kd);
+		tip_tick(which, iconified ? -1 : hx, hy, win_tip);
 		if (which & MU_KEYBD)
 			key(ev.kstate, ev.kreturn);
 		if ((which & MU_BUTTON) && wind_find(ev.mx, ev.my) == win)
