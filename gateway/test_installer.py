@@ -867,6 +867,30 @@ class ClaudeTest(Base):
             fh.write("[Service]\nExecStart=/opt/claude-st/venv/bin/python ...\n")
         self.conf = ag.Claude.CONF
 
+    def test_update_keeps_hand_set_options(self):
+        """settings set by hand on the unit's line (no installer option for
+        them) are kept by an update: pdf's, translate's and radio's"""
+        if os.path.isdir(os.path.join(ag.Pdf.PDF_SRC, "epdf")):
+            self.assertEqual(self.run_ag("install", "pdf"), 0, self.err)
+        self.assertEqual(self.run_ag("install", "translate", "--engine", "stand-in"), 0, self.err)
+        self.assertEqual(self.run_ag("install", "radio"), 0, self.err)
+        hand = {"pdfgate": " --time 900 --jobs 2 --max-mb 128",
+                "translategate": " --workers 3 --time 90",
+                "radiogate": " --timeout 30 --jobs 3 --memory-mb 384"}
+        for name, more in list(hand.items()):
+            text = self.unit(name)
+            if text is None:
+                del hand[name]
+                continue
+            line = self.execstart(name)
+            self.pi.write(ag.unit_path(name), text.replace(line, line + more))
+        self.assertEqual(self.run_ag("update"), 0, self.err)
+        for name, more in hand.items():
+            for flag, value in zip(more.split()[::2], more.split()[1::2]):
+                self.assertIn("%s %s" % (flag, value), self.execstart(name), name)
+        # and a plain install writes none of them
+        self.assertNotIn("--timeout", self.execstart("radiogate").replace("--timeout 30", ""))
+
     def test_radio(self):
         self.pi.ufw = True
         self.assertEqual(self.run_ag("install", "eplay", "--allow", "192.168.1.50"), 0, self.err)
@@ -953,6 +977,27 @@ class ClaudeTest(Base):
         self.assertTrue(self.pi.read(self.conf).endswith("CLAUDE_ST_ARGS=--backend demo --tcp 0.0.0.0:2424\n"))
         self.run_ag("install", "claude", "--from", self.src)
         self.assertTrue(self.pi.read(self.conf).endswith("CLAUDE_ST_ARGS=--backend demo --tcp 0.0.0.0:2424\n"))
+
+    def test_from_this_copy(self):
+        """without --from: the bridge that comes with AERA-Gateway (claude-st/,
+        moved from ClaudeST), never a download"""
+        rc = self.run_ag("install", "claude", "--network", "--atari", "192.168.1.20", "--backend", "demo")
+        self.assertEqual(rc, 0, self.err)
+        here = os.path.join(ag.HERE, "claude-st")
+        got = sorted(os.listdir(self.pi.path("/opt/claude-st/bridge")))
+        self.assertEqual(got, ["atari_text.py", "backends.py", "claude_bridge.py", "requirements.txt"])
+        for f in got:
+            with open(os.path.join(here, "bridge", f), "rb") as a, open(self.pi.path("/opt/claude-st/bridge/" + f),
+                                                                         "rb") as b:
+                self.assertEqual(a.read(), b.read(), f)
+        with open(os.path.join(here, "claude-st.service")) as fh:
+            self.assertEqual(self.unit("claude-st"), fh.read())
+        self.assertTrue(self.pi.read("/opt/claude-st/SOURCE").startswith("AERA-Gateway %s (ClaudeST " % ag.VERSION))
+        self.assertEqual(self.run_ag("update"), 0, self.err)
+        self.assertTrue(self.pi.read(self.conf).endswith(
+            "CLAUDE_ST_ARGS=--backend demo --tcp 0.0.0.0:2323 --allow 192.168.1.20\n"))
+        self.assertEqual(self.run_ag("install", "claude", "--tag", "v2.1"), 2)
+        self.assertIn("comes with AERA-Gateway now", self.err)
 
     def test_serial_and_key(self):
         self.pi.answers = ["sk-ant-sid01-test"]
