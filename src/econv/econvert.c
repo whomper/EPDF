@@ -1040,6 +1040,13 @@ static void draw(const GRECT *clip, short start)
 
 	tree[BOX].ob_x = a.x;
 	tree[BOX].ob_y = a.y;
+	if (own_pens && start == BOX && clip->w >= a.w && clip->h >= a.h) {
+		/* a whole redraw: our two pens set again, should another program
+		   have set the palette meanwhile (the hub, 10 Nov 2026; the values
+		   to give back are the ones read once, at pens_take) */
+		vs_color(vdi_h, PEN_NAVY, pens_want[0]);
+		vs_color(vdi_h, PEN_ROW, pens_want[1]);
+	}
 	wind_get(win, WF_FIRSTXYWH, &r.x, &r.y, &r.w, &r.h);
 	graf_mouse(M_OFF, 0);
 	while (r.w && r.h) {
