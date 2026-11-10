@@ -12,6 +12,11 @@ Atari (ECal,     --plain HTTP, proxy form--> Pi  ecalgate  --HTTPS--> caldav.icl
 Atari (EFTP)     --plain FTP-->              Pi  eftpgate  --FTPS-->  ftp.example.org
                                                            --SFTP-->  my.server.net
 Atari (EWeb)     --plain HTTP, proxy form--> Pi  webgate   --HTTPS--> any web site
+Atari (EConvert, --a PDF, plain HTTP-->      Pi  pdfgate   (converted on the Pi, nothing onwards)
+       EPDF)
+Atari (EMail,    --text, plain HTTP-->       Pi  translategate (a local engine, nothing onwards)
+       EWeb, EPDF)
+Atari (EPlay)    --plain HTTP-->             Pi  radiogate --HTTP(S)--> any web radio station
 Atari (ClaudeST) --STinG or a serial cable-> Pi  claude-st --HTTPS--> claude.ai
 ```
 
@@ -26,11 +31,17 @@ of them.
 | `dav`    | ECal and EContact   | `ecalgate.py`              | 8180                                     |
 | `ftp`    | EFTP                | `eftpgate.py`              | 2121, and 30000-30099 for data           |
 | `web`    | EWeb                | `webgate.py`               | 8280                                     |
+| `pdf`    | EConvert and EPDF   | `pdfgate.py` and aerapdf   | 8380                                     |
+| `translate` | EMail, EWeb, EPDF | `translategate.py`        | 8480                                     |
+| `radio`  | EPlay               | `radiogate.py`             | 8580                                     |
 | `claude` | ClaudeST            | ClaudeST's bridge          | 2323 (or a serial cable)                 |
+
+What each one speaks (requests, answers, refusals, limits) is in
+[docs/SERVICES.md](../docs/SERVICES.md).
 
 This folder is AERA-Gateway's
 ([whomper/AERA-Gateway](https://github.com/whomper/AERA-Gateway)). EMail,
-ECal, EContact, EFTP, EWeb and ClaudeST carry a copy of it, as they carry
+ECal, EContact, EFTP, EWeb, EPDF, EPlay and ClaudeST carry a copy of it, as they carry
 `common/` from AERA-Atari: change it in AERA-Gateway, never in a copy.
 
 ## Setting it up
@@ -52,8 +63,16 @@ sudo aera-gateway install mail imap.gmail.com smtp.gmail.com pop.gmail.com --all
 sudo aera-gateway install dav --allow ATARI_IP
 sudo aera-gateway install ftp --allow ATARI_IP
 sudo aera-gateway install web --allow ATARI_IP
+sudo aera-gateway install pdf --allow ATARI_IP
+sudo aera-gateway install translate --allow ATARI_IP     (English and German; --languages en,de,he for more)
+sudo aera-gateway install radio --allow ATARI_IP
 sudo aera-gateway install claude --network --atari ATARI_IP
 ```
+
+`install pdf` builds EPDF's converter (a few minutes), `install translate`
+downloads the engine and its languages (about 290 MB; it needs a 64-bit
+system and 4 GB), and `install radio` adds ffmpeg. Before `update-pi.sh`
+has run once, `aera-gateway` is `~/AERA-Gateway/gateway/aera-gateway`.
 
 `install all --allow ATARI_IP --mail IMAP SMTP[:587] [POP3] [--browser]`
 does them all in turn: mail only with `--mail`, those already installed
@@ -65,10 +84,30 @@ for their tests. Each gateway runs as a service of its own (`emailgate`,
 with no access to the rest of the Pi, starts now and at every boot, and
 `install` prints what to type into the Atari program.
 
+In each Atari program, the Gateway's address (not its name: plain TOS
+with STinG can't always look names up on the home network) and its port:
+
+| Atari program      | Where                                  | What                                          |
+|--------------------|----------------------------------------|-----------------------------------------------|
+| EMail              | Options > Accounts                     | server `GATEWAY_IP`; IMAP 143 (or POP3 110), SMTP 587 |
+| ECal, EContact     | Settings > Connection                  | Gateway `GATEWAY_IP`, port 8180               |
+| EFTP               | Options > Settings > Secure            | Gateway `GATEWAY_IP`, port 2121               |
+| EWeb               | Settings > Secure                      | Gateway `GATEWAY_IP`, port 8280               |
+| EConvert, EPDF     | Gateway mode: Through the Gateway      | `GATEWAY_IP`, port 8380                       |
+| EMail, EWeb, EPDF  | Settings: Translate                    | Gateway `GATEWAY_IP`, port 8480               |
+| EPlay              | Settings: Gateway                      | `GATEWAY_IP`, port 8580                       |
+| ClaudeST           | Options > Settings > Network           | `GATEWAY_IP`, port 2323                       |
+
+On a Falcon or TT, EMail, ECal, EContact, EFTP and EWeb can make the
+secure connections themselves (their Falcon mode); the Gateway is still
+needed for SFTP, and for EWeb's smaller pictures, pens, compiled scripts,
+translation and snapshots.
+
 Afterwards:
 
 ```
-~/AERA-Gateway/update-pi.sh               the latest release, every gateway on the Pi updated, settings kept
+~/AERA-Gateway/update-pi.sh               the latest release, every service installed updated, settings kept
+                                          (it adds none: a new one is install SERVICE)
 aera-gateway status                       what runs, on which ports, with which settings
 sudo aera-gateway install dav --allow-local     change a setting; the others stay
 sudo aera-gateway remove ftp
@@ -391,10 +430,41 @@ machine, the system, the memory, and the engine's quality, speed (a
 piece of 2 KB, the size the apps send) and memory on the fixed sets in
 `tests/translate/`.
 
+## radio: EPlay's web radio
+
+```
+sudo aera-gateway install radio --allow ATARI_IP
+```
+
+EPlay plays MP3 stations by itself; through the Gateway it can play any
+station. A station may send MP3, AAC, Ogg or HLS (or a `.pls` or `.m3u`
+list of stations): radiogate passes MP3 on as it comes, and has ffmpeg
+convert the rest to MP3 (128 kbit/s, 44.1 kHz, stereo), so the Atari
+always gets MP3, with the songs' titles in it. HLS in fragmented MP4
+isn't taken. EPlay can also ask for a song's cover (`/art`) and, for a
+station that names no picture, its logo from radio-browser.info, a public
+directory of stations (`/logo`): both come as 64x64 JPEGs. For a logo, the
+Gateway sends that directory the station's address and name. EPlay's
+Find station searches that directory through the Gateway (`/search`).
+`install radio` installs ffmpeg if it isn't there; `install all`
+includes it.
+
+In EPlay on the Atari: the Gateway's IP address, port 8580. Check it from
+any browser on your network: `http://GATEWAY_IP:8580/version` answers
+"radiogate" and the ffmpeg it converts with. radiogate is EPlay's own
+(`radio/radiogate.py` there, copied here by `tools/sync-radio.sh` at the
+commit in `gateway/EPLAY`).
+
+Two stations play at once, and ffmpeg runs on one thread with 256 MB, at
+a low priority; a station on the home network needs `--allow-local`. The
+log says which Atari listened to which station's host, for how long and
+how much, never the station's path or the titles.
+
 ## claude: ClaudeST's bridge
 
-The bridge is ClaudeST's own (it changes with `CLAUDEST.PRG`);
-`aera-gateway` sets it up from the latest ClaudeST release, or from a
+The bridge comes with AERA-Gateway, in `gateway/claude-st/` (it moved
+here from ClaudeST on 9 Nov 2026; ClaudeST owns its protocol and reviews
+its changes). `aera-gateway` sets it up from there, or from a ClaudeST
 copy you name with `--from`:
 
 ```
@@ -409,8 +479,8 @@ Its settings stay in `/etc/claude-st/claude-st.env` and its chats in
 what the settings mean, and how to find the session key. In ClaudeST,
 Options > Settings > Network: the Gateway's IP address, port 2323. In a
 ClaudeST copy, `pi/install.sh` still works: it hands its options to
-`aera-gateway install claude`, which takes the bridge from ClaudeST's
-latest release, never from that copy.
+`aera-gateway install claude`, which takes the bridge that comes with
+AERA-Gateway, never from that copy.
 
 ## When something doesn't work
 
