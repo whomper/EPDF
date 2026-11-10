@@ -9,7 +9,10 @@ the standard 16 colours) from a book made here (pdfgen.py):
 OUTDIR/window.png, the screen, is made into docs/help/WINDOW.IMG, the
 guide's front page picture with its numbered parts (common/tools/
 helpfront.py thumb), and copied to docs/screenshot.png for the README.
-Commit both when the window changes.
+EConvert's window while a batch runs, from econv.py on Erez's
+configuration (256 colours: the navy band, the file under way's row in
+light blue), cut to the window: docs/econvert.png. Commit them when a
+window changes.
 """
 import os
 import shutil
@@ -74,8 +77,22 @@ def main(argv):
     os.makedirs(os.path.join(TOP, "docs", "help"), exist_ok=True)
     subprocess.run([sys.executable, os.path.join(TOP, "common", "tools", "helpfront.py"), "thumb", shot,
                     os.path.join(TOP, "docs", "help", "WINDOW.IMG"), ",".join(str(v) for v in CROP)] + BADGES, check=True)
-    print("docs/screenshot.png, docs/help/WINDOW.IMG")
+    econvert_shot(out)
+    print("docs/screenshot.png, docs/help/WINDOW.IMG, docs/econvert.png")
     return 0
+
+
+# EConvert's window on a 640 x 480 screen (centred), with its border
+EC_CROP = (55, 63, 587, 436)
+
+
+def econvert_shot(out):
+    import erz
+    from PIL import Image
+    work = os.path.join(out, "econv")
+    subprocess.run([sys.executable, os.path.join(HERE, "econv.py"), work, erz.MACHINE], check=True)
+    shot = os.path.join(work, erz.MACHINE.replace(":", "_"), "shots", "second.png")
+    Image.open(shot).convert("RGB").crop(EC_CROP).save(os.path.join(TOP, "docs", "econvert.png"), optimize=True)
 
 
 if __name__ == "__main__":

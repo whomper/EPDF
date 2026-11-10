@@ -5,7 +5,12 @@
 A PDF viewer for the Atari ST, STE, TT and Falcon, written in C for GEM: the text of a document on
 every machine, and, from a later stage, its pages as they were made on the TT and the Falcon.
 
-*Stage 1, the text view, is out as 0.1; page rendering on the TT and Falcon is a later stage.*
+*The text view runs on every Atari; on a TT or Falcon, View > Pages shows the pages as they were made.
+EConvert prepares PDFs so that EPDF opens them fast, on the Atari itself or through the Gateway.*
+
+<img src="docs/screenshot.png" width="640" alt="EPDF's window on a Falcon: a book's first page as reflowed text, with the status bar at the foot">
+
+<img src="docs/econvert.png" width="532" alt="EConvert's window in 256 colours converting two PDFs: the navy band, the file list with the one under way in light blue, the settings, and the file's and the batch's progress bars">
 
 **Highlights**
 
