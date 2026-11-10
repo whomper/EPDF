@@ -311,6 +311,37 @@ static char s_row[LROWS][NAME_W + 1], s_mark[LROWS][2], s_rest[LROWS][LTEXT + 1]
    screen black and white */
 static short p_grey, p_navy, p_row, p_dark, p_green, p_blue, p_red;
 
+/* In 256 colours the mock-up's own navy and light blue: two of the high pens
+   set to exactly those while EConvert runs and given back as they were when
+   it ends, the crash's way too (the guidelines' 5.2: an app's own theme
+   pens; the hub, 10 Nov 2026). Pens 0-15, which objects name, have neither;
+   the band and the file under way's row are painted over the tree with them
+   (paint256). */
+#define PEN_NAVY 250
+#define PEN_ROW 251
+static short own_pens, pens_was[2][3];
+static const short pens_want[2][3] = { { 0, 0, 392 }, { 824, 882, 1000 } };
+
+static void pens_take(void)
+{
+	if (planes != 8 || own_pens)
+		return;
+	vq_color(vdi_h, PEN_NAVY, pens_was[0]);
+	vq_color(vdi_h, PEN_ROW, pens_was[1]);
+	vs_color(vdi_h, PEN_NAVY, pens_want[0]);
+	vs_color(vdi_h, PEN_ROW, pens_want[1]);
+	own_pens = 1;
+}
+
+static void pens_give(void)
+{
+	if (!own_pens)
+		return;
+	vs_color(vdi_h, PEN_NAVY, pens_was[0]);
+	vs_color(vdi_h, PEN_ROW, pens_was[1]);
+	own_pens = 0;
+}
+
 static void colours(void)
 {
 	if (planes < 2) {
@@ -327,6 +358,7 @@ static void colours(void)
 	p_red = pen_nearest(vdi_h, 16, 784, 0, 0, 1);		/* failed */
 	if (p_row == p_grey)
 		p_row = 0;		/* (no light blue near: the row stays white, its mark says it) */
+	pens_take();
 }
 
 /* a TEDINFO's colour word: its frame and ground pen, its text's pen (the
@@ -946,6 +978,58 @@ static const char *icon_status(void)
 	return st;
 }
 
+/* words at x, y (the system font, from their top), pen ink, over what is there */
+static void words(short x, short y, const char *t, short ink)
+{
+	if (!*t)
+		return;
+	vswr_mode(vdi_h, 2);
+	vst_color(vdi_h, ink);
+	vst_effects(vdi_h, 0);
+	vst_alignment(vdi_h, 0, 5);
+	v_gtext_n(vdi_h, x, y, t, (short)strlen(t));
+	vswr_mode(vdi_h, 1);
+}
+
+static void box256(short x, short y, short w, short h, short pen)
+{
+	short p[4];
+
+	p[0] = x;
+	p[1] = y;
+	p[2] = (short)(x + w - 1);
+	p[3] = (short)(y + h - 1);
+	vswr_mode(vdi_h, 1);
+	vsf_interior(vdi_h, 1);
+	vsf_color(vdi_h, pen);
+	vsf_perimeter(vdi_h, 0);
+	vr_recfl(vdi_h, p);
+}
+
+/* 256 colours: the band in the mock-up's navy and the file under way's row
+   in its light blue, over what the AES drew (within the clip set) */
+static void paint256(void)
+{
+	short x, y, k;
+
+	if (!own_pens)
+		return;
+	objc_offset(tree, BAND1, &x, &y);
+	box256(x, y, tree[BAND1].ob_width, (short)(2 * tree[BAND1].ob_height), PEN_NAVY);
+	words(x, y, s_band1, 0);
+	words(x, (short)(y + tree[BAND1].ob_height), s_band2, 0);
+	if (!working || cur < ltop || cur >= ltop + LROWS || lsel == cur)
+		return;
+	k = (short)(cur - ltop);
+	objc_offset(tree, (short)(L0 + k), &x, &y);
+	box256(x, y, tree[L0 + k].ob_width, tree[L0 + k].ob_height, PEN_ROW);
+	words(x, y, s_row[k], 1);
+	objc_offset(tree, (short)(M0 + k), &x, &y);
+	words(x, y, s_mark[k], p_blue);
+	objc_offset(tree, (short)(G0 + k), &x, &y);
+	words(x, y, s_rest[k], p_dark);
+}
+
 static void draw(const GRECT *clip, short start)
 {
 	if (iconified) {
@@ -965,6 +1049,17 @@ static void draw(const GRECT *clip, short start)
 			short p[4];
 
 			objc_draw(tree, start, 8, c.x, c.y, c.w, c.h);
+			if (own_pens) {
+				short p[4];
+
+				p[0] = c.x;
+				p[1] = c.y;
+				p[2] = (short)(c.x + c.w - 1);
+				p[3] = (short)(c.y + c.h - 1);
+				vs_clip(vdi_h, 1, p);
+				paint256();
+				vs_clip(vdi_h, 0, p);
+			}
 			if (planes >= 4 && gl_hchar >= 16) {
 				/* the colour icon over the band (a raster copy keeps to no
 				   clip: drawn where its whole square is in this one) */
@@ -1610,6 +1705,7 @@ static void crash_quit(const char *what)
 	}
 	if (has_menu)
 		menu_bar(menu.tree, 0);
+	pens_give();		/* (the two pens as they were) */
 	v_clsvwk(vdi_h);
 	appl_exit();
 }
@@ -1774,6 +1870,7 @@ int main(void)
 	if (has_menu)
 		menu_bar(menu.tree, 0);
 	av_exit();
+	pens_give();		/* (the two pens as they were) */
 	v_clsvwk(vdi_h);
 	appl_exit();
 	return 0;
