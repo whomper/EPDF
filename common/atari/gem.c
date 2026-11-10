@@ -634,6 +634,16 @@ short aes_count(void)
 	return global[1];
 }
 
+/* an AES that runs several programs at once: ap_count -1, or the MagX or MiNT cookie where a version of the AES
+   (MagiC's) reports something else in ap_count: evnt_multi_'s double click needs it (EFTP, 9 Nov) */
+static int aes_multi(void)
+{
+	static short k = -1;		/* worked out once: the cookies don't change while the program runs, and a cookie walk is a Supexec call */
+	if (k < 0)
+		k = aes_count() < 0 || get_cookie(0x4D616758L) || get_cookie(0x4D694E54L);	/* MagX, MiNT */
+	return k;
+}
+
 /* the GEM file selector; the titled version needs AES 1.4 (TOS 1.04) */
 short fsel_exinput(char *path, char *name, short *button, const char *title)
 {
@@ -959,12 +969,18 @@ short evnt_multi_(short flags, short clicks, short mask, short state,
 	for (;;) {
 		short last = arr_win, which;	/* only the very next event can be its echo */
 		u32 t0 = last >= 0 ? tos_ms() : 0;
-		short two = clicks == 0x101 && aes_count() < 0;
+		/* A wait for the left button's press, asked as 0x101 or as the plain 1, 1, 1 that filepick's, EFTP's
+		   and the guidelines' 5.8 window loops ask: XaAES drops a double click whole for either (the hub's
+		   rig, 9 Nov 2026). Asked for two as 0x102, the plain 1, 1, 1's state 1 makes it hand back the
+		   same press every 10 ms; 0x102 with the state 0 (what the callers of 0x101 ask: mask 3, state 0)
+		   gives each press once, with its count. A wait for a release (state 0) keeps its count. */
+		short two = aes_multi() && (clicks == 0x101 || (clicks == 1 && mask == 1 && state == 1));
+		short st = two && clicks == 1 ? 0 : state;
 		if (flags & MU_MESAG)
 			arr_win = -1;
 		if ((flags & MU_KEYBD) && kq_state < 0)
 			kq_init();
-		which = evnt_multi_aes(flags, two ? 0x102 : clicks, mask, state, timer, msg, ev);
+		which = evnt_multi_aes(flags, two ? 0x102 : clicks, mask, st, timer, msg, ev);
 		if (which & MU_KEYBD)
 			kq_fix(ev);
 		if (two && (which & MU_BUTTON))
