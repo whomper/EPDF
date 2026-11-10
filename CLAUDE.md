@@ -332,6 +332,14 @@ at first. This section is kept up to date: the build, the tests, what a release 
   pages"): a page with colour gets /Colour only, one without its /Mono; EPDF on a mono screen
   shows /Colour dithered. Through the Gateway pages=colouronly (AERA-Gateway 1.42, EPDF 2.9;
   gateway.py with GW_PAGES=colouronly).
+  2.11 (Erez's photos and choices, 10 Nov 2026: "Both", "Band on the page"): a converted copy's
+  View > Pages on a Falcon/TT in colour is drawn sharp from its original by render.ovl over the stored
+  page (doc.c's sharp_pages, pdbl.stand, doc_stand_in; the stored one decoded first, pics_next),
+  where memory holds both and the canvas whole (a 4 MB Falcon keeps the stored page); "Drawing a
+  sharper page... 40%" across the page's top in view and the zoomed view's (sharper_band,
+  win_band_tick). The converter's 16-colour page snaps a colour near a pen (quant.c snap_of, as
+  render.ovl's snap_pen): no pattern over greys. With 6 MB free at the start 24 pictures are kept
+  (pics_room; past 8 only while 2 MB stay free): switching Pages and Text decodes nothing again.
 - **The road to 1.0, and EConvert (Erez, 31 Oct 2026):**
   - **1.0 is the text view, complete:** 0.2 speed on an 8 MHz ST (the guidelines' times), 0.3 big
     documents on ST-1 (streamed content, pictures' memory), 0.4 pictures (DSP JPEG on the Falcon, the

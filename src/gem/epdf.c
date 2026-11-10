@@ -1396,6 +1396,7 @@ static void progress(void)
 		snprintf(w, sizeof w, "Reading page %ld of %ld", rp + 1, n);
 		win_progress(1, w, doc_read() * 1000L + pm, n * 1000L);
 	} else if (pic) {
+		win_band_tick();	/* (the sharper page's band, View > Pages and a zoom) */
 		if (doc_pic_drawing())
 			snprintf(w, sizeof w, "Drawing page %ld / %ld", pg + 1, n);
 		else
@@ -1520,6 +1521,7 @@ int main(void)
 		}
 	}
 	crash_install(start_dir, "EPDF", app_version);
+	pics_room();
 	crash_cleanup = crash_quit;
 	help_init();
 	twin_init("EPDF");		/* bgwork asks it; EPDF has no accessory */
