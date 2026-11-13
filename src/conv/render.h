@@ -51,6 +51,12 @@ typedef struct {
 	   2026) */
 	long p_ctot, p_itot, p_idone, p_icur, p_polls, p_ih;
 	int p_inimg;
+	/* a page drawn in bands (item 3, 13 Nov 2026): the picture the last
+	   band decoded, kept for the next (one picture spanning several
+	   bands was decoded in each: page 3 of the showcase 18 times) */
+	void *ic_pic;			/* (a PIC: pic.h) */
+	long ic_obj;
+	int ic_w, ic_h;
 } RPAGE;
 
 /* the fonts are kept from page to page: render_init once, render_done at

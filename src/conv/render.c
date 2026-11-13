@@ -1163,6 +1163,26 @@ static void image_hook(void *u, long obj, const fx *ctm)
 	if (h < 1) h = 1;
 	if (w > 2048) w = 2048;
 	if (h > 2048) h = 2048;
+	if (r->c.rows < r->c.h) {
+		/* in bands: a picture this band doesn't reach isn't decoded (its
+		   rows on the device as rc_image takes them, a row's margin) */
+		int32_t y0 = m[5], y1 = m[5], ys[3] = { m[5] + m[1], m[5] + m[3], m[5] + m[1] + m[3] };
+		int k;
+
+		for (k = 0; k < 3; k++) {
+			if (ys[k] < y0) y0 = ys[k];
+			if (ys[k] > y1) y1 = ys[k];
+		}
+		if ((y1 >> 16) + 2 <= r->c.y0 || (y0 >> 16) - 1 >= r->c.y0 + r->c.rows) {
+			r->p_idone += pd_int(r->d, o, "Length", 0);	/* (counted as done: render_progress) */
+			return;
+		}
+		if (r->ic_pic && r->ic_obj == obj && r->ic_w == (int)w && r->ic_h == (int)h) {
+			p = (PIC *)r->ic_pic;	/* (the band before's: decoded once) */
+			r->p_idone += pd_int(r->d, o, "Length", 0);
+			goto draw;
+		}
+	}
 	if (cv_turn)
 		cv_turn();
 	t0 = render_clock ? render_clock() : 0;
@@ -1180,10 +1200,26 @@ static void image_hook(void *u, long obj, const fx *ctm)
 		r->image_ms += (long)(render_clock() - t0);
 	if (cv_turn)
 		cv_turn();
+	if (!p && r->ic_pic) {
+		/* (the kept one given back for the memory, and tried again) */
+		pic_free((PIC *)r->ic_pic);
+		r->ic_pic = NULL;
+		p = cv_image(r->d, obj, (int)w, (int)h, &why);
+	}
 	if (!p) {
 		r->images_missed++;
 		return;
 	}
+	if (r->c.rows < r->c.h) {
+		/* kept for the next band, the one before let go */
+		if (r->ic_pic)
+			pic_free((PIC *)r->ic_pic);
+		r->ic_pic = p;
+		r->ic_obj = obj;
+		r->ic_w = (int)w;
+		r->ic_h = (int)h;
+	}
+draw:
 #ifdef RENDER_TRACE
 	fprintf(stderr, "image %ld %ldx%ld -> %dx%d px[mid] %04x m %d %d %d %d %d %d\n", obj, sw, sh, p->w, p->h,
 		p->px[(long)p->w * p->h / 2], m[0] >> 16, m[1] >> 16, m[2] >> 16, m[3] >> 16, m[4] >> 16, m[5] >> 16);
@@ -1203,7 +1239,8 @@ static void image_hook(void *u, long obj, const fx *ctm)
 		}
 	} else
 		rc_image(&r->c, p->px, NULL, p->w, p->h, m, 0, 0, &g->clip);
-	pic_free(p);
+	if ((void *)p != r->ic_pic)
+		pic_free(p);
 }
 
 /* ------------------------------------------------------------------ the page */
@@ -1300,6 +1337,8 @@ void render_done(RPAGE *r)
 	}
 	rc_free(&r->c);
 	free(r->area);
+	if (r->ic_pic)
+		pic_free((PIC *)r->ic_pic);
 	memset(r, 0, sizeof *r);
 }
 
@@ -1318,6 +1357,10 @@ int render_page_from(RPAGE *r, long n, int width, int y0)
 	PTEXT t;
 	PDRAW dr;
 
+	if (y0 == 0 && r->ic_pic) {
+		pic_free((PIC *)r->ic_pic);	/* (a new page: the kept picture let go) */
+		r->ic_pic = NULL;
+	}
 	pdf_page_reset(r->d);
 	pg = pdf_page(r->d, n, &res, &box, &rot);
 	if (!pg)
