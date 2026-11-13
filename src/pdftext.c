@@ -1799,10 +1799,20 @@ moved:
 
 static void tm_translate(IX *x, fx tx, fx ty)
 {
-	fx t[6] = { FX_ONE, 0, 0, FX_ONE, tx, ty };
+	fx *l = x->tlm;
 
-	mat_mul(t, x->tlm, x->tlm);
-	mat_copy(x->tm, x->tlm);
+	if (l[1] == 0 && l[2] == 0) {
+		/* [1 0 0 1 tx ty] x tlm with tlm unturned, a page's text nearly
+		   always (Td a word): mat_mul's own sums for it, the rest of tlm as
+		   it is (13 Nov 2026, the hub's item 2) */
+		l[4] = fxmul(tx, l[0]) + l[4];
+		l[5] = fxmul(ty, l[3]) + l[5];
+	} else {
+		fx t[6] = { FX_ONE, 0, 0, FX_ONE, tx, ty };
+
+		mat_mul(t, l, l);
+	}
+	mat_copy(x->tm, l);
 }
 
 static int op_grow(IX *x);
