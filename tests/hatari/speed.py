@@ -140,6 +140,11 @@ def run(work, machine):
                 break
             time.sleep(1)
         con = r.console()
+        # every wait fails the run when it times out (the hub, 13 Nov 2026:
+        # EFTP's row had timed the wrong folder since 1.76)
+        waits = []
+        if "EPDF opened" not in con:
+            waits.append("the book wasn't opened within 60 s")
         s = con.find("EPDF started")
         # (the document opens in the reader's slices since 0.5: the start
         # is until its window is drawn, after "opened")
@@ -163,12 +168,26 @@ def run(work, machine):
         first = os.path.join(r.shots, "01-a-line-scrolled-pages-being-read.png")
         r.act("a page scrolled, pages being read", speed.PAGE, lambda: r.key("shift+Down"))
         r.act("next page", speed.WINDOW, lambda: r.key("ctrl+Right"))
-        time.sleep(120 if machine.startswith("ST") else 60)    # the reading done
+        # the reading done: the book's 30 pages each logged ("EPDF page N")
+        for _ in range(600):
+            if r.console().count("EPDF page ") >= 30:
+                break
+            time.sleep(1)
+        else:
+            waits.append("the book's 30 pages weren't read within 600 s")
         r.act("a line scrolled", speed.LINE, lambda: r.key("Down"))
         r.act("a line scrolled up", speed.LINE, lambda: r.key("Up"))
         r.act("a page scrolled", speed.PAGE, lambda: r.key("shift+Down"))
         r.act("the last page", speed.WINDOW, lambda: r.key("shift+ctrl+Home"))
         r.act("the start", speed.WINDOW, lambda: r.key("Home"))
+        # each row opens what it says: the window changed (the last page's
+        # key had gone nowhere on TOS 4.04 and EmuTOS until 2.14, its row
+        # timing nothing)
+        for a, b, what in (("02-a-page-scrolled-pages-being-read", "03-next-page", "next page"),
+                           ("06-a-page-scrolled", "07-the-last-page", "the last page"),
+                           ("07-the-last-page", "08-the-start", "the start")):
+            if differ(os.path.join(r.shots, a + ".png"), os.path.join(r.shots, b + ".png")) <= 0:
+                waits.append("%s: the window didn't change" % what)
         # 5.8: the selection's first cell on the press, nothing more on the
         # release where it was; a double click's word on its second release
         r.act("a press in the text", speed.KEY, lambda: mouse(r, 200, 160, "mousedown 1"))
@@ -189,6 +208,9 @@ def run(work, machine):
                  menu_act(r, "About box", r.about, 36, 28)]
         r.act("About box closed", speed.WINDOW, lambda: r.key("Escape"))
         bad = r.report()
+        for w in waits:
+            print("  FAILED: %s" % w)
+        bad |= bool(waits)
         print("\nthe status bar's job as the pages were read: %s  (%s)" % (row_shown, row))
         print("\nheld still a second (5.8): pixels held against after the release, before against after")
         for what, ha, ba in held:
