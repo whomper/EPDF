@@ -1254,11 +1254,17 @@ static void key(short kstate, short k)
 	/* the AES makes these itself from Control with the arrows and
 	   Clr/Home, and gives them without Control in kstate; Shift may be gone
 	   too when EPDF was busy, so Shift+^Home and ^End both mean the last */
+	/* TOS 4.04 gives Shift+^Clr/Home with a character ('7': 0x7737,
+	   measured in Hatari, 13 Nov 2026), so it is taken by its scan code
+	   alone; it went nowhere before */
+	if (scan == 0x77) {
+		command(shift(kstate) ? CMD_LAST : CMD_FIRST);
+		return;
+	}
 	if (KEY_ASCII(k) == 0) {
 		switch (scan) {
 		case 0x73: command(CMD_PREV); return;		/* ^Left */
 		case 0x74: command(CMD_NEXT); return;		/* ^Right */
-		case 0x77: command(shift(kstate) ? CMD_LAST : CMD_FIRST); return;	/* ^Clr/Home */
 		case 0x75: command(CMD_LAST); return;		/* ^End, where a keyboard has it */
 		}
 	}
