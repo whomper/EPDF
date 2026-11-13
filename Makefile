@@ -162,13 +162,19 @@ $(eval $(call ATARI_BUILD,m68030lj))
 $(eval $(call ATARI_BUILD,m68000ec))
 
 OBJS = $(patsubst %.c,%.o,$(ATARI_SRC))
+# the reading's hot loops, linked first after the start-up code, so their
+# place in a 68030's cache doesn't move when other code grows (the
+# guidelines' Speed, link order: Erez, 13 Nov 2026). show_text and the
+# content loop, the parser, inflate.
+HOT_OBJS = src/pdftext.o src/pdfobj.o common/src/inflate.o
 binary:
 	mkdir -p binary
 binary/MEASURE.PRG: XCPU = -m68000 -mstrict-align -fdisable-tree-bswap
 binary/MEASURE.PRG: $(addprefix build/m68000/,$(OBJS)) build/m68000/crt0.o build/m68000/nf.o build/m68000/inflate_fast.o common/atari/link.ld | binary
 	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68000/measure.elf \
-	  build/m68000/crt0.o build/m68000/nf.o build/m68000/inflate_fast.o $(addprefix build/m68000/,$(OBJS)) -lgcc
+	  build/m68000/crt0.o build/m68000/nf.o build/m68000/inflate_fast.o \
+	  $(addprefix build/m68000/,$(HOT_OBJS) $(filter-out $(HOT_OBJS),$(OBJS))) -lgcc
 	python3 common/tools/elf2tos.py build/m68000/measure.elf $@
 binary/MEAS30.PRG: XCPU = -m68030 -msoft-float
 binary/MEAS30.PRG: $(addprefix build/m68030/,$(OBJS)) build/m68030/crt0.o build/m68030/nf.o build/m68030/inflate_fast.o common/atari/link.ld | binary
@@ -436,7 +442,11 @@ build/m68000/crash_s.o: common/atari/crash.S | build/m68000
 	$(XCC) $(XCPU) -c -o $@ $<
 binary/EPDF.PRG: XCPU = -m68000 -mstrict-align -fdisable-tree-bswap
 EPDF_OBJS = $(GEM_OBJ) build/m68000/inflate_fast.o $(addprefix build/m68000/,$(patsubst %.c,%.o,$(RT_C))) $(addprefix build/m68000/,$(patsubst %.c,%.o,$(PDF_SRC) src/pdfio_tos.c $(COMMON_SRC))) $(addprefix build/m68000/,$(patsubst %.c,%.o,$(BSSL_SRC)))
-binary/EPDF.PRG: $(EPDF_OBJS) build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o common/atari/link.ld | binary
+# the order they're linked in: the hot loops first (HOT_OBJS), in every
+# build of EPDF.PRG, so the rigs time the layout that ships
+EPDF_HOT = build/m68000/inflate_fast.o $(addprefix build/m68000/,$(HOT_OBJS))
+EPDF_ORDER = $(EPDF_HOT) $(filter-out $(EPDF_HOT),$(EPDF_OBJS))
+binary/EPDF.PRG: $(EPDF_ORDER) build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o common/atari/link.ld | binary
 	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68000/epdf.elf \
 	  build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o $(filter-out %/crt0_epdf.o %/nf.o %/crash_s.o %/coro.o %/link.ld,$(filter build/%,$^)) -lgcc
@@ -540,7 +550,7 @@ build/aprof/gem.o: common/atari/gem.c $(HDRS) | build
 build/aprof/EPDF.PRG: binary/EPDF.PRG build/aprof/gem.o
 	$(AES_LINK) -o build/aprof/epdf.elf \
 	  build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o \
-	  $(filter-out build/m68000/common/atari/gem.o,$(filter build/%.o,$(EPDF_OBJS))) \
+	  $(filter-out build/m68000/common/atari/gem.o,$(filter build/%.o,$(EPDF_ORDER))) \
 	  build/aprof/gem.o -lgcc
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/aprof/epdf.elf $@
 # the same with textwin.c's marks ("EPDF t copy 35", "t rows 15"...), for a breakdown
@@ -550,7 +560,7 @@ build/times/textwin.o: src/gem/textwin.c $(HDRS) | build
 build/times/EPDF.PRG: binary/EPDF.PRG build/aprof/gem.o build/times/textwin.o
 	$(AES_LINK) -o build/times/epdf.elf \
 	  build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o \
-	  $(filter-out build/m68000/common/atari/gem.o build/m68000/src/gem/textwin.o,$(filter build/%.o,$(EPDF_OBJS))) \
+	  $(filter-out build/m68000/common/atari/gem.o build/m68000/src/gem/textwin.o,$(filter build/%.o,$(EPDF_ORDER))) \
 	  build/aprof/gem.o build/times/textwin.o -lgcc
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/times/epdf.elf $@
 speed-test: build/aprof/EPDF.PRG binary/LAUNCH.PRG
@@ -580,5 +590,5 @@ build/stk/EPDF.PRG: binary/EPDF.PRG build/stk/doc.o
 	$(XCC) -m68000 -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/stk/epdf.elf \
 	  build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o \
-	  $(filter-out build/m68000/src/gem/doc.o,$(filter build/%.o,$(EPDF_OBJS))) build/stk/doc.o -lgcc
+	  $(filter-out build/m68000/src/gem/doc.o,$(filter build/%.o,$(EPDF_ORDER))) build/stk/doc.o -lgcc
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/stk/epdf.elf $@
