@@ -1114,6 +1114,24 @@ static void glyph_hook(void *u, long prog, int kind, const char *base, int comp,
 }
 
 /* ------------------------------------------------------------------ pictures */
+/* padding in a branch the whole page never takes: the code after it at the
+   same place in a 68030's instruction cache (256 bytes, by its address mod
+   256) as before the banded page's code came (item 3, 13 Nov 2026: whole
+   pages on Falcon-4:256 2-4 % slower from the shift alone); see
+   tools/rpad.py */
+#ifndef RPAD_A
+#define RPAD_A 248
+#define RPAD_B 14
+#define RPAD_C 208
+#endif
+#define RPAD_S2(n) #n
+#define RPAD_S(n) RPAD_S2(n)
+#if defined(__m68k__) || defined(__mc68000__)
+#define RPAD(n) __asm__ volatile("bra.w 1f\n\t.skip " RPAD_S(n) "\n1:")
+#else
+#define RPAD(n) ((void)0)		/* (the host's build: no 68030 cache) */
+#endif
+
 static RPAGE *poll_page;		/* the page whose picture is being decoded */
 
 int render_pic_poll(void)
@@ -1164,6 +1182,7 @@ static void image_hook(void *u, long obj, const fx *ctm)
 	if (w > 2048) w = 2048;
 	if (h > 2048) h = 2048;
 	if (r->c.rows < r->c.h) {
+		RPAD(RPAD_A);
 		/* in bands: a picture this band doesn't reach isn't decoded (its
 		   rows on the device as rc_image takes them, a row's margin) */
 		int32_t y0 = m[5], y1 = m[5], ys[3] = { m[5] + m[1], m[5] + m[3], m[5] + m[1] + m[3] };
@@ -1337,8 +1356,10 @@ void render_done(RPAGE *r)
 	}
 	rc_free(&r->c);
 	free(r->area);
-	if (r->ic_pic)
+	if (r->ic_pic) {
+		RPAD(RPAD_B);
 		pic_free((PIC *)r->ic_pic);
+	}
 	memset(r, 0, sizeof *r);
 }
 
@@ -1358,6 +1379,7 @@ int render_page_from(RPAGE *r, long n, int width, int y0)
 	PDRAW dr;
 
 	if (y0 == 0 && r->ic_pic) {
+		RPAD(RPAD_C);
 		pic_free((PIC *)r->ic_pic);	/* (a new page: the kept picture let go) */
 		r->ic_pic = NULL;
 	}
