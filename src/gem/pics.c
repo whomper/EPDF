@@ -635,9 +635,19 @@ int pics_rows(PDOC *d, PICE *e, int nplanes, PIC_PAL *pl, int *why)
 	}
 	sink = &k;
 	if (e->obj >= PICS_PAGE) {
-		/* a page drawn as printed: its rows dithered as a photo's */
-		how = pics_page_rows ? pics_page_rows(e->obj - PICS_PAGE, e->w, e->h, sink_row, sink_planes,
-						      nplanes <= 8 && !e->flip ? pl : NULL, nplanes, &k, why) : -1;	/* (render.ovl's pens: 256 colours too, Erez's) */
+		/* a page drawn as printed: its rows dithered as a photo's. Its
+		   bitmap taken first: render.ovl sizes its canvas from what is
+		   left (in bands where it must). Taken at the first row, it came
+		   after the canvas: on a 4 MB Falcon in 256 colours it was refused
+		   once the page was drawn, the page drawn again from 0 % and
+		   refused again (Erez's sharper page, 50 % to 80 % to 0 %,
+		   13 Nov 2026); without it the page isn't drawn at all */
+		if (!bm_first(&k)) {
+			*why = PIC_MEMORY;	/* (doc.c gives the text store's memory back and tries once more) */
+			how = 0;
+		} else
+			how = pics_page_rows ? pics_page_rows(e->obj - PICS_PAGE, e->w, e->h, sink_row, sink_planes,
+							      nplanes <= 8 && !e->flip ? pl : NULL, nplanes, &k, why) : -1;	/* (render.ovl's pens: 256 colours too, Erez's) */
 		if (how < 0) {
 			*why = PIC_UNSUPPORTED;
 			how = 0;

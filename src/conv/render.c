@@ -1312,7 +1312,13 @@ int render_page_from(RPAGE *r, long n, int width, int y0)
 	dr.image = image_hook;
 	ptext_init(&t);
 	t.draw = &dr;
-	k = pdf_page_text(r->d, n, &t);
+	{
+		long oom = r->d->st.oom;
+
+		k = pdf_page_text(r->d, n, &t);
+		if (r->whole_only && r->d->st.oom != oom)
+			k = -1;			/* (cut short: memory refused on the way) */
+	}
 	ptext_free(&t);
 	rp_free(&st->path);
 	free(st);

@@ -86,6 +86,7 @@ static void *rv_open(const char *path, const char *fontdir, long font_budget, lo
 	}
 	render_font_budget = font_budget;
 	x->r.canvas_max = canvas_max;
+	x->r.whole_only = 1;		/* (a page cut short: EPDF keeps its stored page or says so) */
 	return x;
 }
 

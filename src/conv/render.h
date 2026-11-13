@@ -40,6 +40,10 @@ typedef struct {
 	long image_ms;			/* the page's pictures' decode, in render_clock's ms */
 	long canvas_max;		/* set by the caller: the canvas's most bytes (0 any): a page
 				   taller is drawn a band at a time (render_page_from) */
+	int whole_only;			/* set by the caller: a page whose content met a memory
+					   refusal (its text or drawing cut short) is a failure, -1,
+					   not a page with parts missing (render.ovl: EPDF keeps its
+					   stored page, 13 Nov 2026); 0: drawn as far as it went */
 } RPAGE;
 
 /* the fonts are kept from page to page: render_init once, render_done at
