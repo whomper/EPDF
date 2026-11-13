@@ -1516,8 +1516,10 @@ int main(void)
 	/* stage 2: render.ovl and the standard fonts beside the program */
 	path_join(rdraw_path, sizeof rdraw_path, start_dir, "render.ovl");
 	path_join(doc_font_dir, sizeof doc_font_dir, start_dir, "fonts");
-	{
-		/* (else EConvert's, as the release's zip carries them: econvert\fonts) */
+	if (rdraw_machine()) {
+		/* (else EConvert's, as the release's zip carries them:
+		   econvert\fonts; looked for only where render.ovl can use them,
+		   a 68020 or better: an ST touches no file it can't use, 6.5) */
 		char t[220];
 
 		path_join(t, sizeof t, doc_font_dir, "sans.ttf");

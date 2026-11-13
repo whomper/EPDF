@@ -124,6 +124,7 @@ static void job(void)
 
 static char temp_dir[160];
 static int temp_k;
+static char temp_made[2];	/* a copy written there this session: only those are deleted (files.py, 6.5) */
 
 void gw_set_temp_dir(const char *dir)
 {
@@ -155,9 +156,13 @@ void gw_forget(const char *open_now)
 	int k;
 
 	for (k = 0; k < 2; k++) {
+		if (!temp_made[k])
+			continue;	/* (none written: nothing to look for on the disk) */
 		temp_name(k, p, sizeof p);
-		if (!open_now || strcasecmp(p, open_now))
+		if (!open_now || strcasecmp(p, open_now)) {
 			Fdelete(p);
+			temp_made[k] = 0;
+		}
 	}
 }
 
@@ -188,6 +193,7 @@ int gw_start(const char *pdf, const char *open_now, const char *h, unsigned shor
 		temp_k ^= 1;
 		temp_name(temp_k, out_path, sizeof out_path);
 	}
+	temp_made[temp_k] = 1;		/* (written from now on: deleted when let go) */
 	strncpy(host, h, sizeof host - 1);
 	port = p;
 	busy = 1;
