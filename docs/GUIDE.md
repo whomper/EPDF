@@ -150,7 +150,8 @@ pdf --allow ATARI_IP` sets it up. On the Atari you need STinG, MiNTnet or MagiC-
 - **Options > Open on the Gateway:** ticked, a PDF you open that isn't converted yet is shown as it
   is, while the Gateway converts it; the status bar says "Converting on the Gateway" (or "Waiting
   for the Gateway", while it converts another Atari's), and when the converted PDF has come, EPDF
-  shows it in its place, with View > Pages. Nothing is written beside the PDF: the converted PDF
+  shows it in its place, with View > Pages (on a screen of 16 colours or more the pages in colour
+  only: a page without colour comes in black and white). Nothing is written beside the PDF: the converted PDF
   is kept only while it is open (beside `EPDF.PRG`); **File > Save Optimised...** keeps it where
   you choose. Esc stops it.
 

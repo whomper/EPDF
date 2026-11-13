@@ -96,11 +96,11 @@ static void job(void)
 		int pw, iw;
 
 		memset(&o, 0, sizeof o);
-		/* the pages in colour where the screen has 16 colours or more
-		   ("colour" keeps the mono page too: the copy still reads on an
-		   ST); mono had been asked for on every screen, so a Falcon
-		   showed the Gateway's pages in black and white (Erez, 7 Nov 2026) */
-		o.pages = planes >= 4 ? "colour" : "mono";
+		/* on a screen of 16 colours or more only the pages in colour
+		   ("colouronly": a page with colour gets its /Colour, one without
+		   its /Mono; nothing made twice, AERA-Gateway 1.42 on; Erez, 13
+		   Nov 2026); a mono screen asks for the mono pages (7 Nov 2026) */
+		o.pages = planes >= 4 ? "colouronly" : "mono";
 		o.photos = "indexed";
 		o.pictures = "screen";
 		sizes(&pw, &iw);
