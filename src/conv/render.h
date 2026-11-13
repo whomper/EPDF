@@ -44,6 +44,13 @@ typedef struct {
 					   refusal (its text or drawing cut short) is a failure, -1,
 					   not a page with parts missing (render.ovl: EPDF keeps its
 					   stored page, 13 Nov 2026); 0: drawn as far as it went */
+	/* how far through the page (render_progress): its content streams'
+	   and its pictures' stored bytes, as the page starts, and the
+	   pictures' read so far (a page that is a scan sat at its content's
+	   end, 40 %, while the picture took most of the time: Erez, 13 Nov
+	   2026) */
+	long p_ctot, p_itot, p_idone, p_icur, p_polls, p_ih;
+	int p_inimg;
 } RPAGE;
 
 /* the fonts are kept from page to page: render_init once, render_done at
@@ -68,5 +75,11 @@ typedef struct {
 	RCLIP px;			/* the same in the canvas's pixels */
 } RDRAWING;
 int render_drawings(const RPAGE *r, RDRAWING *out, int max);
+/* the page being drawn: how far, 0 to 1000, its content and its pictures
+   by their stored bytes (render.ovl's progress) */
+int render_progress(const RPAGE *r);
+/* pic.h's pic_poll for a renderer that turns (render.ovl's): the picture
+   being decoded counted for render_progress, then cv_turn's turn */
+int render_pic_poll(void);
 
 #endif

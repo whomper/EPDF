@@ -73,6 +73,8 @@ static void *rv_open(const char *path, const char *fontdir, long font_budget, lo
 	}
 	stopped = 0;
 	cv_turn = turn;
+	pic_poll = render_pic_poll;	/* (a picture's decoding turns too, counting its rows: it ran without a turn, 47 s on
+					   a scanned page, the band at 40 %; 13 Nov 2026) */
 	if (pdf_open_hook(&x->d, path, reader_turn, NULL)) {
 		snprintf(err, (size_t)errlen, "%s", x->d.err[0] ? x->d.err : "can't be read");
 		free(x);
@@ -109,6 +111,8 @@ static int rv_page(void *doc, long n, int width, int y0, ROVL_PAGE *out)
 	stopped = 0;
 	x->d.stopping = 0;
 	cv_turn = turn;
+	pic_poll = render_pic_poll;	/* (a picture's decoding turns too, counting its rows: it ran without a turn, 47 s on
+					   a scanned page, the band at 40 %; 13 Nov 2026) */
 	render_clock = ms;
 	pic_dsp = dsp_on && dspjpeg_present() ? &dspjpeg_port_jpeg : NULL;
 	rc = render_page_from(&x->r, n, width, y0);
@@ -157,7 +161,7 @@ static void rv_close(void *doc)
 
 static int rv_progress(void *doc)
 {
-	return doc ? ((RDOC *)doc)->d.page_prog : 0;
+	return doc ? render_progress(&((RDOC *)doc)->r) : 0;
 }
 
 static int rv_pens(void *doc, const unsigned char (*pal)[3], int n, int planes, int y, int rows, unsigned char *out)

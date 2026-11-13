@@ -1114,6 +1114,15 @@ static void glyph_hook(void *u, long prog, int kind, const char *base, int comp,
 }
 
 /* ------------------------------------------------------------------ pictures */
+static RPAGE *poll_page;		/* the page whose picture is being decoded */
+
+int render_pic_poll(void)
+{
+	if (poll_page)
+		poll_page->p_polls++;
+	return cv_turn ? !cv_turn() : 1;	/* (cv_turn: 1 when it says stop) */
+}
+
 static void image_hook(void *u, long obj, const fx *ctm)
 {
 	RS *s = u;
@@ -1157,7 +1166,16 @@ static void image_hook(void *u, long obj, const fx *ctm)
 	if (cv_turn)
 		cv_turn();
 	t0 = render_clock ? render_clock() : 0;
+	/* (how far it is: its rows by render_pic_poll's calls, render_progress) */
+	r->p_icur = pd_int(r->d, o, "Length", 0);
+	r->p_polls = 0;
+	r->p_ih = h;		/* (the rows it is made at: the reader's calls count those) */
+	r->p_inimg = 1;
+	poll_page = r;
 	p = cv_image(r->d, obj, (int)w, (int)h, &why);
+	poll_page = NULL;
+	r->p_inimg = 0;
+	r->p_idone += r->p_icur > 0 ? r->p_icur : 0;
 	if (render_clock)
 		r->image_ms += (long)(render_clock() - t0);
 	if (cv_turn)
@@ -1189,6 +1207,66 @@ static void image_hook(void *u, long obj, const fx *ctm)
 }
 
 /* ------------------------------------------------------------------ the page */
+/* a page's content streams' and pictures' stored bytes (render_progress's
+   whole): Contents, a stream or an array of them; the image XObjects its
+   resources name (forms' own not counted) */
+static void prog_totals(RPAGE *r, POBJ *pg, POBJ *res)
+{
+	POBJ *c = pd_get(r->d, pg, "Contents"), *xo = res ? pd_get(r->d, res, "XObject") : NULL;
+	long i;
+
+	r->p_ctot = r->p_itot = r->p_idone = 0;
+	r->p_inimg = 0;
+	if (c && c->t == PO_DICT)
+		r->p_ctot = pd_int(r->d, c, "Length", 0);
+	else if (c && c->t == PO_ARR)
+		for (i = 0; i < c->a; i++) {
+			POBJ *e = pa_at(c, i), *s = e && e->t == PO_REF ? pdf_get(r->d, e->a) : e;
+
+			if (s && s->t == PO_DICT)
+				r->p_ctot += pd_int(r->d, s, "Length", 0);
+		}
+	if (xo && xo->t == PO_DICT)
+		for (i = 0; i < xo->a; i++) {
+			POBJ *x = pd_get(r->d, xo, xo->u.e[i].key);
+			const char *st = x && x->t == PO_DICT ? pd_name(r->d, x, "Subtype") : NULL;
+
+			if (st && !strcmp(st, "Image"))
+				r->p_itot += pd_int(r->d, x, "Length", 0);
+		}
+	if (r->p_ctot < 0)
+		r->p_ctot = 0;
+	if (r->p_itot < 0)
+		r->p_itot = 0;
+}
+
+int render_progress(const RPAGE *r)
+{
+	long tot = r->p_ctot + r->p_itot, done, img;
+	int pp = r->d ? r->d->page_prog : 0;
+
+	if (tot <= 0 || r->p_itot <= 0)
+		return pp;			/* (no pictures: the content alone, as before) */
+	img = r->p_idone;
+	if (r->p_inimg && r->p_icur > 0 && r->p_ih > 0) {
+		/* its rows so far: a call every 16 rows (64 in some of the
+		   reader's), at most 95 % of it until it is done */
+		long rows = r->p_polls * 16, f;
+
+		if (rows > r->p_ih)
+			rows = r->p_ih;
+		f = rows * 950L / r->p_ih;		/* (thousandths) */
+		img += r->p_icur / 1000 * f + r->p_icur % 1000 * f / 1000;
+	}
+	if (img > r->p_itot)
+		img = r->p_itot;	/* (a picture drawn twice: counted once) */
+	done = r->p_ctot / 1000 * pp + r->p_ctot % 1000 * pp / 1000 + img;
+	while (tot > (1L << 20))	/* (x 1000 in a long) */
+		tot >>= 1, done >>= 1;
+	done = tot > 0 ? done * 1000 / tot : 0;
+	return done > 1000 ? 1000 : (int)done;
+}
+
 int render_init(RPAGE *r, PDOC *d, const char *fontdir)
 {
 	memset(r, 0, sizeof *r);
@@ -1260,6 +1338,7 @@ int render_page_from(RPAGE *r, long n, int width, int y0)
 	}
 	if (pw < FX_ONE || ph < FX_ONE)
 		return -1;
+	prog_totals(r, pg, res);
 	s = (fx)(((int64_t)width << 32) / pw);	/* pixels a point (16.16) */
 	h = (int)(((int64_t)ph * s) >> 32);
 	if (h < 1)
