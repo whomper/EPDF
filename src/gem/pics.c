@@ -716,9 +716,26 @@ static void let_go(PICE *e)
 }
 
 /* the picture obj at w x h: its slot (ready, wanted, decoding or failed) */
+/* the largest block of ST RAM free: where the pictures' bitmaps go
+   (bm_alloc). Malloc(-1) gives TT RAM's on a machine that has it (Erez's
+   Falcon, 128 MB): 24 pictures were kept and more taken while his 14 MB
+   of ST RAM ran out, and the sharper page's bitmap was refused
+   (13 Nov 2026) */
+static int st_only(void);
+
+long pics_st_free(void)
+{
+	long m;
+
+	if (st_only())
+		return (long)Malloc(-1L);
+	m = (long)Mxalloc(-1L, 0);
+	return m > 0 ? m : 0;
+}
+
 void pics_room(void)
 {
-	npics = (long)Malloc(-1L) >= 6L * 1024 * 1024 ? MAXPICS : 8;
+	npics = pics_st_free() >= 6L * 1024 * 1024 ? MAXPICS : 8;
 }
 
 PICE *pics_get(long obj, int w, int h, int flip)
@@ -748,7 +765,7 @@ PICE *pics_get(long obj, int w, int h, int flip)
 		}
 		/* (past eight kept, a new one only while 2 MB stay free; else the
 		   one longest unseen makes room) */
-		if (empty >= 0 && (used < 8 || best < 0 || (long)Malloc(-1L) >= 2L * 1024 * 1024))
+		if (empty >= 0 && (used < 8 || best < 0 || pics_st_free() >= 2L * 1024 * 1024))
 			best = empty;
 	}
 	if (best < 0)
@@ -855,7 +872,7 @@ int pics_ahead(long obj, int w, int h, int flip, long page)
 	if (n >= AHEAD || slot < 0 || w <= 0 || h <= 0)
 		return -1;
 	bytes = (long)((w + 15) / 16) * 2 * (planes > 8 ? 16 : planes) * h;
-	if ((long)Malloc(-1L) < 2 * bytes + AHEAD_SPARE)
+	if (pics_st_free() < 2 * bytes + AHEAD_SPARE)
 		return -1;
 	memset(&cache[slot], 0, sizeof cache[slot]);
 	cache[slot].obj = obj;

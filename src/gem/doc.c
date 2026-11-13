@@ -152,7 +152,10 @@ static void pages_note(long n, const PPREP *pp)
 	   canvas whole: on a 4 MB Falcon it didn't, its canvas went to bands,
 	   33 s, and the sharp page failed) */
 	if (obj >= 0 && sharp_pages() &&
-	    (long)Malloc(-1L) >= 2 * ((w + 15) / 16 * 2 * planes * h) + w * h * 2 + 768 * 1024L) {
+	    (pics_st_free() == (long)Malloc(-1L) ?	/* (only ST RAM: the bitmaps and the canvas from it) */
+	     (long)Malloc(-1L) >= 2 * ((w + 15) / 16 * 2 * planes * h) + w * h * 2 + 768 * 1024L :
+	     pics_st_free() >= 2 * ((w + 15) / 16 * 2 * planes * h) + 256 * 1024L &&
+	     (long)Malloc(-1L) >= w * h * 2 + 768 * 1024L)) {
 		stand = obj;		/* (shown till render.ovl's is drawn) */
 		obj = PICS_PAGE + n;
 	}

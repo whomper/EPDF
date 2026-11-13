@@ -1262,7 +1262,7 @@ static int zoom_fits(long w, long h)
 {
 	long bytes = (w + 15) / 16 * 2 * (planes > 8 ? 16 : planes) * h;
 
-	return (long)Malloc(-1L) >= bytes + 128 * 1024L;
+	return pics_st_free() >= bytes + 128 * 1024L;	/* (a bitmap: ST RAM) */
 }
 
 /* a page of View > Pages at pct of its line's size: its picture (drawn
@@ -1307,7 +1307,7 @@ static void zoom_set_pic(const DVPIC *p)
 	b = pics_get(zoom.base.obj, zoom.base.w, zoom.base.h, zoom.base.flip);
 	if (!(b && b->state == PICS_READY))
 		b = stand_in(&zoom.base, b);	/* (the stored page, while the sharp one is drawn) */
-	if (p->obj >= PICS_PAGE && b && b->state == PICS_READY && (long)Malloc(-1L) >= 2 * bytes + 128 * 1024L) {
+	if (p->obj >= PICS_PAGE && b && b->state == PICS_READY && pics_st_free() >= 2 * bytes + 128 * 1024L) {
 		unsigned long t0 = tos_ms();
 
 		graf_mouse(BUSYBEE, NULL);
