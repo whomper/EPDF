@@ -516,7 +516,7 @@ static char *work_stack;
    instruction cache (addresses mod 256) as before stack_used came
    (tools/rpad.py; render.c's RPAD) */
 #ifndef EPAD_A
-#define EPAD_A 56
+#define EPAD_A 200
 #endif
 #define EPAD_S2(n) #n
 #define EPAD_S(n) EPAD_S2(n)
@@ -1193,8 +1193,9 @@ static void draw(const GRECT *clip, short start)
 			if (draw_only) {
 				short i;
 
-				for (i = 0; i < draw_only_n; i++)
-					objc_draw(tree, draw_only[i], 0, c.x, c.y, c.w, c.h);
+				/* (a count below 0: these objects with their children) */
+				for (i = 0; i < (draw_only_n < 0 ? -draw_only_n : draw_only_n); i++)
+					objc_draw(tree, draw_only[i], draw_only_n < 0 ? 8 : 0, c.x, c.y, c.w, c.h);
 			} else
 				objc_draw(tree, start, 8, c.x, c.y, c.w, c.h);
 			if (own_pens) {
@@ -1270,6 +1271,23 @@ static void redraw_alone(short o)
 	g.w = (short)(tree[o].ob_width + 3);
 	g.h = (short)(tree[o].ob_height + 3);
 	draw_steady(&g, &o, 1);
+}
+
+/* the list (a white box: it paints its whole rectangle) and its rows
+   alone, the progress's strips noted as draw() notes them: 45 ms where the
+   window's tree within the list was 55, in the turn a new file takes */
+static void redraw_list_alone(void)
+{
+	GRECT g;
+	short o = LIST;
+
+	if (iconified)
+		return;
+	objc_offset(tree, o, &g.x, &g.y);
+	g.w = (short)(tree[o].ob_width + 3);
+	g.h = (short)(tree[o].ob_height + 3);
+	draw_steady(&g, &o, -1);
+	note_drawn(&g);
 }
 
 /* the file's line and bar to the batch's, one rectangle drawn once
@@ -2271,9 +2289,17 @@ int main(void)
 				last_bar = tos_ms();
 				if (a != last1 || b != last2 || fresh) {
 					progress_texts();
-					redraw_progress();
-					last1 = a;
-					last2 = b;
+					if (!iconified && list_follow()) {
+						/* a new file: the list that follows it in a
+						   turn of its own, the lines and bars in the
+						   next (the two in one turn: 75 ms on a Falcon) */
+						redraw_list_alone();
+						last1 = -1;
+					} else {
+						redraw_progress();
+						last1 = a;
+						last2 = b;
+					}
 					drawn = 1;
 				}
 				fresh = 0;
