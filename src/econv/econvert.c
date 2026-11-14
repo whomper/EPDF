@@ -2043,8 +2043,10 @@ static void message(const short *msg)
 		{
 			char v[32];
 
-			snprintf(v, sizeof v, "%d,%d", msg[4], msg[5]);
-			setting("WINDOW", v, "the window's place: x,y in pixels");
+			/* x,y,w,h as every AERA program writes it (6.1); the size is
+			   the window's own, read back but not changed by it */
+			snprintf(v, sizeof v, "%d,%d,%d,%d", msg[4], msg[5], msg[6], msg[7]);
+			setting("WINDOW", v, "the window's place and size: x,y,width,height in pixels");
 		}
 		break;
 	case WM_CLOSED:

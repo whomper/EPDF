@@ -10,11 +10,14 @@ ECONVERT.PRG is started through LAUNCH.PRG with the PDF (it comes into the
 batch), writes to C:\\OUT (econvert.inf), Return converts. Checked: the
 batch done ("batch-done done"), the converted file there and a converted
 PDF (its catalog's /AERA), Stop (Esc) while a second batch works leaving no
-file behind, and the result said in the window ("Stopped: 1 converted"). Shots: the window before, during (the bars) and after.
+file behind, the result said in the window ("Stopped: 1 converted"), and
+its INF not written when no setting changed, WINDOW=x,y,w,h once the
+window is dragged, nothing written at the quit (6.1). Shots: the window before, during (the bars) and after.
 On an ST EConvert starts with This Atari greyed (Gateway only): econv.py WORK ST:mono
 checks it starts; tests/hatari/gateway.py converts there.
 """
 import os
+import re
 import shutil
 import sys
 import time
@@ -34,6 +37,31 @@ _spec.loader.exec_module(speed)
 FONTS = os.environ.get("CONV_FONTS", "/usr/share/fonts/truetype/liberation")
 SHORT = {"sans": "LiberationSans-Regular", "sansb": "LiberationSans-Bold", "serif": "LiberationSerif-Regular",
          "serifb": "LiberationSerif-Bold", "mono": "LiberationMono-Regular", "monob": "LiberationMono-Bold"}
+
+
+WIN_AT = (40, 60)                   # the window's place from its INF (in Hatari's window, 1:1)
+
+
+def infs(r):
+    """econvert.inf's contents (one file, whatever its case: 6.6)"""
+    d = os.path.join(r.hd, "ECONV")
+    return [open(os.path.join(d, f), "rb").read() for f in sorted(os.listdir(d)) if f.lower() == "econvert.inf"]
+
+
+def drag(r, x, y, dx, dy):
+    """the mouse pressed at x,y, moved by dx,dy in steps, let go (the AES's
+    window drag)"""
+    g = dict(l.split("=") for l in r.xdo("getwindowgeometry", "--shell", r.win()).split())
+    ox, oy = int(g["X"]), int(g["Y"])
+    r.xdo("mousemove", str(ox + x), str(oy + y))
+    time.sleep(0.5)
+    r.xdo("mousedown", "1")
+    time.sleep(0.5)
+    for k in range(1, 9):
+        r.xdo("mousemove", str(ox + x + dx * k // 8), str(oy + y + dy * k // 8))
+        time.sleep(0.15)
+    time.sleep(0.5)
+    r.xdo("mouseup", "1")
 
 
 def run(work, machine, src):
@@ -56,7 +84,8 @@ def run(work, machine, src):
             # fonts and Hebrew in 4 pages, about 40 s on Falcon-4)
             showcase.cut(os.path.join(r.hd, "IN.PDF"))
         make_pdf(os.path.join(r.hd, "IN2.PDF"), book(8))     # the second: stopped in the middle
-        r.write("ECONV/ECONVERT.INF", "WRITETO=C:\\OUT\n")
+        inf0 = "WRITETO=C:\\OUT\nWINDOW=%d,%d\n" % WIN_AT
+        r.write("ECONV/ECONVERT.INF", inf0)
         r.write("LAUNCH.TXT", "C:\\ECONV\\ECONVERT.PRG\nC:\\IN.PDF C:\\IN2.PDF\n")
         r.start("C:\\LAUNCH.PRG")
         end = time.time() + 120
@@ -105,7 +134,22 @@ def run(work, machine, src):
         time.sleep(2)
         r.still()
         r.shot("after")
+        # the INF (guidelines 6.1, AERA-Atari a4b8a1a): as it was while no
+        # setting changed; the window moved, WINDOW=x,y,w,h at its new
+        # place; nothing written again at the quit
+        if infs(r) != [inf0.replace("\n", "\r\n").encode()]:
+            bad.append("econvert.inf written with nothing changed: %r" % infs(r))
+        drag(r, WIN_AT[0] + 80, WIN_AT[1] + 6, 32, 24)
+        time.sleep(3)
+        moved = infs(r)
+        m = re.search(rb"WINDOW=(-?\d+),(-?\d+),(\d+),(\d+)", moved[0] if len(moved) == 1 else b"")
+        if not m or abs(int(m.group(1)) - WIN_AT[0] - 32) > 8 or abs(int(m.group(2)) - WIN_AT[1] - 24) > 8:
+            bad.append("the window moved, its INF not WINDOW=x,y,w,h at its place: %r" % moved)
+        else:
+            print("  moved: WINDOW=%s" % b",".join(m.groups()).decode())
         bad += quitcheck.quit(r, "ECONVERT")
+        if infs(r) != moved:
+            bad.append("econvert.inf written again at the quit: %r" % infs(r))
         print("%s: %s  (%s)" % (r.describe(), "ok" if not bad else "; ".join(bad), r.shots))
     finally:
         r.stop()
