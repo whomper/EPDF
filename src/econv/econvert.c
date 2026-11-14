@@ -511,6 +511,21 @@ static void build(void)
 static CORO main_co, work_co;
 static char *work_stack;
 
+/* padding in a branch only a refused allocation takes: the converter's
+   code, linked after this file, at the same places in a 68030's
+   instruction cache (addresses mod 256) as before stack_used came
+   (tools/rpad.py; render.c's RPAD) */
+#ifndef EPAD_A
+#define EPAD_A 236
+#endif
+#define EPAD_S2(n) #n
+#define EPAD_S(n) EPAD_S2(n)
+#if defined(__m68k__) || defined(__mc68000__)
+#define EPAD(n) __asm__ volatile("bra.w 1f\n\t.skip " EPAD_S(n) "\n1:")
+#else
+#define EPAD(n) ((void)0)
+#endif
+
 /* the job's stack used: coro_used's count, a long at a time (a byte at a
    time it was some 30 ms of the job's last turn on a Falcon, twice) */
 static long stack_used(void)
@@ -1561,6 +1576,7 @@ static void begin(void)
 	if (there && alert(2, "[2][%d of the files are in the folder|already. Replace them?][ Replace |Cancel]", there) != 1)
 		return;
 	if (!work_stack && !(work_stack = malloc(CONV_STACK))) {
+		EPAD(EPAD_A);
 		alert(1, "[3][Not enough memory to start.][ OK ]");
 		return;
 	}
