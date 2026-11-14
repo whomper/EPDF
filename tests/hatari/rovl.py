@@ -14,9 +14,10 @@ progressive and CMYK, a PNG with alpha, a scan) drawn 600 wide:
   pixels a page, 9 levels, on 7 Nov 2026; their cause not found yet);
 - the same in bands of 64 KB (a page taller than the canvas), byte for
   byte the page drawn whole;
-- on a stock Falcon-4, page 3's progressive JPEG drawn whole comes from
-  its blocks' averages (no room for libjpeg's coefficients beside the
-  canvas: pic.c, by design), so that page is said and not compared;
+- on a stock Falcon-4, page 3's progressive JPEG drawn whole is refused
+  by pic.c for memory and drawn by render.c's cv_jpeg: that page against
+  the host's drawn so (no --jpeg-pic), and in bands (where pic.c draws
+  it) against the host's as the others, not against the whole page;
 - with the DSP, each page's time (the stage's first goal: seconds);
 - on an ST, not loaded and said why; nothing else.
 """
@@ -91,12 +92,14 @@ def close_to(raw, w, h, ppm):
     return n, most
 
 
-def averaged(spec, p):
-    """page 3's progressive JPEG on a stock Falcon-4: drawn whole, libjpeg
-    can't have its coefficients beside the page's canvas, and pic.c shows
-    it from its 8x8 blocks' averages (as designed); the bands, with the
-    memory, decode it whole. So neither the host's page nor the bands' are
-    that page: said, not failed (14 Nov 2026)"""
+def fallback(spec, p):
+    """page 3's progressive JPEG on a stock Falcon-4, the page drawn whole:
+    pic.c can't have libjpeg's coefficients beside the canvas and refuses
+    it for memory, and render.c's own decode (cv_jpeg) draws it, which
+    scales otherwise. That page is compared with the host's page drawn so
+    (build/econvert without --jpeg-pic); in bands, with the memory, pic.c
+    draws it, so the bands' page 3 is compared with the host's as the
+    other pages are, not with the whole one (14 Nov 2026)"""
     return spec.startswith("Falcon-4") and p["page"] == 3
 
 
@@ -128,24 +131,24 @@ def main(argv):
                 why.append("pages %s" % [(p["page"], p["rc"]) for p in pages])
             if "dump" in cfg:
                 for p in pages:
-                    if averaged(spec, p):
-                        print("  page %d: its progressive JPEG from its blocks' averages on a 4 MB Falcon"
-                              " (pic.c, by design), not compared" % p["page"])
-                        continue
                     raw = open(os.path.join(hd, "PAGE%d.565" % p["page"]), "rb").read()
-                    want = os.path.join(work, "host-%d.ppm" % p["page"])
+                    lj = fallback(spec, p) and "band" not in cfg
+                    want = os.path.join(work, "host-%d%s.ppm" % (p["page"], "-cvjpeg" if lj else ""))
                     if not os.path.exists(want):
-                        subprocess.run([os.path.join(TOP, "build", "econvert"), "--fonts", FONTS, "--width", "600",
-                                        "--jpeg-pic", "--render", str(p["page"]), want, pdf],
+                        subprocess.run([os.path.join(TOP, "build", "econvert"), "--fonts", FONTS, "--width", "600"] +
+                                       ([] if lj else ["--jpeg-pic"]) + ["--render", str(p["page"]), want, pdf],
                                        check=True, stdout=subprocess.DEVNULL)
                     if len(raw) != p["w"] * p["h"] * 2:
                         why.append("page %d: %d bytes" % (p["page"], len(raw)))
                         continue
-                    if "band" in cfg:
+                    if "band" in cfg and not fallback(spec, p):
                         whole = os.path.join(work, spec.replace(":", "_") + "-nodsp_dump", "PAGE%d.565" % p["page"])
                         if open(whole, "rb").read() != raw:
                             why.append("page %d in bands isn't the page drawn whole" % p["page"])
                         continue
+                    if fallback(spec, p):
+                        print("  page %d: against the host's page drawn %s" % (
+                            p["page"], "by pic.c (in bands)" if "band" in cfg else "by cv_jpeg (pic.c refused it the memory)"))
                     n, most = close_to(raw, p["w"], p["h"], open(want, "rb").read())
                     if n * 1000 > p["w"] * p["h"] or most > 16:
                         why.append("page %d: %d pixels differ from the host's, by up to %d" % (p["page"], n, most))
