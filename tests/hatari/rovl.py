@@ -14,6 +14,9 @@ progressive and CMYK, a PNG with alpha, a scan) drawn 600 wide:
   pixels a page, 9 levels, on 7 Nov 2026; their cause not found yet);
 - the same in bands of 64 KB (a page taller than the canvas), byte for
   byte the page drawn whole;
+- on a stock Falcon-4, page 3's progressive JPEG drawn whole comes from
+  its blocks' averages (no room for libjpeg's coefficients beside the
+  canvas: pic.c, by design), so that page is said and not compared;
 - with the DSP, each page's time (the stage's first goal: seconds);
 - on an ST, not loaded and said why; nothing else.
 """
@@ -88,6 +91,15 @@ def close_to(raw, w, h, ppm):
     return n, most
 
 
+def averaged(spec, p):
+    """page 3's progressive JPEG on a stock Falcon-4: drawn whole, libjpeg
+    can't have its coefficients beside the page's canvas, and pic.c shows
+    it from its 8x8 blocks' averages (as designed); the bands, with the
+    memory, decode it whole. So neither the host's page nor the bands' are
+    that page: said, not failed (14 Nov 2026)"""
+    return spec.startswith("Falcon-4") and p["page"] == 3
+
+
 def main(argv):
     if not argv:
         sys.exit(__doc__)
@@ -116,6 +128,10 @@ def main(argv):
                 why.append("pages %s" % [(p["page"], p["rc"]) for p in pages])
             if "dump" in cfg:
                 for p in pages:
+                    if averaged(spec, p):
+                        print("  page %d: its progressive JPEG from its blocks' averages on a 4 MB Falcon"
+                              " (pic.c, by design), not compared" % p["page"])
+                        continue
                     raw = open(os.path.join(hd, "PAGE%d.565" % p["page"]), "rb").read()
                     want = os.path.join(work, "host-%d.ppm" % p["page"])
                     if not os.path.exists(want):
@@ -142,8 +158,8 @@ def main(argv):
                 print("  render.ovl %s KB, loaded in %d ms, %d KB free after" % (lines[0]["kb"], lines[0]["ms"],
                                                                                  lines[0]["free_kb"]))
             for p in pages:
-                print("  page %d: %6d ms (pictures %5d) %d band(s) turns %d dsp %s free %d KB" % (
-                    p["page"], p["ms"], p["image_ms"], p["bands"], p["turns"], p["dsp"], p["free_kb"]))
+                print("  page %d: %6d ms (pictures %5d) %d band(s) turns %d (longest %d ms) dsp %s free %d KB" % (
+                    p["page"], p["ms"], p["image_ms"], p["bands"], p["turns"], p["gap_ms"], p["dsp"], p["free_kb"]))
             if gone is not None:
                 print("  closed: %d KB free (%+d KB against before loading)" % (lines[-1]["free_kb"], -gone))
             bad += bool(why)

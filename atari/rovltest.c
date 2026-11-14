@@ -20,8 +20,18 @@ long pdf_ms(void);
 void (*pf_idle)(void);
 static long turns;
 
+static long gap_ms, last_turn;		/* the longest stretch between turns (the 50 ms of a turn) */
+
+static void turn_gap(long now)
+{
+	if (now - last_turn > gap_ms)
+		gap_ms = now - last_turn;
+	last_turn = now;
+}
+
 static int turn(void)
 {
+	turn_gap(pdf_ms());
 	turns++;
 	return 0;
 }
@@ -69,12 +79,17 @@ int main(void)
 
 		t = pdf_ms();
 		turns = 0;
+		gap_ms = 0;
 		if (strstr(cfg, "dump")) {
 			snprintf(name, sizeof name, "C:\\PAGE%ld.565", pg + 1);
 			fh = Fcreate(name, 0);
 		}
 		do {
+			/* (the stretches inside render.ovl's call: from it to the
+			   first turn, between turns, from the last to its end) */
+			last_turn = pdf_ms();
 			rc = o->page(doc, pg, 600, y0, &p);
+			turn_gap(pdf_ms());
 			if (rc)
 				break;
 			bands++;
@@ -100,9 +115,9 @@ int main(void)
 		if (fh >= 0)
 			Fclose((short)fh);
 		snprintf(b, sizeof b, "{\"page\":%ld,\"ms\":%ld,\"rc\":%d,\"w\":%d,\"h\":%d,\"bands\":%d,\"image_ms\":%ld,"
-			 "\"glyphs\":%ld,\"images\":%ld,\"turns\":%ld,\"dsp\":\"%s\",\"free_kb\":%ld,\"pens_ms\":%ld}\n",
+			 "\"glyphs\":%ld,\"images\":%ld,\"turns\":%ld,\"gap_ms\":%ld,\"dsp\":\"%s\",\"free_kb\":%ld,\"pens_ms\":%ld}\n",
 			 pg + 1, pdf_ms() - t, rc, p.w, p.h, bands, p.image_ms,
-			 p.glyphs, p.images, turns, o->dsp_state(), (long)Malloc(-1L) / 1024, pens_ms);
+			 p.glyphs, p.images, turns, gap_ms, o->dsp_state(), (long)Malloc(-1L) / 1024, pens_ms);
 		nf_debug(b);
 	}
 	o->close(doc);
