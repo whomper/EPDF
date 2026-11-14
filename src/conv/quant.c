@@ -20,44 +20,12 @@ typedef struct {
 	int lo[3], hi[3];
 } BOX;
 
-static uint16_t *g_cols;
-static int g_axis;
-
-static int chan(uint16_t c, int ax)
-{
-	return ax == 0 ? R8(c) : ax == 1 ? G8(c) : B8(c);
-}
-
-static int by_axis(const void *x, const void *y)
-{
-	int a = chan(*(const uint16_t *)x, g_axis), b = chan(*(const uint16_t *)y, g_axis);
-
-	return a - b;
-}
-
-static void box_fit(BOX *b, const uint16_t *cols)
-{
-	long i;
-	int k;
-
-	for (k = 0; k < 3; k++) {
-		b->lo[k] = 255;
-		b->hi[k] = 0;
-	}
-	for (i = b->a; i < b->b; i++)
-		for (k = 0; k < 3; k++) {
-			int v = chan(cols[i], k);
-
-			if (v < b->lo[k]) b->lo[k] = v;
-			if (v > b->hi[k]) b->hi[k] = v;
-		}
-}
-
 /* padding in a branch only a refused allocation takes: the code after it
    at the same places in a 68030's instruction cache (addresses mod 256)
    as before each split turned (tools/rpad.py; render.c's RPAD) */
 #ifndef QPAD_A
-#define QPAD_A 16
+#define QPAD_A 190
+#define QPAD_B 218
 #endif
 #define QPAD_S2(n) #n
 #define QPAD_S(n) QPAD_S2(n)
@@ -66,6 +34,61 @@ static void box_fit(BOX *b, const uint16_t *cols)
 #else
 #define QPAD(n) ((void)0)		/* (the host's build: no 68030 cache) */
 #endif
+
+static unsigned g_cmp;		/* the sort's comparisons: a turn every 4096 */
+
+/* the sort's comparators, one an axis (a test of the axis on each call cost more
+   than the turn's count: the photo pages 1 s each on a Falcon). A turn
+   every 4096 comparisons: the first splits sort all of a picture's colours
+   in one qsort, 340 ms on a Falcon; the order is qsort's either way */
+#define BY_AXIS(name, CH, PAD) \
+static int name(const void *x, const void *y) \
+{ \
+	int a = CH(*(const uint16_t *)x), b = CH(*(const uint16_t *)y); \
+ \
+	if ((++g_cmp & 4095) == 0 && cv_turn) { \
+		PAD; \
+		cv_turn(); \
+	} \
+	return a - b; \
+}
+BY_AXIS(by_r, R8, (void)0)
+BY_AXIS(by_g, G8, (void)0)
+/* (by_b's turn padded: nearest, the dithers' per pixel, at its place in
+   the 68030's cache as before the comparators came) */
+BY_AXIS(by_b, B8, QPAD(QPAD_B))
+
+static void box_fit(BOX *b, const uint16_t *cols)
+{
+	int lo0 = 255, lo1 = 255, lo2 = 255, hi0 = 0, hi1 = 0, hi2 = 0;
+	long i0, i;
+
+	/* (a block of 8192 colours between turns: the first box is all of a
+	   picture's colours) */
+	for (i0 = b->a; i0 < b->b; i0 += 8192) {
+		long e = b->b - i0 > 8192 ? i0 + 8192 : b->b;
+
+		for (i = i0; i < e; i++) {
+			uint16_t c = cols[i];
+			int r = R8(c), g = G8(c), u = B8(c);
+
+			if (r < lo0) lo0 = r;
+			if (r > hi0) hi0 = r;
+			if (g < lo1) lo1 = g;
+			if (g > hi1) hi1 = g;
+			if (u < lo2) lo2 = u;
+			if (u > hi2) hi2 = u;
+		}
+		if (e < b->b && cv_turn)
+			cv_turn();
+	}
+	b->lo[0] = lo0;
+	b->lo[1] = lo1;
+	b->lo[2] = lo2;
+	b->hi[0] = hi0;
+	b->hi[1] = hi1;
+	b->hi[2] = hi2;
+}
 
 int quant(const uint16_t *px, long count, int ncol, unsigned char (*pal)[3], unsigned char *map)
 {
@@ -84,6 +107,10 @@ int quant(const uint16_t *px, long count, int ncol, unsigned char (*pal)[3], uns
 			cv_turn();
 		hist[px[i]]++;
 	}
+	/* (a turn between the passes over the 65536 colours: a photo's
+	   quant held a Falcon 250 ms before its first split) */
+	if (cv_turn)
+		cv_turn();
 	for (i = 0; i < 65536; i++)
 		nc += hist[i] != 0;
 	cols = malloc((size_t)(nc ? nc : 1) * sizeof *cols);
@@ -94,10 +121,14 @@ int quant(const uint16_t *px, long count, int ncol, unsigned char (*pal)[3], uns
 		free(box);
 		return 0;
 	}
+	if (cv_turn)
+		cv_turn();
 	nc = 0;
 	for (i = 0; i < 65536; i++)
 		if (hist[i])
 			cols[nc++] = (uint16_t)i;
+	if (cv_turn)
+		cv_turn();
 	box[0].a = 0;
 	box[0].b = nc;
 	box[0].pixels = count;
@@ -127,9 +158,8 @@ int quant(const uint16_t *px, long count, int ncol, unsigned char (*pal)[3], uns
 		for (k = 1; k < 3; k++)
 			if (box[best].hi[k] - box[best].lo[k] > box[best].hi[ax] - box[best].lo[ax])
 				ax = k;
-		g_cols = cols;
-		g_axis = ax;
-		qsort(cols + box[best].a, (size_t)(box[best].b - box[best].a), sizeof *cols, by_axis);
+		qsort(cols + box[best].a, (size_t)(box[best].b - box[best].a), sizeof *cols,
+		      ax == 0 ? by_r : ax == 1 ? by_g : by_b);
 		half = box[best].pixels / 2;
 		for (j = box[best].a; j < box[best].b - 1; j++) {
 			acc += hist[cols[j]];
@@ -147,6 +177,9 @@ int quant(const uint16_t *px, long count, int ncol, unsigned char (*pal)[3], uns
 	}
 	for (k = 0; k < nb; k++) {
 		unsigned long r = 0, g = 0, b = 0, n = 0;
+
+		if (cv_turn)
+			cv_turn();	/* (all the colours, box by box: 150 ms in one go) */
 
 		for (i = box[k].a; i < box[k].b; i++) {
 			unsigned long h = hist[cols[i]];

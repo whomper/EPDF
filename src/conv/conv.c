@@ -28,14 +28,14 @@
 
 #define PAGE_W 640			/* the whole page's pictures' width when the caller gives none */
 #define NDRAW 16			/* drawings a page at most */
-#define DRAW_ID 900000000L
-#define TURN_PX 16384L			/* pixels between turns in w_picture's loops */		/* a drawing's number in the text until it has its object */
+#define DRAW_ID 900000000L		/* a drawing's number in the text until it has its object */
+#define TURN_PX 4096L			/* pixels between turns in w_picture's loops */
 
 /* padding in a branch a conversion that opens never takes: the code after
    it at the same places in a 68030's instruction cache (addresses mod 256)
    as before pic_poll was set here (tools/rpad.py; render.c's RPAD) */
 #ifndef VPAD_A
-#define VPAD_A 242
+#define VPAD_A 248
 #endif
 #define VPAD_S2(n) #n
 #define VPAD_S(n) VPAD_S2(n)
