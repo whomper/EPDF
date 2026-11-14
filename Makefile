@@ -207,6 +207,26 @@ endef
 $(eval $(call FT_BUILD,m68000))
 $(eval $(call FT_BUILD,m68030))
 FT_OBJS = $(patsubst $(FT)/src/%.c,ft/%.o,$(filter $(FT)/src/%,$(FT_SRC))) ft/epdf/ftsystem.o ft/setjmp.o
+# the renderer's (render.ovl, EConvert, CONVTEST): no auto-hinter, as it
+# loads every glyph unhinted (render.c's FT_LOAD_NO_HINTING): 46 KB of code
+# and tables a 4 MB Falcon has for its pictures (item 3, 14 Nov 2026);
+# FTTEST keeps it. So the code and tables after it keep their places in
+# the 68030's caches (addresses mod 256, tools/rpad.py): the seven base
+# functions only the auto-hinter calls are kept (-u, 2.3 KB), and
+# src/conv/ftpad.S's padding is linked where it was and after ftinit
+comma := ,
+FT_CV_KEEP = $(addprefix -Wl$(comma)-u$(comma),FT_Matrix_Invert FT_Get_Next_Char FT_Vector_Transform \
+               FT_Outline_Get_Orientation FT_Outline_EmboldenXY FT_Get_Advances FT_Get_Advance \
+               ft_cv_pad ft_cv_pad_ro ft_cv_pad_str ft_cv_pad_data ft_cv_pad_init_ro)
+FT_CV_OBJS = $(patsubst ft/autofit/autofit.o,ft/ftpad_af.o,$(patsubst ft/base/ftinit.o,ft/base/ftinit_noaf.o ft/ftpad_init.o,$(FT_OBJS)))
+build/m68030/ft/ftpad_af.o: FT_PAD = -DFT_PAD_NAME=ft_cv_pad -DFT_PAD_TEXT=68 -DFT_PAD_RO=36 -DFT_PAD_STR=18 -DFT_PAD_DATA=8
+build/m68030/ft/ftpad_init.o: FT_PAD = -DFT_PAD_NAME=ft_cv_pad_init -DFT_PAD_TEXT=0 -DFT_PAD_RO=4 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
+build/m68030/ft/ftpad_af.o build/m68030/ft/ftpad_init.o: src/conv/ftpad.S Makefile | build/m68030
+	@mkdir -p $(dir $@)
+	$(XCC) -m68030 $(FT_PAD) -c -o $@ $<
+build/m68030/ft/base/ftinit_noaf.o: $(FT)/src/base/ftinit.c | build/m68030
+	@mkdir -p $(dir $@)
+	@$(XCC) $(XFLAGS) $(FT_DEFS) -DEPDF_NO_AUTOFIT $(FT_INC) -Wno-unused-variable -Wno-implicit-fallthrough -Wno-cast-function-type -Wno-missing-field-initializers -Wno-dangling-pointer -I$(FT)/src/base -c -o $@ $<
 
 # EConvert's converter on this computer (src/conv/, FreeType built for the host in build/host-ft)
 CONV_SRC = src/conv/conv.c src/conv/render.c src/conv/raster.c src/conv/cvjpeg.c src/conv/deflate.c src/conv/quant.c src/conv/jpegenc.c common/src/charset.c src/view/trpara.c
@@ -327,10 +347,10 @@ build/m68030cv/%.o: XFLAGS += -DPDF_DRAW -DPIC_LIBJPEG -DNO_GETENV -DNO_PUTENV -
 build/m68030cv/$(LJ)/%.o build/m68030cv/$(T)/%.o: XFLAGS += -w
 build/m68030cv/common/src/inflate.o build/m68030cv/src/pdffilt.o: XFLAGS += -DINFLATE_ASM
 CV_ATARI_OBJ = $(addprefix build/m68030cv/,$(patsubst %.c,%.o,$(CV_ATARI_SRC))) build/m68030/inflate_fast.o \
-               $(addprefix build/m68030/,$(FT_OBJS))
+               $(addprefix build/m68030/,$(FT_CV_OBJS))
 binary/CONVTEST.PRG: XCPU = -m68030 -msoft-float
 binary/CONVTEST.PRG: $(CV_ATARI_OBJ) build/m68030cv/atari/convtest.o build/m68030/crt0.o build/m68030/nf.o common/atari/link.ld | binary
-	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
+	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections $(FT_CV_KEEP) \
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68030/convtest.elf \
 	  build/m68030/crt0.o build/m68030/nf.o build/m68030cv/atari/convtest.o $(CV_ATARI_OBJ) -lgcc
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/m68030/convtest.elf $@
@@ -350,7 +370,7 @@ build/m68030ovl/%: XCPU = -m68030 -msoft-float
 binary/render.ovl: XCPU = -m68030 -msoft-float
 binary/render.ovl: $(ROVL_OBJ) common/tlsovl/ovl.ld | binary
 	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/tlsovl/ovl.ld -Wl,-e,rovl \
-	  -Wl,--gc-sections -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments \
+	  -Wl,--gc-sections $(FT_CV_KEEP) -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments \
 	  -o build/m68030ovl/render.elf $(ROVL_OBJ) -lgcc
 	python3 common/tools/elf2tos.py build/m68030ovl/render.elf $@
 
@@ -393,10 +413,10 @@ build/m68000ec/crt0_ec.o: common/atari/crt0.S | build/m68000ec
 	$(XCC) -m68000 -DSTACK_SIZE=16384 -c -o $@ $<
 EC_OBJS = $(patsubst %.c,build/m68000ec/%.o,$(EC_GEM_SRC)) build/m68000ec/version.o build/m68000ec/sting_s.o \
           $(addprefix build/m68030cv/,$(patsubst %.c,%.o,$(EC_CV_SRC))) build/m68030/inflate_fast.o \
-          $(addprefix build/m68030/,$(FT_OBJS))
+          $(addprefix build/m68030/,$(FT_CV_OBJS))
 binary/ECONVERT.PRG: XCPU = -m68000
 binary/ECONVERT.PRG: $(EC_OBJS) build/m68000ec/crt0_ec.o build/m68000/nf.o build/m68000ec/crash_s.o build/m68000ec/coro.o common/atari/link.ld | binary
-	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
+	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections $(FT_CV_KEEP) \
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68030/econvert.elf \
 	  build/m68000ec/crt0_ec.o build/m68000/nf.o build/m68000ec/crash_s.o build/m68000ec/coro.o $(EC_OBJS) -lgcc
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/m68030/econvert.elf $@
