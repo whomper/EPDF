@@ -516,7 +516,7 @@ static char *work_stack;
    instruction cache (addresses mod 256) as before stack_used came
    (tools/rpad.py; render.c's RPAD) */
 #ifndef EPAD_A
-#define EPAD_A 236
+#define EPAD_A 56
 #endif
 #define EPAD_S2(n) #n
 #define EPAD_S(n) EPAD_S2(n)
@@ -538,7 +538,7 @@ static long stack_used(void)
 	return coro_used(work_stack + k * 4, CONV_STACK - k * 4);
 }
 static int working;			/* the batch under way */
-static int fresh;			/* just begun: its first slice in the next turn */
+static int fresh;			/* just begun: its first slice in the next turn; 3, 4, 5 the end's steps */
 static int stop_now;			/* Stop: the next turn says stop */
 static int work_done;			/* the batch has finished (its stack is idle) */
 static unsigned long slice_end;
@@ -1255,6 +1255,23 @@ static void redraw_obj(short o)
 	wind_update(END_UPDATE);
 }
 
+/* a button whose words or state changed: the object alone (draw_steady,
+   off the screen and one copy), not the window's tree under it (the whole
+   tree within its clip was 40-45 ms of a Falcon's turn for one button) */
+static void draw_steady(const GRECT *g, const short *objs, short n);
+
+static void redraw_alone(short o)
+{
+	GRECT g;
+
+	if (iconified)
+		return;
+	objc_offset(tree, o, &g.x, &g.y);
+	g.w = (short)(tree[o].ob_width + 3);
+	g.h = (short)(tree[o].ob_height + 3);
+	draw_steady(&g, &o, 1);
+}
+
 /* the file's line and bar to the batch's, one rectangle drawn once
    (four objects drawn one by one were 80 ms of a Falcon's turn) */
 
@@ -1594,7 +1611,7 @@ static void begin(void)
 	t_batch = tos_ms();
 	log_event("batch", NULL, NULL);
 	texts();
-	redraw_obj(B_GO);		/* (Stop; the bars come in the turns after: the key's turn short) */
+	redraw_alone(B_GO);		/* (Stop; the bars come in the turns after: the key's turn short) */
 	fresh = 2;
 }
 
@@ -1602,7 +1619,7 @@ static void begin(void)
 static void finish_button(void)
 {
 	tree[B_GO].ob_spec = (long)"Convert";
-	redraw_obj(B_GO);
+	redraw_alone(B_GO);
 }
 
 /* its second: the progress lines and bars cleared (only what changed:
@@ -1636,7 +1653,14 @@ static void finish_progress(void)
 		snprintf(s_result, sizeof s_result, "%d converted in %s", n_ok, took);
 	log_event("result", s_result, NULL);
 	texts();
-	redraw_progress();
+	if (iconified)
+		redraw_progress();
+	else {
+		/* the two lines and bars; the list's rows are the next step's
+		   (finished: it draws them in their end state) */
+		strip(0);
+		strip(1);
+	}
 	log_event("batch-done", stop_now ? "stopped" : "done", NULL);
 #ifdef TURN_DEBUG
 	{
@@ -1673,7 +1697,7 @@ static void finished(void)
 				g.h = tree[o[0]].ob_height;
 				draw_steady(&g, o, 3);
 			}
-		redraw_obj(B_REMOVE);
+		redraw_alone(B_REMOVE);
 	}
 	if (gate_off)
 		alert(1, "[1][The Gateway at %.24s doesn't answer. Check that it is on and that the PDF converter is installed on it.][ OK ]", gate_host);
@@ -2203,7 +2227,7 @@ int main(void)
 		/* (a still pointer costs nothing: woken when it leaves its pixel; the
 		   timer a tip's wait when idle, at once while a batch runs) */
 		evnt_set_m1(1, hx, hy, 1, 1);
-		which = evnt_multi_(flags, 1, 1, 1, working ? 0 : tip_wait(1000), msg, &ev);
+		which = evnt_multi_(flags, 1, 1, 1, working || fresh >= 4 ? 0 : tip_wait(1000), msg, &ev);
 		if (which & MU_M1)
 			graf_mkstate(&hx, &hy, &kd, &kd);
 		tip_tick(which, iconified ? -1 : hx, hy, win_tip);
@@ -2213,6 +2237,17 @@ int main(void)
 			click(ev.mx, ev.my);
 		if (which & MU_MESAG)
 			message(msg);
+		if (fresh == 4) {
+			fresh = 5;
+			finish_progress();	/* (the batch over: working 0) */
+			last1 = last2 = -1;
+			continue;
+		}
+		if (fresh == 5) {
+			fresh = 0;
+			finished();
+			continue;
+		}
 		if (working) {
 			/* a slice of the batch, then its bars where they moved (at
 			   most four times a second, each the part that grew) */
@@ -2223,14 +2258,11 @@ int main(void)
 				continue;
 			}
 			if (fresh == 3) {
-				/* the batch's end drawn in one piece: the button, the
-				   progress, the alert and the list (drawing is not sliced:
-				   Erez, 4 Nov 2026; to 1.1 three turns) */
-				fresh = 0;
+				/* the batch's end in three steps, a turn each: the button,
+				   the progress, then the list (Erez, 14 Nov 2026: in place
+				   of one piece, 170 ms on a Falcon, each under 50) */
+				fresh = 4;
 				finish_button();
-				finish_progress();
-				last1 = last2 = -1;
-				finished();
 				continue;
 			}
 			if (tos_ms() - last_bar >= 250 || fresh) {
