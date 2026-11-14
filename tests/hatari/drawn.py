@@ -56,7 +56,7 @@ def run(work, machine):
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
         showcase.make(os.path.join(r.hd, "SHOW.PDF"))
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\SHOW.PDF\n")
-        r.start("C:\\LAUNCH.PRG")
+        r.start("C:\\LAUNCH.PRG", ready="EPDF started")
         end = time.time() + 180
         while time.time() < end and r.console().count("EPDF page ") < 9:
             time.sleep(1)

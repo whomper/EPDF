@@ -61,7 +61,7 @@ def run(work, machine):
             subprocess.run([os.path.join(TOP, "build", "econvert"), "--pages", os.environ.get("PAGES", "colour"), src, os.path.join(r.hd, "CONV.PDF")],
                            check=True, stdout=subprocess.DEVNULL)
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\CONV.PDF\n")
-        r.start("C:\\LAUNCH.PRG")
+        r.start("C:\\LAUNCH.PRG", ready="EPDF started")
         end = time.time() + 120
         while time.time() < end and r.console().count("EPDF page ") < 6:
             time.sleep(1)

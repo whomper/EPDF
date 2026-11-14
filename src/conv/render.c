@@ -988,6 +988,19 @@ static FT_UInt glyph_index(FT_Face face, int comp, uint32_t code, uint32_t uni)
 	return gid;
 }
 
+/* padding in a branch only a refused allocation takes: what follows the
+   glyphs' code at its places in a 68030's caches (addresses mod 256,
+   tools/rpad.py) after the screen's crisp glyphs (14 Nov 2026) */
+#ifndef GPAD_A
+#define GPAD_A 20
+#endif
+#define GPAD_S2(n) #n
+#define GPAD_S(n) GPAD_S2(n)
+#if defined(__m68k__) || defined(__mc68000__)
+#define GPAD(n) __asm__ volatile("bra.w 1f\n\t.skip " GPAD_S(n) "\n1:")
+#else
+#define GPAD(n) ((void)0)
+#endif
 #define MONO_INK 64		/* of 255: a mono glyph's pixel inked from a quarter */
 static void glyph_hook(void *u, long prog, int kind, const char *base, int comp, uint32_t code, uint32_t uni,
 		       const fx *gm, int mode)
@@ -1037,7 +1050,10 @@ static void glyph_hook(void *u, long prog, int kind, const char *base, int comp,
 		k[1] = t.xy >> 6;
 		k[2] = t.yx >> 6;
 		k[3] = t.yy >> 6;
-		k[4] = (sz >> 10) * 2 + (r->mono_glyphs != 0);	/* (a mono glyph isn't a grey one) */
+		/* (2: a screen's of 16 colours or fewer, the glyphs under 20 pixels) */
+		int mono = r->mono_glyphs == 1 || (r->mono_glyphs == 2 && (sz >> 16) < 20);
+
+		k[4] = (sz >> 10) * 2 + mono;	/* (a mono glyph isn't a grey one) */
 		hv = ((unsigned long)(uintptr_t)face >> 4) ^ code * 31u ^ uni * 131u ^ (unsigned long)k[4] * 7u ^
 		     (unsigned long)k[0] * 3u;
 		for (e = f->gh[hv % GC_HASH]; e; e = e->next)
@@ -1073,8 +1089,10 @@ static void glyph_hook(void *u, long prog, int kind, const char *base, int comp,
 				cv_turn();	/* (a glyph made: some ms of FreeType on a Falcon) */
 			if (bm->pixel_mode != FT_PIXEL_MODE_GRAY)
 				return;
-			if (!f->pool && !(f->pool = malloc(GC_MAX * sizeof *f->pool)))
+			if (!f->pool && !(f->pool = malloc(GC_MAX * sizeof *f->pool))) {
+				GPAD(GPAD_A);
 				return;
+			}
 			if (f->npool == GC_MAX || f->gbytes > GC_BYTES)
 				gc_flush(f);
 			e = &f->pool[f->npool];
@@ -1089,7 +1107,25 @@ static void glyph_hook(void *u, long prog, int kind, const char *base, int comp,
 			e->bm = e->w * e->h > 0 ? malloc((size_t)e->w * e->h) : NULL;
 			if (e->w * e->h > 0 && !e->bm)
 				return;
-			if (r->mono_glyphs) {
+			if (mono == 1 && r->mono_glyphs == 2) {
+				/* a screen's: inked from a quarter too, and a stroke
+				   that falls between two pixels, each under a quarter,
+				   inked at the stronger of them (a light face's 1 at
+				   8 pixels was lost: EDOS_01.PDF's Montserrat Light) */
+				int x;
+
+				for (y = 0; y < e->h; y++)
+					for (x = 0; x < e->w; x++) {
+						const unsigned char *p = bm->buffer + (long)y * bm->pitch + x;
+						int a = *p, l = x > 0 ? p[-1] : 0, rt = x + 1 < e->w ? p[1] : 0;
+						int u = y > 0 ? p[-bm->pitch] : 0, d = y + 1 < e->h ? p[bm->pitch] : 0;
+						int ink = a > MONO_INK ||
+							  (a >= MONO_INK / 3 && ((a >= l && a > rt && a + (l > rt ? l : rt) > MONO_INK * 3 / 2) ||
+										 (a >= u && a > d && a + (u > d ? u : d) > MONO_INK * 3 / 2)));
+
+						e->bm[(long)y * e->w + x] = ink ? 255 : 0;
+					}
+			} else if (mono) {
 				int x;
 
 				for (y = 0; y < e->h; y++)

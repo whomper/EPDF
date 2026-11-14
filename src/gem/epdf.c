@@ -362,12 +362,12 @@ static long find_left;			/* pages it may still look at */
    every step of a selection dragged) */
 static void menu_states(void)
 {
-	static const short cmd[10] = { CMD_COPY, CMD_SELALL, CMD_FIND, CMD_FINDNEXT, CMD_FINDPREV, CMD_PAGES,
-				       CMD_SAVEOPT, CMD_ZOOMIN, CMD_ZOOMOUT, CMD_ZOOMACTUAL };
-	static signed char was[10] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
-	static signed char tick = -1;
+	static const short cmd[8] = { CMD_COPY, CMD_SELALL, CMD_FIND, CMD_FINDNEXT, CMD_FINDPREV, CMD_PAGES,
+				      CMD_SAVEOPT, CMD_ZOOMTOGGLE };
+	static signed char was[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
+	static signed char tick = -1, ztick = -1;
 	DOCVIEW *v = doc_view();
-	signed char now[10];
+	signed char now[8], z;
 	int i;
 
 	menus_due = 0;
@@ -378,9 +378,9 @@ static void menu_states(void)
 	now[3] = now[4] = v && find_text[0];
 	now[5] = doc_has_pages() != 0;		/* (greyed for a file without its pages whole) */
 	now[6] = v && doc_prepared();		/* Save Optimised...: a converted PDF's */
-	now[7] = v && doc_pages_mode() && win_zoom_can(1);
-	now[8] = now[9] = v && doc_pages_mode() && win_zoom_can(-1);
-	for (i = 0; i < 10; i++)
+	z = (signed char)(v && doc_pages_mode() && win_zoom_can(-1));	/* (a page zoomed) */
+	now[7] = z || (v && doc_pages_mode() && win_zoom_can(1));
+	for (i = 0; i < 8; i++)
 		if (now[i] != was[i]) {
 			menu_ienable(menu.tree, mbar_object(&menu, cmd[i]), now[i]);
 			was[i] = now[i];
@@ -388,6 +388,10 @@ static void menu_states(void)
 	if (doc_pages_mode() != tick) {
 		tick = (signed char)doc_pages_mode();
 		menu_icheck(menu.tree, mbar_object(&menu, CMD_PAGES), tick);
+	}
+	if (z != ztick) {
+		ztick = z;
+		menu_icheck(menu.tree, mbar_object(&menu, CMD_ZOOMTOGGLE), ztick);
 	}
 }
 
@@ -897,7 +901,7 @@ static void command(int c)
 {
 	char n[8];
 
-	if (c != CMD_ABOUT && c != CMD_ZOOMIN && c != CMD_ZOOMOUT && c != CMD_ZOOMACTUAL)
+	if (c != CMD_ABOUT && c != CMD_ZOOMIN && c != CMD_ZOOMOUT && c != CMD_ZOOMACTUAL && c != CMD_ZOOMTOGGLE)
 		win_zoom_end();		/* (a picture shown whole: the text back first) */
 	switch (c) {
 	case CMD_ABOUT:
@@ -909,11 +913,18 @@ static void command(int c)
 	case CMD_SAVEOPT:
 		save_optimised();
 		break;
-	case CMD_ZOOMIN:
-	case CMD_ZOOMOUT:
-		win_zoom_step(c == CMD_ZOOMIN ? 1 : -1);
+	case CMD_ZOOMTOGGLE:			/* View > Zoom In: zoomed, or back */
+		if (win_zoom_can(-1))
+			win_zoom_actual();
+		else
+			win_zoom_in();
 		menu_states();
 		break;
+	case CMD_ZOOMIN:
+		win_zoom_in();
+		menu_states();
+		break;
+	case CMD_ZOOMOUT:
 	case CMD_ZOOMACTUAL:
 		win_zoom_actual();
 		menu_states();

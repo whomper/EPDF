@@ -25,6 +25,13 @@ int rdraw_machine(void)
 	return get_cookie(0x5F435055L) >= 20;	/* _CPU: 0, 10, 20, 30, 40, 60 */
 }
 
+/* a screen of 16 colours or fewer: render.ovl's small glyphs a bit a
+   pixel (ROVL_HOST's crisp), from the next page drawn */
+void rdraw_crisp(int on)
+{
+	host.crisp = on;
+}
+
 int rdraw_load(int (*turn)(void), char *err, int errlen)
 {
 	const ROVL *o;

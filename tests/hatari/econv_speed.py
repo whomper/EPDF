@@ -68,7 +68,9 @@ def run(work, machine):
         r.act("About box closed", speed.WINDOW, lambda: r.key("Escape"))
         # (not the file selector: its time open is the AES's and the user's,
         # and counts in the stretch until EConvert's next event call)
-        r.act("Convert", speed.KEY, lambda: r.key("Return"), job=True)
+        # (moving: the job's progress changes the window by design, the
+        # rig's turns timed as the job's, not a screen come to rest)
+        r.act("Convert", speed.KEY, lambda: r.key("Return"), job=True, moving=True)
         r.act("Stop", speed.KEY, lambda: r.key("Escape"))
         bad = r.report()
     finally:

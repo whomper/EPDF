@@ -87,7 +87,7 @@ def run(work, machine, src):
         inf0 = "WRITETO=C:\\OUT\nWINDOW=%d,%d\n" % WIN_AT
         r.write("ECONV/ECONVERT.INF", inf0)
         r.write("LAUNCH.TXT", "C:\\ECONV\\ECONVERT.PRG\nC:\\IN.PDF C:\\IN2.PDF\n")
-        r.start("C:\\LAUNCH.PRG")
+        r.start("C:\\LAUNCH.PRG", ready="ECONVERT started")
         end = time.time() + 120
         while time.time() < end and "ECONVERT started" not in r.console():
             time.sleep(1)

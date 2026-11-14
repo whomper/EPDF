@@ -40,7 +40,10 @@ static unsigned long t_mark;
 #endif
 
 /* no info line: the status bar at the foot says what it said (as EWeb's) */
-#define WKIND (NAME | CLOSER | FULLER | MOVER | SIZER | UPARROW | DNARROW | VSLIDE)
+/* the left and right arrows and slider move a zoomed page sideways; out
+   of a zoom the slider fills its bar (Erez, 14 Nov 2026: "have a vertical
+   and add a horizontal scroll", always there) */
+#define WKIND (NAME | CLOSER | FULLER | MOVER | SIZER | UPARROW | DNARROW | VSLIDE | LFARROW | RTARROW | HSLIDE)
 #define MARGIN 8
 
 static short win = -1;
@@ -170,12 +173,26 @@ void win_info(void)
    wind_set, 40 ms on an ST, so each is set only when it changes (a line
    scrolled set both again: the 80 ms turn after the key) */
 static short sl_size = -1, sl_pos = -1, sl_px = -1;	/* sl_px: the place in the bar's pixels */
+static short hs_size = -1, hs_pos = -1;			/* the horizontal one's */
 extern short gl_hchar;
+static void zoom_sliders(void);
 
 static void sliders(void)
 {
 	DOCVIEW *v = doc_view();
 	long total = v ? v->total : 0, size = 1000, pos = 0;
+
+	if (win_zoomed()) {
+		zoom_sliders();		/* (a zoomed page's place) */
+		sliders_due = 0;
+		return;
+	}
+	if (hs_size != 1000 || hs_pos != 0) {
+		wind_set(win, WF_HSLSIZE, 1000, 0, 0, 0);	/* (the text: nothing sideways) */
+		wind_set(win, WF_HSLIDE, 0, 0, 0, 0);
+		hs_size = 1000;
+		hs_pos = 0;
+	}
 
 	if (v && total > rows) {
 		size = (long)rows * 1000 / total;
@@ -1173,12 +1190,86 @@ int win_zoomed(void)
 	return zoom.on;
 }
 
+/* a zoomed page's sliders: the window's share of it and its place, each
+   set only when it changes (sliders) */
+static void zoom_sliders(void)
+{
+	long vs = zoom.p.h > work.h ? (long)work.h * 1000 / zoom.p.h : 1000;
+	long hs = zoom.p.w > work.w ? (long)work.w * 1000 / zoom.p.w : 1000;
+	long vp = zoom.p.h > work.h ? zoom.top * 1000 / (zoom.p.h - work.h) : 0;
+	long hp = zoom.p.w > work.w ? zoom.left * 1000 / (zoom.p.w - work.w) : 0;
+
+	vs = vs < 1 ? 1 : vs;
+	hs = hs < 1 ? 1 : hs;
+	vp = vp > 1000 ? 1000 : vp;
+	hp = hp > 1000 ? 1000 : hp;
+	if (vs != sl_size)
+		wind_set(win, WF_VSLSIZE, (short)vs, 0, 0, 0);
+	if (vp != sl_pos)
+		wind_set(win, WF_VSLIDE, (short)vp, 0, 0, 0);
+	if (hs != hs_size)
+		wind_set(win, WF_HSLSIZE, (short)hs, 0, 0, 0);
+	if (hp != hs_pos)
+		wind_set(win, WF_HSLIDE, (short)hp, 0, 0, 0);
+	sl_size = (short)vs;
+	sl_pos = (short)vp;
+	sl_px = -1;			/* (the text's next set from scratch) */
+	hs_size = (short)hs;
+	hs_pos = (short)hp;
+}
+
+/* a zoomed page moved to (l, t), the window drawn again: 1 when it moved */
+static int zoom_move(long l, long t)
+{
+	long mx = zoom.p.w > work.w ? zoom.p.w - work.w : 0, my = zoom.p.h > work.h ? zoom.p.h - work.h : 0;
+
+	l = l < 0 ? 0 : l > mx ? mx : l;
+	l &= ~15L;			/* (on a word of the bitmap: the copy's fast way) */
+	t = t < 0 ? 0 : t > my ? my : t;
+	if (l == zoom.left && t == zoom.top)
+		return 0;
+	zoom.left = l;
+	zoom.top = t;
+	win_redraw(&work);
+	sliders_due = 1;
+	return 1;
+}
+
+/* a slider of the window dragged while a page is zoomed (vert: the right
+   one): the page moved there, not the text back (Erez, 14 Nov 2026) */
+static void zoom_slid(int vert, short pos)
+{
+	if (vert)
+		zoom_move(zoom.left, zoom.p.h > work.h ? (long)pos * (zoom.p.h - work.h) / 1000 : 0);
+	else
+		zoom_move(zoom.p.w > work.w ? (long)pos * (zoom.p.w - work.w) / 1000 : 0, zoom.top);
+}
+
+/* an arrow or a slider's bar clicked while a page is zoomed */
+static void zoom_arrowed(short how)
+{
+	long l = zoom.left, t = zoom.top;
+
+	switch (how) {
+	case WA_UPPAGE: t -= work.h - ch; break;
+	case WA_DNPAGE: t += work.h - ch; break;
+	case WA_UPLINE: t -= 2L * ch; break;
+	case WA_DNLINE: t += 2L * ch; break;
+	case WA_LFPAGE: l -= work.w - 32; break;
+	case WA_RTPAGE: l += work.w - 32; break;
+	case WA_LFLINE: l -= 32; break;
+	case WA_RTLINE: l += 32; break;
+	}
+	zoom_move(l, t);
+}
+
 void win_zoom_end(void)
 {
 	if (!zoom.on)
 		return;
 	zoom.on = 0;
 	zoom.pct = 0;
+	sliders_due = 1;		/* (the text's again) */
 	zoom_pre_free();
 	doc_pic_stop_page_unless(zoom.base.obj, zoom.base.w, zoom.base.h);	/* (a zoomed page still drawing gives way) */
 	if (has_menu_states)
@@ -1374,6 +1465,7 @@ static void zoom_to(int k, short fx, short fy)
 		zoom.top = zoom.top < 0 ? 0 : zoom.top > my ? my : zoom.top;
 	}
 	zoom.on = 1;
+	sliders_due = 1;
 	{
 		char a[16];
 
@@ -1428,17 +1520,20 @@ int win_zoom_can(int dir)
 	return 0;
 }
 
-void win_zoom_step(int dir)
+/* View > Zoom In and ^+: the page in view at 200 % (Erez, 14 Nov 2026:
+   two sizes, Normal and Zoom; 200 % a click's too), else the biggest
+   there is room for */
+void win_zoom_in(void)
 {
-	int k = zoom_step_now();
+	int k;
 	DVPIC p;
 
-	if (zoom.on && !zoom.pct)
+	if (zoom.on)
 		return;
-	if (!zoom.on) {
+	{
 		long r;
 
-		if (dir < 0 || !page_line_at(0, rows, &zoom.base))
+		if (!page_line_at(0, rows, &zoom.base))
 			return;
 		/* the page's first row in view: where its picture starts */
 		for (r = 0; r <= rows; r++) {
@@ -1457,18 +1552,16 @@ void win_zoom_step(int dir)
 		}
 		zoom.base.row = zoom.base.row < 0 ? -zoom.base.row : 0;
 	}
-	if (dir < 0) {
-		zoom_to(k - 1, (short)(work.x + work.w / 2), (short)(work.y + work.h / 2));
-		return;
-	}
-	for (k = k + 1; k < NZSTEPS; k++)
+	for (k = NZSTEPS - 1; k > 0 && zsteps[k] > 200; k--)
+		;
+	for (; k > 0; k--)
 		if (zoom_page_pic(&zoom.base, zsteps[k], &p)) {
 			zoom_to(k, (short)(work.x + work.w / 2), (short)(work.y + work.h / 2));
 			return;
 		}
 }
 
-/* View > Actual size: View > Pages' page as it was */
+/* the zoom ended (View > Zoom In again, ^-, ^0): View > Pages' page as it was */
 void win_zoom_actual(void)
 {
 	if (zoom.on && zoom.pct)
@@ -1526,6 +1619,7 @@ int win_zoom_at(short mx, short my)
 				zoom.top = zoom.top < 0 ? 0 : zoom.top > myl ? myl : zoom.top;
 			}
 			zoom.on = 1;
+			sliders_due = 1;
 			log_event("zoom", "200", NULL);
 			if (has_menu_states)
 				has_menu_states();
@@ -1565,6 +1659,7 @@ int win_zoom_at(short mx, short my)
 	zoom.left = 0;
 	zoom.pct = 0;
 	zoom.on = 1;
+	sliders_due = 1;
 	log_event("zoom", NULL, NULL);
 	win_draw_all();
 	return 1;
@@ -1584,6 +1679,7 @@ int win_zoom_pan(long dx, long dy)
 		return 0;
 	zoom.left = l;
 	zoom.top = t;
+	sliders_due = 1;
 	{
 		/* drawn while the button is held: not BEG_UPDATE of our own,
 		   which TOS's AES holds back till the release (5.8, click.h) */
@@ -1619,6 +1715,7 @@ int win_zoom_key(short scan)
 		if (l != zoom.left) {
 			zoom.left = l;
 			win_redraw(&work);
+			sliders_due = 1;
 		}
 		return 1;
 	}
@@ -1627,6 +1724,7 @@ int win_zoom_key(short scan)
 		win_zoom_end();
 		return 1;
 	case 0x4a: case 0x4e:					/* keypad - and +: Zoom out, in */
+	case 0x0b: case 0x0c: case 0x0d: case 0x70:		/* ^0, ^-, ^+ (^=), ^ keypad 0 */
 		return 0;
 	case 0x48: step = -2L * ch; break;			/* Up */
 	case 0x50: step = 2L * ch; break;			/* Down */
@@ -1646,6 +1744,7 @@ int win_zoom_key(short scan)
 	if (step != zoom.top) {
 		zoom.top = step;
 		win_redraw(&work);
+		sliders_due = 1;
 	}
 	return 1;
 }
@@ -1756,12 +1855,16 @@ static void moved_rest(void)
 }
 
 /*
- * A scroll's copy on a 256-colour screen by the CPU, whole rows of
- * 16-pixel groups at a time (common's scr_copy_rows): the VDI's copy of a
- * window's rows was 65-70 ms of Falcon-4's line, the CPU's 60-65 (the
- * memory's floor either way; scr_rows leaves a 68030's to the VDI, as fast
- * in 16 colours). The box starts on a group and is whole groups wide (the
- * caller's); 0 when it isn't for here.
+ * A scroll's copy on a 68020 or later by the CPU, whole rows of 16-pixel
+ * groups at a time, every plane of a row together (common's
+ * scr_copy_rows): the VDI's copy of a window's rows was 65-70 ms of
+ * Falcon-4's line in 256 colours, the CPU's 60-65 (the memory's floor
+ * either way). In 16 and 4 colours too: the Falcon's VDI moves the window
+ * a plane at a time, and a scroll held down showed the text grey and
+ * coloured at its old place and its new one between the planes (Erez's
+ * Falcon in 16 colours, View > Pages, 14 Nov 2026). An ST's goes through
+ * scr_rows (the CPU there already). The box starts on a group and is whole
+ * groups wide (the caller's); 0 when it isn't for here.
  */
 static int copy_wide(const short *p)
 {
@@ -1769,8 +1872,8 @@ static int copy_wide(const short *p)
 	short np, sw, sh, rows_n;
 	unsigned char *base;
 
-	if (planes != 8 || (p[0] & 15) || ((p[2] + 1) & 15) || p[4] != p[0] || p[6] != p[2] ||
-	    p[3] - p[1] != p[7] - p[5] || !(base = scr_at(&bpl, &np, &sw, &sh)) || np != 8 || p[2] >= sw ||
+	if ((planes != 8 && ((planes != 4 && planes != 2) || scr_cpu_wins())) || (p[0] & 15) || ((p[2] + 1) & 15) || p[4] != p[0] || p[6] != p[2] ||
+	    p[3] - p[1] != p[7] - p[5] || !(base = scr_at(&bpl, &np, &sw, &sh)) || np != planes || p[2] >= sw ||
 	    p[1] < 0 || p[5] < 0 || p[3] >= sh || p[7] >= sh)
 		return 0;
 	n = (long)(p[2] + 1 - p[0]) / 16 * 2 * np;
@@ -2288,7 +2391,7 @@ int win_open(short x, short y, short w, short h)
 	win = wind_create(icon_kind(WKIND), desk_x, desk_y, desk_w, desk_h);
 	if (win < 0)
 		return -1;
-	sl_size = sl_pos = sl_px = -1;	/* a new window: its sliders set */
+	sl_size = sl_pos = sl_px = hs_size = hs_pos = -1;	/* a new window: its sliders set */
 	win_title();
 	wind_open(win, x, y, w, h);
 	iconified = 0;
@@ -2386,6 +2489,10 @@ int win_message(const short *msg)
 	case WM_ARROWED:
 		if (iconified)
 			return 1;
+		if (win_zoomed()) {
+			zoom_arrowed(msg[4]);
+			return 1;
+		}
 		switch (msg[4]) {
 		case WA_UPPAGE: win_scroll(-(rows - 1)); break;
 		case WA_DNPAGE: win_scroll(rows - 1); break;
@@ -2394,8 +2501,14 @@ int win_message(const short *msg)
 		}
 		return 1;
 	case WM_VSLID:
-		if (!iconified)
+		if (!iconified && win_zoomed())
+			zoom_slid(1, msg[4]);
+		else if (!iconified)
 			win_slider(msg[4]);
+		return 1;
+	case WM_HSLID:
+		if (!iconified && win_zoomed())
+			zoom_slid(0, msg[4]);
 		return 1;
 	case WM_ICONIFY:
 	case WM_ALLICONIFY:

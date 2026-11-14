@@ -115,6 +115,7 @@ static int rv_page(void *doc, long n, int width, int y0, ROVL_PAGE *out)
 					   a scanned page, the band at 40 %; 13 Nov 2026) */
 	render_clock = ms;
 	pic_dsp = dsp_on && dspjpeg_present() ? &dspjpeg_port_jpeg : NULL;
+	x->r.mono_glyphs = H->size >= (long)sizeof(ROVL_HOST) && H->crisp ? 2 : 0;
 	rc = render_page_from(&x->r, n, width, y0);
 	/* no room for its canvas (a page drawn bigger: View > Zoom in, Erez
 	   8 Nov 2026): in smaller bands, each reading the page again, down to

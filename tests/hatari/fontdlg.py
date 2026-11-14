@@ -45,7 +45,7 @@ def run(work, machine):
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
         make_pdf(os.path.join(r.hd, "BOOK.PDF"), book(2))
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\BOOK.PDF\n")
-        r.start("C:\\LAUNCH.PRG")
+        r.start("C:\\LAUNCH.PRG", ready="EPDF started")
         wait(r, "EPDF page ", 2, 120)
         park(r)
         r.still()

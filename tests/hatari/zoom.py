@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
-"""View > Larger text, Smaller text and Actual size (Erez, 8 Nov 2026: the
-keypad's + and -, 100 to 400 %, a zoomed page dragged with the mouse; 9 Nov:
-EWeb's words and ^+ ^- ^0), on common's speed rig:
+"""View > Zoom In (Erez, 14 Nov 2026: two sizes, Normal and Zoom, the item
+ticked while zoomed; the keypad's + and -, EWeb's ^+ ^- ^0; a zoomed page
+moved by a drag, by the window's sliders and its arrows), on common's
+speed rig:
 
     zoom.py WORK [MACHINE...]        (default: Falcon:16 ST:mono)
 
 On a Falcon (Erez's, 14 MB: a stock 4 MB Falcon has room for 150 % of
-the showcase's first page at most): the showcase (showcase.py) with render.ovl and the standard
-fonts, View > Pages, then keypad + (150 %: "zoom 150", the page drawn by
-render.ovl 1.5 times as wide), + again (200 %), a drag (the window shows
-another part of the page), - twice (back to View > Pages as it was), and a
-click on a page (200 %) and a click alone (back). The same through a
-converted copy whose original is beside it: the zoomed page drawn from the
-original, in colour. On an ST: a converted copy, + gives EConvert's double
-page (200 %, "zoom 200"), + again nothing more.
+the showcase's first page at most): the showcase (showcase.py) with
+render.ovl and the standard fonts, View > Pages, then keypad + (200 %:
+"zoom 200", the enlarged page at once, then the one render.ovl draws twice
+as wide), + again (nothing more), a drag, the right bar below its slider
+and the foot's left and right arrows (each moves the page, none gives the
+page as it was back), - (back to View > Pages as it was), ^+ and ^0. The
+same through a converted copy whose original is beside it: the zoomed page
+drawn from the original, in colour. On an ST: a converted copy, + gives
+EConvert's double page (200 %, "zoom 200"), + again nothing more.
 """
 import os
 import re
@@ -35,6 +37,11 @@ speed = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(speed)
 
 FONTS = os.path.join(TOP, "third_party", "liberation", "fonts")
+# the window's right bar below its slider and its foot's arrows (Falcon,
+# 640 x 480: the window over the desktop)
+VBAR_X, VBAR_Y = 628, 420
+LEFT_X, LEFT_Y = 18, 466
+RIGHT_X, RIGHT_Y = 604, 466
 
 
 def wait(r, what, count=1, most=300):
@@ -80,7 +87,7 @@ def run(work, machine, converted):
                             os.path.join(r.hd, "ATARI", "SHOW.PDF")], check=True, stdout=subprocess.DEVNULL)
             doc = "C:\\ATARI\\SHOW.PDF"
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\n%s\n" % doc)
-        r.start("C:\\LAUNCH.PRG")
+        r.start("C:\\LAUNCH.PRG", ready="EPDF started")
         wait(r, "EPDF page ", 9, 180)
         park(r)
         r.still()
@@ -111,33 +118,19 @@ def run(work, machine, converted):
             if "EPDF zoom 300" in r.console() or "EPDF zoom 400" in r.console():
                 bad.append("ST: zoomed past the double page")
         else:
-            if not wait(r, "EPDF zoom 150", 1, 30):
-                bad.append("keypad +: no 150 %%: %s" % [l for l in r.console().splitlines() if "zoom" in l])
+            # two sizes, Normal and Zoom (Erez, 14 Nov 2026): keypad + gives
+            # 200 % at once, + again nothing more
+            if not wait(r, "EPDF zoom 200", 1, 30):
+                bad.append("keypad +: no 200 %%: %s" % [l for l in r.console().splitlines() if "zoom" in l])
                 raise RuntimeError
             # the page's picture enlarged at once, before the sharp one is drawn
             # (Erez, 8 Nov 2026: "tens of seconds of wait time")
             time.sleep(2)
             quick = r.shot("enlarged")
             if "EPDF zoom-enlarged" not in r.console():
-                bad.append("150 %: no enlarged picture shown first")
+                bad.append("200 %: no enlarged picture shown first")
             elif differ(pages, quick) < 5000:
-                bad.append("150 %%: the enlarged page didn't show at once (%d pixels)" % differ(pages, quick))
-            n0 = r.console().count("rows from 0 ")
-            if not wait(r, "rows from 0 ", n0 + 0, 5):
-                pass
-            end = time.time() + 300
-            while time.time() < end and "EPDF picture ready" not in r.console().split("EPDF zoom 150")[-1]:
-                time.sleep(1)
-            time.sleep(2)
-            park(r)
-            r.still()
-            z150 = r.shot("zoom150")
-            if differ(pages, z150) < 5000:
-                bad.append("150 %%: the window hardly changed (%d pixels)" % differ(pages, z150))
-            widths = re.findall(r"EPDF page-drawn \d+ ms (\d+) rows", r.console().split("EPDF zoom 150")[-1])
-            r.key("KP_Add")
-            if not wait(r, "EPDF zoom 200", 1, 30):
-                bad.append("keypad + again: no 200 %")
+                bad.append("200 %%: the enlarged page didn't show at once (%d pixels)" % differ(pages, quick))
             end = time.time() + 300
             while time.time() < end and "EPDF picture ready" not in r.console().split("EPDF zoom 200")[-1]:
                 time.sleep(1)
@@ -145,6 +138,12 @@ def run(work, machine, converted):
             park(r)
             r.still()
             z200 = r.shot("zoom200")
+            if differ(pages, z200) < 5000:
+                bad.append("200 %%: the window hardly changed (%d pixels)" % differ(pages, z200))
+            r.key("KP_Add")
+            time.sleep(3)
+            if r.console().count("EPDF zoom ") > 1:
+                bad.append("keypad + again zoomed further: %s" % [l for l in r.console().splitlines() if "EPDF zoom " in l])
             drag(r, 400, 300, 200, 150)
             time.sleep(3)
             park(r)
@@ -154,19 +153,33 @@ def run(work, machine, converted):
                 bad.append("the drag didn't move the page (%d pixels)" % differ(z200, dragged))
             if "EPDF pages 0" in r.console():
                 bad.append("the drag left View > Pages")
-            r.key("KP_Subtract")
-            wait(r, "EPDF zoom 150", 2, 30)
+            # the window's sliders and arrows move the zoomed page (Erez, 14
+            # Nov 2026: the right slider gave the page as it was back)
+            prev = dragged
+            for what, x, y, least in (("the right bar below its slider", VBAR_X, VBAR_Y, 2000),
+                                      ("the left arrow", LEFT_X, LEFT_Y, 100),
+                                      ("the right arrow", RIGHT_X, RIGHT_Y, 100)):
+                r.click(x, y)
+                time.sleep(3)
+                park(r)
+                r.still()
+                now = r.shot("bar-" + what.split()[1])
+                if differ(prev, now) < least:
+                    bad.append("%s didn't move the zoomed page (%d pixels)" % (what, differ(prev, now)))
+                if differ(pages, now) < 2000:
+                    bad.append("%s gave the page as it was back" % what)
+                prev = now
             r.key("KP_Subtract")
             time.sleep(4)
             park(r)
             r.still()
             back = r.shot("back")
             if differ(pages, back) > 2000:
-                bad.append("keypad - twice: not View > Pages as it was (%d pixels differ)" % differ(pages, back))
-            # EWeb's keys (Erez, 9 Nov 2026): ^+ a step larger, ^0 the page as it was
-            n150 = r.console().count("EPDF zoom 150")
+                bad.append("keypad -: not View > Pages as it was (%d pixels differ)" % differ(pages, back))
+            # EWeb's keys (Erez, 9 Nov 2026): ^+ zoomed, ^0 the page as it was
+            n200 = r.console().count("EPDF zoom 200")
             r.key("ctrl+plus")
-            if not wait(r, "EPDF zoom 150", n150 + 1, 30):
+            if not wait(r, "EPDF zoom 200", n200 + 1, 30):
                 bad.append("^+ didn't zoom")
             time.sleep(4)
             r.key("ctrl+0")

@@ -98,7 +98,7 @@ def run(work, machine, port, there=True):
         r.write("ECONV/ECONVERT.INF", "WRITETO=C:\\OUT\nCONVERT=gateway\nGATE=127.0.0.1\nGATEPORT=%d\nPAGES=%s\n" %
                 (port if there else 1, PAGES))
         r.write("LAUNCH.TXT", "C:\\ECONV\\ECONVERT.PRG\nC:\\%s C:\\%s\n" % names)
-        r.start("C:\\LAUNCH.PRG")
+        r.start("C:\\LAUNCH.PRG", ready="ECONVERT started")
         end = time.time() + 120
         while time.time() < end and "ECONVERT started" not in r.console():
             time.sleep(1)
@@ -174,7 +174,7 @@ def run_epdf(work, machine, port, there=True):
         make_pdf(src, book(4))
         r.write("EPDF/epdf.inf", "GATEWAY=1\nGATE=127.0.0.1\nGATEPORT=%d\n" % (port if there else 1))
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\DOCS\\BOOK.PDF\n")
-        r.start("C:\\LAUNCH.PRG")
+        r.start("C:\\LAUNCH.PRG", ready="EPDF started")
         end = time.time() + 900
         k = 0
         while time.time() < end and "EPDF gateway-done" not in r.console():

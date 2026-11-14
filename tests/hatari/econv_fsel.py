@@ -66,7 +66,7 @@ def run(work, machine):
         make_pdf(os.path.join(r.hd, "PDFS", "IN.PDF"), book(2))
         r.write("ECONV/ECONVERT.INF", "FOLDER=C:\\PDFS\n")
         r.write("LAUNCH.TXT", "C:\\ECONV\\ECONVERT.PRG\n")
-        r.start("C:\\LAUNCH.PRG")
+        r.start("C:\\LAUNCH.PRG", ready="ECONVERT started")
         end = time.time() + 120
         while time.time() < end and "ECONVERT started" not in r.console():
             time.sleep(1)

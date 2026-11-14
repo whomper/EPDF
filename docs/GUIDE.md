@@ -55,14 +55,14 @@ gives way to you at once.
 - **View:** **The page's lines**: ticked, each line is as it is on the page; not ticked (as EPDF
   starts), the lines of a paragraph are joined and wrapped to the window, so the text reads at any
   window width. **Pages**: each page whole, as it is printed: on a Falcon or a TT any PDF (see
-  below), on an ST a converted PDF's; greyed where there are none. **Larger text** (^+, or the
-  keypad's +), **Smaller text** (^-, or the keypad's -) and **Actual size** (^0) show the page in
-  view bigger, smaller, and as it was: 150, 200, 300 and 400%, as far as the memory holds; a click
-  on a page goes to 200% and a click back. On a Falcon or a TT the
+  below), on an ST a converted PDF's; greyed where there are none. **Zoom In** (^+, or the
+  keypad's +) shows the page in view at 200% (150% where the memory holds no more), ticked while
+  it does; chosen again, or ^-, the keypad's -, ^0 or Esc, gives the pages back. A click on a page
+  zooms it too, and a click back. On a Falcon or a TT the
   bigger page is drawn by the Atari, in colour (a converted PDF's from its original where EPDF
   knows it, the Gateway's). On an ST, it's EConvert's double page in black and white (200 %).
-  A zoomed page is moved by dragging it with the mouse, or with the arrow keys; Esc gives the
-  pages back. **Translate**: ticked, the text view shows each page translated into the language
+  A zoomed page is moved with the window's sliders and arrows (the one at its foot sideways), by
+  dragging it with the mouse, or with the arrow keys. **Translate**: ticked, the text view shows each page translated into the language
   chosen in Settings (see [Translating](#translating)).
 - **Page:** the previous and the next page (^Left, ^Right), the first and the last (^Clr/Home,
   ⇧^Clr/Home).

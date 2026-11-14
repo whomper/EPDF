@@ -80,7 +80,7 @@ def run(work, machine):
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
         make_pdf(os.path.join(r.hd, "BOOK.PDF"), book(30))
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\BOOK.PDF\n")
-        r.start("C:\\LAUNCH.PRG")
+        r.start("C:\\LAUNCH.PRG", ready="EPDF started")
         wait_for(r, "EPDF opened", 1)
         time.sleep(120 if machine.startswith("ST") else 60)    # the reading done
         bad = 0

@@ -198,6 +198,23 @@ static void pages_drawn_note(long n)
 	k = snprintf(b, sizeof b, "\x7F%ld 640x%ld\n", PICS_PAGE + n, h);
 	pages_have = 1;
 	ts_put(&pstore, n, b, k);
+	if (drawn == 1) {
+		/* the first page read: every page not read yet at its size too,
+		   so a page reached by the reader keeps its height (most do) and
+		   what is below it stays where it was. Before, an unread page was
+		   its head alone and grew when read: a held key scrolling the
+		   pages saw them jump (Erez's EDOS_01.PDF, 14 Nov 2026) */
+		long m;
+
+		drawn = 2;
+		for (m = 0; m < onpages; m++)
+			if (m != n && !ts_have(&store, m)) {
+				k = snprintf(b, sizeof b, "\x7F%ld 640x%ld\n", PICS_PAGE + m, h);
+				ts_put(&pstore, m, b, k);
+				if (pages_mode)
+					dv_page_ready(&view, m);
+			}
+	}
 }
 
 /* the page read's size, on the reader's stack */
@@ -283,7 +300,7 @@ static TSTORE *text_store(void);
 void doc_set_pages(int on)
 {
 	long top;
-	int cols, lm;
+	int cols, lm, pw, pc, pa;
 
 	if (!doc || !pstore_open || !on == !pages_mode)
 		return;
@@ -292,9 +309,12 @@ void doc_set_pages(int on)
 	top = dv_page_at_top(&view);
 	cols = view.cols;
 	lm = view.lines_mode;
+	pw = view.pic_w;
+	pc = view.pic_ch;
+	pa = view.pic_aspect;
 	dv_free(&view);
 	pages_mode = on;
-	if (dv_init(&view, on ? &pstore : text_store(), npages, cols, lm) != 0) {
+	if (dv_init_pics(&view, on ? &pstore : text_store(), npages, cols, lm, pw, pc, pa) != 0) {
 		pages_mode = 0;
 		dv_init(&view, &store, npages, cols, lm);
 	}
@@ -367,7 +387,7 @@ void doc_tr_forget(void)
 void doc_set_translate(int on)
 {
 	long top;
-	int cols, lm;
+	int cols, lm, pw, pc, pa;
 
 	if (!doc || (on && !tr_open) || !on == !tr_mode)
 		return;
@@ -377,8 +397,11 @@ void doc_set_translate(int on)
 	top = dv_page_at_top(&view);
 	cols = view.cols;
 	lm = view.lines_mode;
+	pw = view.pic_w;
+	pc = view.pic_ch;
+	pa = view.pic_aspect;
 	dv_free(&view);
-	if (dv_init(&view, text_store(), npages, cols, lm) != 0) {
+	if (dv_init_pics(&view, text_store(), npages, cols, lm, pw, pc, pa) != 0) {
 		tr_mode = 0;
 		dv_init(&view, &store, npages, cols, lm);
 	}
@@ -591,6 +614,7 @@ static int page_rows(long n, int w, int h, void (*row)(void *u, long y, const un
 	int rc, y0 = 0, i;
 
 	*why = PIC_DAMAGED;
+	rdraw_crisp(planes <= 4);
 	if (!rdraw_load(draw_turn, err, sizeof err)) {
 		log_event("render-ovl", err, NULL);
 		*why = PIC_UNSUPPORTED;

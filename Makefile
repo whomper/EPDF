@@ -217,7 +217,7 @@ FT_OBJS = $(patsubst $(FT)/src/%.c,ft/%.o,$(filter $(FT)/src/%,$(FT_SRC))) ft/ep
 comma := ,
 FT_CV_KEEP = $(addprefix -Wl$(comma)-u$(comma),FT_Matrix_Invert FT_Get_Next_Char FT_Vector_Transform \
                FT_Outline_Get_Orientation FT_Outline_EmboldenXY FT_Get_Advances FT_Get_Advance \
-               ft_cv_pad ft_cv_pad_ro ft_cv_pad_str ft_cv_pad_data ft_cv_pad_init_ro lj_cv_pad pic_cv_pad cs_cv_pad ec_cv_pad ec_cv_pad_ro)
+               ft_cv_pad ft_cv_pad_ro ft_cv_pad_str ft_cv_pad_data ft_cv_pad_init_ro lj_cv_pad pic_cv_pad cs_cv_pad ec_cv_pad ec_cv_pad_ro head_cv_pad)
 FT_CV_OBJS = $(patsubst ft/autofit/autofit.o,ft/ftpad_af.o,$(patsubst ft/base/ftinit.o,ft/base/ftinit_noaf.o ft/ftpad_init.o,$(FT_OBJS)))
 build/m68030/ft/ftpad_af.o: FT_PAD = -DFT_PAD_NAME=ft_cv_pad -DFT_PAD_TEXT=68 -DFT_PAD_RO=36 -DFT_PAD_STR=18 -DFT_PAD_DATA=8
 build/m68030/ft/ftpad_init.o: FT_PAD = -DFT_PAD_NAME=ft_cv_pad_init -DFT_PAD_TEXT=0 -DFT_PAD_RO=4 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
@@ -230,7 +230,9 @@ CS_PAD ?= 178
 build/m68030/ecpad.o: FT_PAD = -DFT_PAD_NAME=ec_cv_pad -DFT_PAD_TEXT=$(EC_PAD) -DFT_PAD_RO=$(EC_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 EC_PAD ?= 164
 EC_PAD_RO ?= 214
-build/m68030/ecpad.o build/m68030/cspad.o build/m68030/picpad.o build/m68030/ljpad.o build/m68030/ft/ftpad_af.o build/m68030/ft/ftpad_init.o: src/conv/ftpad.S Makefile | build/m68030
+build/m68030/headpad.o: FT_PAD = -DFT_PAD_NAME=head_cv_pad -DFT_PAD_TEXT=$(HEAD_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
+HEAD_PAD ?= 220
+build/m68030/headpad.o build/m68030/ecpad.o build/m68030/cspad.o build/m68030/picpad.o build/m68030/ljpad.o build/m68030/ft/ftpad_af.o build/m68030/ft/ftpad_init.o: src/conv/ftpad.S Makefile | build/m68030
 	@mkdir -p $(dir $@)
 	$(XCC) -m68030 $(FT_PAD) -c -o $@ $<
 build/m68030/ft/base/ftinit_noaf.o: $(FT)/src/base/ftinit.c | build/m68030
@@ -369,7 +371,7 @@ binary/CONVTEST.PRG: $(CV_ATARI_OBJ) build/m68030cv/atari/convtest.o build/m6803
 # renderer and the reader as CONVTEST.PRG has them, built for the 68030,
 # loaded by EPDF.PRG with common's ovl.c (an ST never loads it); its heap
 # is the program's (libc.c with LIBC_NO_HEAP)
-ROVL_OBJ = build/m68030cv/src/rovl/head.o build/m68030cv/src/rovl/pens.o build/m68030ovl/libc.o \
+ROVL_OBJ = build/m68030cv/src/rovl/head.o build/m68030/headpad.o build/m68030cv/src/rovl/pens.o build/m68030ovl/libc.o \
            $(filter-out build/m68030cv/common/atari/libc.o build/m68030/cspad.o,$(CV_ATARI_OBJ))
 build/m68030cv/src/rovl/head.o build/m68030cv/src/rovl/pens.o: XFLAGS += -Isrc/rovl -DROVL_VERSION=\"$(VERSION_STR)\"
 build/m68030ovl/libc.o: common/atari/libc.c $(HDRS)

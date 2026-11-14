@@ -160,7 +160,7 @@ def run(work, machine, tg_port, pdf_port, tglog, mode, he_port=0):
         r.write("EPDF/epdf.inf", inf)
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\DOCS\\BOOK.PDF\n")
         before = requests(tglog) if mode != "hebrew" else 0
-        r.start("C:\\LAUNCH.PRG")
+        r.start("C:\\LAUNCH.PRG", ready="EPDF started")
         end = time.time() + 600
         if mode == "off":
             while time.time() < end and r.console().count("EPDF page ") < 4:

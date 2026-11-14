@@ -35,8 +35,10 @@ typedef struct {
 	RFONTS *fonts;
 	const char *fontdir;		/* the standard fonts' files (Liberation*.ttf), or NULL */
 	long glyphs, glyphs_missed, images, images_missed;
-	int mono_glyphs;		/* glyphs hinted, a bit a pixel (the mono page's: grey edges
-					   dithered broke 10-pixel text into dots, Erez, 4 Nov 2026) */
+	int mono_glyphs;		/* 1: glyphs a bit a pixel (the mono page's: grey edges
+					   dithered broke 10-pixel text into dots, Erez, 4 Nov 2026);
+					   2: those under 20 pixels, a screen's of 16 colours or fewer
+					   (render.ovl's, ROVL_HOST's crisp) */
 	long image_ms;			/* the page's pictures' decode, in render_clock's ms */
 	long canvas_max;		/* set by the caller: the canvas's most bytes (0 any): a page
 				   taller is drawn a band at a time (render_page_from) */
