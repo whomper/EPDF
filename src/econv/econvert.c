@@ -1598,7 +1598,7 @@ static void begin(void)
 		return;
 	}
 	screen_sizes_measure();
-	coro_start(&work_co, work_stack, CONV_STACK, worker);
+	coro_start_long(&work_co, work_stack, CONV_STACK, worker);
 	batch_bytes = bytes_done = 0;
 	for (i = 0; i < nfiles; i++)
 		if (files[i].state != 1)
