@@ -110,7 +110,17 @@ static int sf_setup(short height)
 
 void text_font(short h, short id, short w, short hgt)
 {
+	static short last_id = -1, last_w, last_h;
+
 	(void)h;
+	/* the same font again (an app that sets it each redraw): keep what
+	   was found, the CPU path's first-draw check (sf) too; asked again it
+	   cost each redraw's first fills the CPU path (ClaudeST, 13 Nov 2026) */
+	if (id == last_id && w == last_w && hgt == last_h)
+		return;
+	last_id = id;
+	last_w = w;
+	last_h = hgt;
 	fast = id == 1 && !get_cookie(0x4E564449L);	/* 'NVDI' */
 	/* TOS 4.04's VDI bolds a line and then clips it, so a column left
 	   of the clip, not drawn, smears into the clip's first; TOS 1.04's
@@ -447,6 +457,64 @@ void text_plain(short h, short x, short y, const char *s, long n)
  * window's scroll, inverting or clearing on an ST (EPDF's gemprof.py,
  * 1 Nov 2026: scr_rows 30 ms of a line scrolled, box_op 35 of Select all).
  */
+#ifdef __mcoldfire__
+/* (a ColdFire's: the same rows in C, as it has no dbra, no word-indexed
+   jump and no movem to or from (An)+; GCC calls it __mc68000__ too) */
+static void rows_xor(unsigned char *d, short rows, long line, short n)
+{
+	long skip = line - n;
+	for (; rows > 0; rows--) {
+		unsigned long *p = (unsigned long *)d;
+		short k;
+		for (k = (short)(n >> 2); k > 0; k--, p++)
+			*p = ~*p;
+		d = (unsigned char *)p;
+		if (n & 2) {
+			*(unsigned short *)d = (unsigned short)~*(unsigned short *)d;
+			d += 2;
+		}
+		d += skip;
+	}
+}
+
+static void rows_set(unsigned char *d, short rows, long line, short n, unsigned long v)
+{
+	long skip = line - n;
+	for (; rows > 0; rows--) {
+		unsigned long *p = (unsigned long *)d;
+		short k;
+		for (k = (short)(n >> 2); k > 0; k--)
+			*p++ = v;
+		d = (unsigned char *)p;
+		if (n & 2) {
+			*(unsigned short *)d = (unsigned short)v;
+			d += 2;
+		}
+		d += skip;
+	}
+}
+
+static void rows_copy_mid2(unsigned char *d, long dline, const unsigned char *s, long sline, short rows, short n)
+{
+	long skip = sline - n, dskip = dline - n;
+	for (; rows > 0; rows--) {
+		unsigned long *q = (unsigned long *)d;
+		const unsigned long *p = (const unsigned long *)s;
+		short k;
+		for (k = (short)(n >> 2); k > 0; k--)
+			*q++ = *p++;
+		d = (unsigned char *)q;
+		s = (const unsigned char *)p;
+		if (n & 2) {
+			*(unsigned short *)d = *(const unsigned short *)s;
+			d += 2;
+			s += 2;
+		}
+		s += skip;
+		d += dskip;
+	}
+}
+#else
 static void rows_xor(unsigned char *d, short rows, long line, short n)
 {
 	short longs = (short)(n >> 2), blk = (short)(longs >> 3), remj = (short)(-2 * (longs & 7)), tail = (short)(n & 2);
@@ -554,6 +622,8 @@ static void rows_copy_mid2(unsigned char *d, long dline, const unsigned char *s,
 			 : "m"(blk), "m"(remj), "m"(tail), "m"(skip), "m"(dskip)
 			 : "d0", "d2", "d3", "d4", "d5", "d6", "d7", "a2", "memory", "cc");
 }
+
+#endif
 
 static void rows_copy_mid(unsigned char *d, const unsigned char *s, short rows, long line, short n)
 {
