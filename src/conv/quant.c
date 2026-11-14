@@ -53,6 +53,20 @@ static void box_fit(BOX *b, const uint16_t *cols)
 		}
 }
 
+/* padding in a branch only a refused allocation takes: the code after it
+   at the same places in a 68030's instruction cache (addresses mod 256)
+   as before each split turned (tools/rpad.py; render.c's RPAD) */
+#ifndef QPAD_A
+#define QPAD_A 16
+#endif
+#define QPAD_S2(n) #n
+#define QPAD_S(n) QPAD_S2(n)
+#if defined(__m68k__) || defined(__mc68000__)
+#define QPAD(n) __asm__ volatile("bra.w 1f\n\t.skip " QPAD_S(n) "\n1:")
+#else
+#define QPAD(n) ((void)0)		/* (the host's build: no 68030 cache) */
+#endif
+
 int quant(const uint16_t *px, long count, int ncol, unsigned char (*pal)[3], unsigned char *map)
 {
 	uint32_t *hist = calloc(65536, sizeof *hist);
@@ -61,8 +75,10 @@ int quant(const uint16_t *px, long count, int ncol, unsigned char (*pal)[3], uns
 	long nc = 0, i;
 	int nb = 1, k;
 
-	if (!hist)
+	if (!hist) {
+		QPAD(QPAD_A);
 		return 0;
+	}
 	for (i = 0; i < count; i++) {
 		if ((i & 16383) == 16383 && cv_turn)
 			cv_turn();
@@ -87,8 +103,8 @@ int quant(const uint16_t *px, long count, int ncol, unsigned char (*pal)[3], uns
 	box[0].pixels = count;
 	box_fit(&box[0], cols);
 	while (nb < ncol) {
-		if ((nb & 7) == 7 && cv_turn)
-			cv_turn();
+		if (cv_turn)
+			cv_turn();	/* (each split: the first ones sort all the colours) */
 		/* the box to split: the most pixels times its widest side */
 		long best = -1, score = -1, j, half, acc = 0;
 		int ax = 0;

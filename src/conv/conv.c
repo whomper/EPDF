@@ -28,7 +28,22 @@
 
 #define PAGE_W 640			/* the whole page's pictures' width when the caller gives none */
 #define NDRAW 16			/* drawings a page at most */
-#define DRAW_ID 900000000L		/* a drawing's number in the text until it has its object */
+#define DRAW_ID 900000000L
+#define TURN_PX 16384L			/* pixels between turns in w_picture's loops */		/* a drawing's number in the text until it has its object */
+
+/* padding in a branch a conversion that opens never takes: the code after
+   it at the same places in a 68030's instruction cache (addresses mod 256)
+   as before pic_poll was set here (tools/rpad.py; render.c's RPAD) */
+#ifndef VPAD_A
+#define VPAD_A 242
+#endif
+#define VPAD_S2(n) #n
+#define VPAD_S(n) VPAD_S2(n)
+#if defined(__m68k__) || defined(__mc68000__)
+#define VPAD(n) __asm__ volatile("bra.w 1f\n\t.skip " VPAD_S(n) "\n1:")
+#else
+#define VPAD(n) ((void)0)		/* (the host's build: no 68030 cache) */
+#endif
 
 int (*cv_turn)(void);
 const char *cv_phase = "";
@@ -42,6 +57,13 @@ static int turn_now(void)
 	if (turn_o && turn_o->turn && turn_o->turn(turn_o->u))
 		stopped = 1;
 	return stopped;
+}
+
+/* pic_poll's: 1 to go on (a picture's decoding turns too: EConvert's held
+   the machine for a whole photo, 14 Nov 2026) */
+static int pic_turn(void)
+{
+	return !turn_now();
 }
 
 static int reader_turn(void *ctx)
@@ -239,24 +261,32 @@ static void w_raw(PW *w, long num, const char *dict, const unsigned char *d, lon
 /* jpeg: the batch's "JPEG (small)": a photo or a grey picture as a JPEG */
 static int w_picture(PW *w, long num, const uint16_t *px, int pw, int ph, int jpeg)
 {
-	long n = (long)pw * ph, i, mid = 0;
+	long n = (long)pw * ph, i, i0, mid = 0;
 	int grey = 1;
 	unsigned char *d;
 	char dict[2048];
 
-	for (i = 0; i < n; i++) {
-		int c = px[i], r = R8(c), g = G8(c), b = B8(c), mx, mn;
+	/* (each loop over the pixels turns between blocks of TURN_PX of them,
+	   nothing more inside: a 640 x 850 scan held EConvert 780 ms, 14 Nov
+	   2026) */
+	for (i0 = 0; i0 < n && grey; i0 += TURN_PX) {
+		long e = n - i0 > TURN_PX ? i0 + TURN_PX : n;
 
-		mx = r > g ? r : g;
-		mx = b > mx ? b : mx;
-		mn = r < g ? r : g;
-		mn = b < mn ? b : mn;
-		if (mx - mn > 24) {
-			grey = 0;
-			break;
+		for (i = i0; i < e; i++) {
+			int c = px[i], r = R8(c), g = G8(c), b = B8(c), mx, mn;
+
+			mx = r > g ? r : g;
+			mx = b > mx ? b : mx;
+			mn = r < g ? r : g;
+			mn = b < mn ? b : mn;
+			if (mx - mn > 24) {
+				grey = 0;
+				break;
+			}
+			if (g > 48 && g < 208)
+				mid++;
 		}
-		if (g > 48 && g < 208)
-			mid++;
+		turn_now();
 	}
 	if (grey && mid * 50 < n) {
 		/* black and white (a scan, a line drawing) */
@@ -287,11 +317,16 @@ static int w_picture(PW *w, long num, const uint16_t *px, int pw, int ph, int jp
 		long nc = 0;
 
 		if (seen) {
-			for (i = 0; i < n && nc <= 256; i++)
-				if (!(seen[px[i] >> 3] & (1 << (px[i] & 7)))) {
-					seen[px[i] >> 3] |= (unsigned char)(1 << (px[i] & 7));
-					nc++;
-				}
+			for (i0 = 0; i0 < n && nc <= 256; i0 += TURN_PX) {
+				long e = n - i0 > TURN_PX ? i0 + TURN_PX : n;
+
+				for (i = i0; i < e && nc <= 256; i++)
+					if (!(seen[px[i] >> 3] & (1 << (px[i] & 7)))) {
+						seen[px[i] >> 3] |= (unsigned char)(1 << (px[i] & 7));
+						nc++;
+					}
+				turn_now();
+			}
 			free(seen);
 			if (nc <= 256)
 				jpeg = 0;
@@ -317,8 +352,13 @@ static int w_picture(PW *w, long num, const uint16_t *px, int pw, int ph, int jp
 	if (!d)
 		return -1;
 	if (grey) {
-		for (i = 0; i < n; i++)
-			d[i] = (unsigned char)((R8(px[i]) * 77 + G8(px[i]) * 150 + B8(px[i]) * 29) >> 8);
+		for (i0 = 0; i0 < n; i0 += TURN_PX) {
+			long e = n - i0 > TURN_PX ? i0 + TURN_PX : n;
+
+			for (i = i0; i < e; i++)
+				d[i] = (unsigned char)((R8(px[i]) * 77 + G8(px[i]) * 150 + B8(px[i]) * 29) >> 8);
+			turn_now();
+		}
 		snprintf(dict, sizeof dict, "/Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceGray "
 			 "/BitsPerComponent 8", pw, ph);
 	} else {
@@ -330,8 +370,13 @@ static int w_picture(PW *w, long num, const uint16_t *px, int pw, int ph, int jp
 			free(d);
 			return -1;
 		}
-		for (i = 0; i < n; i++)
-			d[i] = map[px[i]];
+		for (i0 = 0; i0 < n; i0 += TURN_PX) {
+			long e = n - i0 > TURN_PX ? i0 + TURN_PX : n;
+
+			for (i = i0; i < e; i++)
+				d[i] = map[px[i]];
+			turn_now();
+		}
 		free(map);
 		o = snprintf(dict, sizeof dict, "/Type /XObject /Subtype /Image /Width %d /Height %d "
 			     "/ColorSpace [/Indexed /DeviceRGB %d <", pw, ph, nc - 1);
@@ -1091,10 +1136,13 @@ int cv_convert(const char *in, const char *out, const CVOPT *o, CVSTAT *st, char
 	stopped = 0;
 	turn_o = o;
 	cv_turn = turn_now;
+	pic_poll = pic_turn;		/* (no one else in a converter sets it: NULL after) */
 	/* (opened with the turns: a big file's table, an AES-256 key) */
 	if (pdf_open_hook(&c->d, in, reader_turn, c)) {
 		cv_turn = NULL;
 		turn_o = NULL;
+		pic_poll = NULL;
+		VPAD(VPAD_A);
 		snprintf(err, (size_t)errlen, "%s", c->d.err[0] ? c->d.err : "can't be read");
 		free(c);
 		return -1;
@@ -1261,6 +1309,7 @@ done:
 	turn_now();
 	cv_turn = NULL;
 	turn_o = NULL;
+	pic_poll = NULL;
 	free(c->pages);
 	free(c->w.off);
 	free(c->pm);

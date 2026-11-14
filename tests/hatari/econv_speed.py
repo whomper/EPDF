@@ -12,7 +12,9 @@ batch. Each action's longest stretch between event calls against the
 guidelines' times: the start, About, a setting clicked, the file selector
 opened, Convert (its first turn as a key's, the turns after it as a
 job's: the converting gives the machine back every 40 ms), Stop, and the
-window drawn again (its turns too).
+window drawn again (its turns too). ECONV_SPEED_DOC=showcase converts the
+showcase's cut instead (photos, CMYK, a progressive JPEG: their decoding's
+turns); ECONVERT_PRG another aprof build.
 """
 import os
 import sys
@@ -21,6 +23,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOP = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
+import showcase  # noqa: E402
 from pdfgen import make_pdf, book  # noqa: E402
 import importlib.util  # noqa: E402
 _spec = importlib.util.spec_from_file_location("aera_speed", os.path.join(TOP, "common", "tests", "speed", "speed.py"))
@@ -38,13 +41,17 @@ def run(work, machine):
         import shutil
         os.makedirs(os.path.join(r.hd, "ECONV", "FONTS"))
         os.makedirs(os.path.join(r.hd, "OUT"))
-        shutil.copy(os.path.join(TOP, "build", "aprof", "ECONVERT.PRG"), os.path.join(r.hd, "ECONV", "ECONVERT.PRG"))
+        shutil.copy(os.environ.get("ECONVERT_PRG") or os.path.join(TOP, "build", "aprof", "ECONVERT.PRG"),
+                    os.path.join(r.hd, "ECONV", "ECONVERT.PRG"))
         for k, v in SHORT.items():
             p = os.path.join(FONTS, v + ".ttf")
             if os.path.exists(p):
                 shutil.copy(p, os.path.join(r.hd, "ECONV", "FONTS", k.upper() + ".TTF"))
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
-        make_pdf(os.path.join(r.hd, "BOOK.PDF"), book(20))
+        if os.environ.get("ECONV_SPEED_DOC") == "showcase":
+            showcase.cut(os.path.join(r.hd, "BOOK.PDF"))     # photos: their decoding's turns
+        else:
+            make_pdf(os.path.join(r.hd, "BOOK.PDF"), book(20))
         r.write("ECONV/ECONVERT.INF", "WRITETO=C:\\OUT\n")
         r.write("LAUNCH.TXT", "C:\\ECONV\\ECONVERT.PRG\nC:\\BOOK.PDF\n")
         r.start("C:\\LAUNCH.PRG")
