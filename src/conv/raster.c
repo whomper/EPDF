@@ -90,7 +90,7 @@ void rc_clear(RCANVAS *c, uint16_t px)
 #define APAD_A 64
 #endif
 #ifndef APAD_B
-#define APAD_B 188
+#define APAD_B 180
 #endif
 #define APAD_S2(n) #n
 #define APAD_S(n) APAD_S2(n)
@@ -595,7 +595,7 @@ void rc_stroke(RCANVAS *c, const RPATH *p, int32_t width, const int32_t *dash, i
 	int32_t hw;
 
 	if (p->n < 2) {
-		APAD(APAD_B);		/* (the turns below: 44 bytes) */
+		APAD(APAD_B);		/* (the turns below: 52 bytes) */
 		return;
 	}
 	if (width < 65536)
@@ -653,8 +653,8 @@ void rc_stroke(RCANVAS *c, const RPATH *p, int32_t width, const int32_t *dash, i
 			}
 		}
 	}
-	if (cv_turn)
-		cv_turn();	/* (and between the outline and its fill) */
+	if (made >= 32 && cv_turn)
+		cv_turn();	/* (and between a long outline and its fill: not each line's, a page in bands draws each 18 times) */
 	rc_fill(c, &o, 0, col, clip);
 	rp_free(&o);
 }
