@@ -307,7 +307,8 @@ at first. This section is kept up to date: the build, the tests, what a release 
   hub, "Release it" and "Change EPDF to align with EWeb"): Font... in Options with no key (D6); View >
   Larger text ^+, Smaller text ^-, Actual size ^0, the keypad's + and - too (EWeb's; since 14 Nov 2026
   one item, View > Zoom In ^+, ticked while zoomed: two sizes, Normal and Zoom at 200 %, Erez; the
-  window's sliders and arrows, a horizontal one always there, move a zoomed page); Help opens the
+  window's sliders and arrows move a zoomed page; the horizontal bar only while zoomed, Erez 14 Nov:
+  the window made again at its place, textwin.c's remake); Help opens the
   guide's first page (D12); jobs say "45%", "12 KB of 3.4 MB", "2 min left" (D35); "Copied to the
   clipboard." / "Couldn't write the clipboard." (D50); the Find dialog on common's dlgbuild (band,
   Cancel then Find, 10 wide); every GEM object built -DDLG_CLICK (C16); EConvert keeps B2 (D34).

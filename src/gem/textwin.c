@@ -40,10 +40,14 @@ static unsigned long t_mark;
 #endif
 
 /* no info line: the status bar at the foot says what it said (as EWeb's) */
-/* the left and right arrows and slider move a zoomed page sideways; out
-   of a zoom the slider fills its bar (Erez, 14 Nov 2026: "have a vertical
-   and add a horizontal scroll", always there) */
-#define WKIND (NAME | CLOSER | FULLER | MOVER | SIZER | UPARROW | DNARROW | VSLIDE | LFARROW | RTARROW | HSLIDE)
+#define WKIND (NAME | CLOSER | FULLER | MOVER | SIZER | UPARROW | DNARROW | VSLIDE)
+/* a zoomed page's window: the left and right arrows and slider move it
+   sideways (Erez, 14 Nov 2026: "have a vertical and add a horizontal
+   scroll"; then "show only when zoomed in": always there, the bar cost
+   every start 65 ms on an ST, 30 on a Falcon). The window is made again
+   at its place when a zoom starts and when it ends (remake) */
+#define WKIND_ZOOM (WKIND | LFARROW | RTARROW | HSLIDE)
+static int kind_zoom;			/* the window has the horizontal bar */
 #define MARGIN 8
 
 static short win = -1;
@@ -79,9 +83,8 @@ int win_cols(void)
 	return cols;
 }
 
-static void get_work(void)
+static void work_from(void)
 {
-	wind_get(win, WF_WORKXYWH, &whole.x, &whole.y, &whole.w, &whole.h);
 	bar_h = (short)(ch + (ch >= 16 ? 7 : 5));	/* (EWeb's: a line, the words, the progress line) */
 	if (whole.h < bar_h + 2 * ch)
 		bar_h = 0;			/* too low a window for it */
@@ -94,6 +97,12 @@ static void get_work(void)
 	rows = (short)(work.h / ch);
 	if (rows < 1)
 		rows = 1;
+}
+
+static void get_work(void)
+{
+	wind_get(win, WF_WORKXYWH, &whole.x, &whole.y, &whole.w, &whole.h);
+	work_from();
 }
 
 /* the window's place, its work area moved onto a multiple of 8 across */
@@ -176,6 +185,8 @@ static short sl_size = -1, sl_pos = -1, sl_px = -1;	/* sl_px: the place in the b
 static short hs_size = -1, hs_pos = -1;			/* the horizontal one's */
 extern short gl_hchar;
 static void zoom_sliders(void);
+static int remake(int zoomed);
+static void zoom_shown(void);
 
 static void sliders(void)
 {
@@ -186,12 +197,6 @@ static void sliders(void)
 		zoom_sliders();		/* (a zoomed page's place) */
 		sliders_due = 0;
 		return;
-	}
-	if (hs_size != 1000 || hs_pos != 0) {
-		wind_set(win, WF_HSLSIZE, 1000, 0, 0, 0);	/* (the text: nothing sideways) */
-		wind_set(win, WF_HSLIDE, 0, 0, 0, 0);
-		hs_size = 1000;
-		hs_pos = 0;
 	}
 
 	if (v && total > rows) {
@@ -1207,9 +1212,9 @@ static void zoom_sliders(void)
 		wind_set(win, WF_VSLSIZE, (short)vs, 0, 0, 0);
 	if (vp != sl_pos)
 		wind_set(win, WF_VSLIDE, (short)vp, 0, 0, 0);
-	if (hs != hs_size)
+	if (kind_zoom && hs != hs_size)
 		wind_set(win, WF_HSLSIZE, (short)hs, 0, 0, 0);
-	if (hp != hs_pos)
+	if (kind_zoom && hp != hs_pos)
 		wind_set(win, WF_HSLIDE, (short)hp, 0, 0, 0);
 	sl_size = (short)vs;
 	sl_pos = (short)vp;
@@ -1274,7 +1279,24 @@ void win_zoom_end(void)
 	doc_pic_stop_page_unless(zoom.base.obj, zoom.base.w, zoom.base.h);	/* (a zoomed page still drawing gives way) */
 	if (has_menu_states)
 		has_menu_states();
-	win_draw_all();
+	if (remake(0))
+		win_layout();		/* (the text's rows for the window's height again; the AES's redraw draws them) */
+	else
+		win_draw_all();
+}
+
+/* a zoom shown: the window made again with its horizontal bar (drawn by
+   the redraw the AES sends), else drawn at once */
+static void zoom_shown(void)
+{
+	if (remake(1)) {
+		long mx = zoom.p.w > work.w ? zoom.p.w - work.w : 0, my = zoom.p.h > work.h ? zoom.p.h - work.h : 0;
+
+		zoom.left = zoom.left > mx ? mx : zoom.left;	/* (the work area a bar lower) */
+		zoom.top = zoom.top > my ? my : zoom.top;
+		sliders();
+	} else
+		win_draw_all();
 }
 
 static void draw_zoom(const GRECT *c)
@@ -1474,7 +1496,7 @@ static void zoom_to(int k, short fx, short fy)
 	}
 	if (has_menu_states)
 		has_menu_states();
-	win_draw_all();
+	zoom_shown();
 }
 
 static int zoom_step_now(void)
@@ -1623,7 +1645,7 @@ int win_zoom_at(short mx, short my)
 			log_event("zoom", "200", NULL);
 			if (has_menu_states)
 				has_menu_states();
-			win_draw_all();
+			zoom_shown();
 			return 1;
 		}
 	}
@@ -1661,7 +1683,7 @@ int win_zoom_at(short mx, short my)
 	zoom.on = 1;
 	sliders_due = 1;
 	log_event("zoom", NULL, NULL);
-	win_draw_all();
+	zoom_shown();
 	return 1;
 }
 
@@ -2391,14 +2413,8 @@ int win_open(short x, short y, short w, short h)
 	win = wind_create(icon_kind(WKIND), desk_x, desk_y, desk_w, desk_h);
 	if (win < 0)
 		return -1;
-	sl_size = sl_pos = sl_px = -1;	/* a new window: its sliders set */
-	/* the horizontal slider full (nothing sideways till a zoom) before the
-	   window opens: set after, each wind_set drew it again, 40 ms on an ST
-	   (2.26's start on ST 705 -> 795 ms, speed.py) */
-	wind_set(win, WF_HSLSIZE, 1000, 0, 0, 0);
-	wind_set(win, WF_HSLIDE, 0, 0, 0, 0);
-	hs_size = 1000;
-	hs_pos = 0;
+	sl_size = sl_pos = sl_px = hs_size = hs_pos = -1;	/* a new window: its sliders set */
+	kind_zoom = 0;
 	win_title();
 	wind_open(win, x, y, w, h);
 	iconified = 0;
@@ -2406,6 +2422,45 @@ int win_open(short x, short y, short w, short h)
 	sliders();
 	win_info();
 	return 0;
+}
+
+/* the window made again at its place, with the horizontal bar (a zoom) or
+   without: its work area from wind_calc and its sliders set before it
+   opens (each wind_set on an open window draws the slider again: 40 ms on
+   an ST), so it is drawn once, by the redraw the AES sends; 1 when it was */
+static int remake(int zoomed)
+{
+	short x, y, w, h, nw, k;
+
+	if (win < 0 || iconified || !zoomed == !kind_zoom)
+		return 0;
+	k = icon_kind(zoomed ? WKIND_ZOOM : WKIND);
+	wind_get(win, WF_CURRXYWH, &x, &y, &w, &h);
+	wind_update(BEG_UPDATE);
+	wind_close(win);
+	wind_delete(win);
+	nw = wind_create(k, desk_x, desk_y, desk_w, desk_h);
+	if (nw < 0 && zoomed) {
+		zoomed = 0;		/* (no window to spare: the plain one again) */
+		k = icon_kind(WKIND);
+		nw = wind_create(k, desk_x, desk_y, desk_w, desk_h);
+	}
+	win = nw;
+	kind_zoom = zoomed;
+	if (win < 0) {
+		wind_update(END_UPDATE);
+		return 1;
+	}
+	wind_calc(WC_WORK, k, x, y, w, h, &whole.x, &whole.y, &whole.w, &whole.h);
+	work_from();
+	sl_size = sl_pos = sl_px = hs_size = hs_pos = -1;
+	sliders();
+	win_title();
+	wind_open(win, x, y, w, h);
+	wind_update(END_UPDATE);
+	get_work();
+	log_event("window-remade", zoomed ? "zoom" : "text", NULL);
+	return 1;
 }
 
 void win_close(void)
