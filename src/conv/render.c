@@ -1122,7 +1122,8 @@ static void glyph_hook(void *u, long prog, int kind, const char *base, int comp,
 #ifndef RPAD_A
 #define RPAD_A 248
 #define RPAD_B 14
-#define RPAD_C 208
+#define RPAD_C 178
+#define RPAD_D 42
 #endif
 #define RPAD_S2(n) #n
 #define RPAD_S(n) RPAD_S2(n)
@@ -1368,6 +1369,9 @@ int render_page(RPAGE *r, long n, int width)
 	return render_page_from(r, n, width, 0);
 }
 
+static void band_glyph_hook(void *u, long prog, int kind, const char *base, int comp, uint32_t code, uint32_t uni,
+			    const fx *gm, int mode);
+
 int render_page_from(RPAGE *r, long n, int width, int y0)
 {
 	POBJ *res, *box, *pg;
@@ -1452,7 +1456,7 @@ int render_page_from(RPAGE *r, long n, int width, int y0)
 	rp_init(&st->path);
 	dr.u = st;
 	dr.op = op_hook;
-	dr.glyph = glyph_hook;
+	dr.glyph = r->c.rows < r->c.h ? band_glyph_hook : glyph_hook;
 	dr.image = image_hook;
 	ptext_init(&t);
 	t.draw = &dr;
@@ -1468,6 +1472,31 @@ int render_page_from(RPAGE *r, long n, int width, int y0)
 	free(st);
 	areas_merge(r);
 	return k < 0 ? -1 : 0;
+}
+
+/* a page in bands: a glyph whose origin is more than four ems from the
+   band, in the device's y, can't reach it (no glyph is drawn that far from
+   its origin): counted, not made or laid (item 3, 13 Nov 2026). Its own
+   hook, so the whole page's glyph_hook is as it was */
+static void band_glyph_hook(void *u, long prog, int kind, const char *base, int comp, uint32_t code, uint32_t uni,
+			    const fx *gm, int mode)
+{
+	RS *s = u;
+	RPAGE *r = s->r;
+	fx m[6];
+	int32_t gy, reach;
+
+	if ((mode & 3) != 3) {
+		mat_mul6(gm, r->base, m);
+		gy = m[5] >> 16;
+		reach = ((fxa(m[1]) + fxa(m[3])) >> 14) + 4;
+		if (gy + reach < r->c.y0 || gy - reach >= r->c.y0 + r->c.rows) {
+			r->glyphs++;
+			return;
+		}
+		RPAD(RPAD_D);
+	}
+	glyph_hook(u, prog, kind, base, comp, code, uni, gm, mode);
 }
 
 int render_drawings(const RPAGE *r, RDRAWING *out, int max)
