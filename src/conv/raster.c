@@ -90,7 +90,7 @@ void rc_clear(RCANVAS *c, uint16_t px)
 #define APAD_A 64
 #endif
 #ifndef APAD_B
-#define APAD_B 180
+#define APAD_B 86
 #endif
 #define APAD_S2(n) #n
 #define APAD_S(n) APAD_S2(n)
@@ -601,6 +601,16 @@ void rc_stroke(RCANVAS *c, const RPATH *p, int32_t width, const int32_t *dash, i
 	if (width < 65536)
 		width = 65536;
 	hw = width / 2;
+	{
+		/* none of it in the rows held or the clip (a page in bands: each
+		   band's): no outline, its dashes made once a page, not once a band */
+		RCLIP b, k;
+		int32_t m = (hw >> 16) + 2;
+
+		clip_to(c, clip, &k);
+		if (!rp_bounds(p, &b) || b.y1 + m <= k.y0 || b.y0 - m >= k.y1 || b.x1 + m <= k.x0 || b.x0 - m >= k.x1)
+			return;
+	}
 	rp_init(&o);
 	for (s = 0; s < p->ns && !o.bad; s++) {
 		long a = p->start[s], z = s + 1 < p->ns ? p->start[s + 1] : p->n, cnt = z - a;
