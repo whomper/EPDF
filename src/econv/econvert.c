@@ -510,6 +510,18 @@ static void build(void)
 #define CONV_STACK (64L * 1024)		/* FreeType's rasteriser and the reader's interpreter */
 static CORO main_co, work_co;
 static char *work_stack;
+
+/* the job's stack used: coro_used's count, a long at a time (a byte at a
+   time it was some 30 ms of the job's last turn on a Falcon, twice) */
+static long stack_used(void)
+{
+	const unsigned long *m = (const unsigned long *)work_stack;
+	long k = 0, n = CONV_STACK / 4;
+
+	while (k < n && m[k] == 0xA5A5A5A5UL)
+		k++;
+	return coro_used(work_stack + k * 4, CONV_STACK - k * 4);
+}
 static int working;			/* the batch under way */
 static int fresh;			/* just begun: its first slice in the next turn */
 static int stop_now;			/* Stop: the next turn says stop */
@@ -676,15 +688,15 @@ done_one:
 			}
 			{
 				char a[120];
+				long u = stack_used();
 
 				snprintf(a, sizeof a, "%d %ld ms %ld bytes stack %ld%s%s", r, st.ms, st.out_bytes,
-					 coro_used(work_stack, CONV_STACK), r == -1 ? " why " : "", r == -1 ? err : "");
+					 u, r == -1 ? " why " : "", r == -1 ? err : "");
 				log_event("converted", base_of(files[i].path), a);
 				{
 					/* the job's stack, deepest so far, in crash.log's "last
 					   status" (Erez's bombs left no record of it) */
 					static long most;
-					long u = coro_used(work_stack, CONV_STACK);
 
 					if (u > most) {
 						char q[64];
