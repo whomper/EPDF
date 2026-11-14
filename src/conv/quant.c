@@ -24,7 +24,7 @@ typedef struct {
    at the same places in a 68030's instruction cache (addresses mod 256)
    as before each split turned (tools/rpad.py; render.c's RPAD) */
 #ifndef QPAD_A
-#define QPAD_A 190
+#define QPAD_A 92
 #define QPAD_B 218
 #endif
 #define QPAD_S2(n) #n
@@ -111,8 +111,14 @@ int quant(const uint16_t *px, long count, int ncol, unsigned char (*pal)[3], uns
 	   quant held a Falcon 250 ms before its first split) */
 	if (cv_turn)
 		cv_turn();
-	for (i = 0; i < 65536; i++)
-		nc += hist[i] != 0;
+	for (i = 0; i < 65536; i += 8192) {
+		long e = i + 8192, j;
+
+		for (j = i; j < e; j++)
+			nc += hist[j] != 0;
+		if (cv_turn)
+			cv_turn();
+	}
 	cols = malloc((size_t)(nc ? nc : 1) * sizeof *cols);
 	box = malloc((size_t)ncol * sizeof *box);
 	if (!cols || !box) {
@@ -124,9 +130,15 @@ int quant(const uint16_t *px, long count, int ncol, unsigned char (*pal)[3], uns
 	if (cv_turn)
 		cv_turn();
 	nc = 0;
-	for (i = 0; i < 65536; i++)
-		if (hist[i])
-			cols[nc++] = (uint16_t)i;
+	for (i = 0; i < 65536; i += 8192) {
+		long e = i + 8192, j;
+
+		for (j = i; j < e; j++)
+			if (hist[j])
+				cols[nc++] = (uint16_t)j;
+		if (cv_turn)
+			cv_turn();	/* (the gathering in one go: 185 ms on a Falcon) */
+	}
 	if (cv_turn)
 		cv_turn();
 	box[0].a = 0;
