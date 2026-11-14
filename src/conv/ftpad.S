@@ -22,7 +22,9 @@ FT_PAD_NAME:
 	.section .rodata.FT_PAD_NAME,"a"
 	.globl	CAT(FT_PAD_NAME, _ro)
 CAT(FT_PAD_NAME, _ro):
+#if FT_PAD_RO > 0
 	.skip	FT_PAD_RO
+#endif
 
 #if FT_PAD_DATA > 0
 	/* (the code is shorter by a multiple of 256 less this: the data, the
