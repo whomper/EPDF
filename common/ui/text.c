@@ -224,8 +224,10 @@ static void cells_st_high(unsigned char *d, const unsigned char *sp, short n)
 /* n whole cells of 8x8 on ST medium's screen (two planes, 160 bytes a
    line) from d on, the first at pixel px: each glyph row one load and its
    two planes' bytes stored at fixed places (the loop over rows with a
-   step, 700 cycles a cell, was most of a page scrolled: 124 of 170 ms) */
-static void cells_st_med(unsigned char *d, const unsigned char *sp, short n, short px)
+   step, 700 cycles a cell, was most of a page scrolled: 124 of 170 ms).
+   Not inlined: in text_plain it moved the other screens' cell loops in a
+   68030's instruction cache, Falcon-4:16's text_plain 59 -> 72 ms */
+static __attribute__((noinline)) void cells_st_med(unsigned char *d, const unsigned char *sp, short n, short px)
 {
 	for (; n > 0; n--, px += 8) {
 		const unsigned char *g = glyph + *sp++;
