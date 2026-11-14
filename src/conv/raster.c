@@ -83,6 +83,20 @@ void rc_clear(RCANVAS *c, uint16_t px)
 	}
 }
 
+/* padding in a branch only a refused allocation takes: the code after it
+   at the same places in a 68030's instruction cache (addresses mod 256)
+   as before rc_image turned (tools/rpad.py; render.c's RPAD) */
+#ifndef APAD_A
+#define APAD_A 64
+#endif
+#define APAD_S2(n) #n
+#define APAD_S(n) APAD_S2(n)
+#if defined(__m68k__) || defined(__mc68000__)
+#define APAD(n) __asm__ volatile("bra.w 1f\n\t.skip " APAD_S(n) "\n1:")
+#else
+#define APAD(n) ((void)0)		/* (the host's build: no 68030 cache) */
+#endif
+
 /* ------------------------------------------------------------------ paths */
 void rp_init(RPATH *p)
 {
@@ -668,12 +682,54 @@ static int along(int32_t pos, int32_t org, int32_t ext, int n)
 	return (int)t;
 }
 
+#define IMG_ROWS 16		/* rc_image's rows between turns */
+
+/* rc_image's rows Ya .. Yb - 1 of the clip k, the picture's columns by cmap */
+void img_rows(RCANVAS *c, const uint16_t *px, const unsigned char *alpha, int pw, int ph, const int32_t *m, int stencil,
+	      uint16_t col, const RCLIP *k, const int *cmap, int swap, int Ya, int Yb);
+__attribute__((noinline)) void img_rows(RCANVAS *c, const uint16_t *px, const unsigned char *alpha, int pw,
+					       int ph, const int32_t *m, int stencil, uint16_t col, const RCLIP *k,
+					       const int *cmap, int swap, int Ya, int Yb)
+{
+	int X, Y;
+
+	for (Y = Ya; Y < Yb; Y++) {
+		uint16_t *row = c->px + (long)(Y - c->y0) * c->w;
+		int r = swap ? along(Y, m[5], m[1], pw) : along(Y, m[5], m[3], ph);
+
+		if (r < 0)
+			continue;
+		for (X = k->x0; X < k->x1; X++) {
+			int q = cmap[X - k->x0], ix, iy;
+			long at;
+
+			if (q < 0)
+				continue;
+			if (swap) {
+				ix = r;
+				iy = ph - 1 - q;
+			} else {
+				ix = q;
+				iy = ph - 1 - r;
+			}
+			at = (long)iy * pw + ix;
+			if (stencil) {
+				if (alpha[at])
+					row[X] = mix(row[X], col, alpha[at] + (alpha[at] >> 7));
+			} else if (!alpha)
+				row[X] = px[at];
+			else if (alpha[at])
+				row[X] = mix(row[X], px[at], alpha[at] + (alpha[at] >> 7));
+		}
+	}
+}
+
 void rc_image(RCANVAS *c, const uint16_t *px, const unsigned char *alpha, int pw, int ph, const int32_t *m,
 	      int stencil, uint16_t col, const RCLIP *clip)
 {
 	RCLIP k;
 	int32_t xs[4], ys[4], x0, x1, y0, y1;
-	int i, X, Y, swap;
+	int i, X, Y, Yb, swap;
 	int *cmap;
 
 	/* the square's corners on the device */
@@ -700,39 +756,21 @@ void rc_image(RCANVAS *c, const uint16_t *px, const unsigned char *alpha, int pw
 	   down the device. A slant is drawn as the nearer of the two */
 	swap = iabs32(m[0]) + iabs32(m[3]) < iabs32(m[1]) + iabs32(m[2]);
 	cmap = malloc((size_t)(k.x1 - k.x0) * sizeof *cmap);
-	if (!cmap)
+	if (!cmap) {
+		APAD(APAD_A);
 		return;
+	}
 	/* u from the device x (no turn: u along a; turned: v along b) */
 	for (X = k.x0; X < k.x1; X++)
 		cmap[X - k.x0] = swap ? along(X, m[4], m[2], ph) : along(X, m[4], m[0], pw);
-	for (Y = k.y0; Y < k.y1; Y++) {
-		uint16_t *row = c->px + (long)(Y - c->y0) * c->w;
-		int r = swap ? along(Y, m[5], m[1], pw) : along(Y, m[5], m[3], ph);
-
-		if (r < 0)
-			continue;
-		for (X = k.x0; X < k.x1; X++) {
-			int q = cmap[X - k.x0], ix, iy;
-			long at;
-
-			if (q < 0)
-				continue;
-			if (swap) {
-				ix = r;
-				iy = ph - 1 - q;
-			} else {
-				ix = q;
-				iy = ph - 1 - r;
-			}
-			at = (long)iy * pw + ix;
-			if (stencil) {
-				if (alpha[at])
-					row[X] = mix(row[X], col, alpha[at] + (alpha[at] >> 7));
-			} else if (!alpha)
-				row[X] = px[at];
-			else if (alpha[at])
-				row[X] = mix(row[X], px[at], alpha[at] + (alpha[at] >> 7));
-		}
+	/* in blocks of IMG_ROWS rows, a turn between them (a photo laid whole
+	   held a Falcon 440 ms, 14 Nov 2026): the rows are laid by a function
+	   that calls none, so its loop keeps its registers */
+	for (Y = k.y0; Y < k.y1; Y = Yb) {
+		Yb = k.y1 - Y > IMG_ROWS ? Y + IMG_ROWS : k.y1;
+		img_rows(c, px, alpha, pw, ph, m, stencil, col, &k, cmap, swap, Y, Yb);
+		if (Yb < k.y1 && cv_turn)
+			cv_turn();
 	}
 	free(cmap);
 }
