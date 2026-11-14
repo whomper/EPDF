@@ -36,9 +36,9 @@ _spec.loader.exec_module(speed)
 # (what, x, y): the window's buttons and the file selector's places (EmuTOS
 # and TOS 4 centre both the same way on a 640 x 480 screen)
 STEPS = [
-    ("click", 160, 148),        # Add files... (the window 2 rows taller since Convert on: 16 up)
+    ("click", 515, 135),        # Add files... (the B2 window's buttons at its right, centred on 640 x 480)
     ("double", 250, 222),       # IN.PDF, the first in C:\PDFS
-    ("click", 484, 180),        # Write to...
+    ("click", 515, 231),        # Write to...
     ("click", 193, 186),        # the list's close box: up to C:\
     ("click", 235, 238),        # OUT, the second folder
     ("click", 220, 400),        # OK
@@ -95,7 +95,7 @@ def run(work, machine):
             bad.append("the file never came into the list (%s)" % " ".join(counts))
         elif counts[-1] != "1":
             bad.append("the list lost the file: files %s" % " ".join(counts))
-        r.click(488, 404)            # Convert
+        r.click(515, 415)            # Convert
         end = time.time() + 120
         while time.time() < end and "ECONVERT batch-done" not in r.console():
             time.sleep(1)
