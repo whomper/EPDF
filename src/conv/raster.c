@@ -89,6 +89,9 @@ void rc_clear(RCANVAS *c, uint16_t px)
 #ifndef APAD_A
 #define APAD_A 64
 #endif
+#ifndef APAD_B
+#define APAD_B 188
+#endif
 #define APAD_S2(n) #n
 #define APAD_S(n) APAD_S2(n)
 #if defined(__m68k__) || defined(__mc68000__)
@@ -588,11 +591,13 @@ void rc_stroke(RCANVAS *c, const RPATH *p, int32_t width, const int32_t *dash, i
 	       uint16_t col, const RCLIP *clip)
 {
 	RPATH o;
-	long s, i;
+	long s, i, made = 0;
 	int32_t hw;
 
-	if (p->n < 2)
+	if (p->n < 2) {
+		APAD(APAD_B);		/* (the turns below: 44 bytes) */
 		return;
+	}
 	if (width < 65536)
 		width = 65536;
 	hw = width / 2;
@@ -610,6 +615,11 @@ void rc_stroke(RCANVAS *c, const RPATH *p, int32_t width, const int32_t *dash, i
 			RPT pa = p->pt[a + i], pb = p->pt[a + (i + 1) % cnt];
 			int joint = i < cnt - 2 + closed;
 
+			/* a turn every 32 pieces: a dash costs some 0.8 ms of a Falcon
+			   (its divisions and root), the showcase's trend line of 129
+			   dashes held one 110 ms */
+			if ((++made & 31) == 0 && cv_turn)
+				cv_turn();
 			if (!ds.n) {
 				seg(&o, &pa, &pb, hw, joint);
 				continue;
@@ -627,8 +637,11 @@ void rc_stroke(RCANVAS *c, const RPATH *p, int32_t width, const int32_t *dash, i
 					q0.y = pa.y + (int32_t)(dy * at / len);
 					q1.x = pa.x + (int32_t)(dx * (at + step) / len);
 					q1.y = pa.y + (int32_t)(dy * (at + step) / len);
-					if (ds.on)
+					if (ds.on) {
 						seg(&o, &q0, &q1, hw, 0);
+						if ((++made & 31) == 0 && cv_turn)
+							cv_turn();
+					}
 					at += step;
 					ds.left -= step;
 					if (ds.left <= 0) {
@@ -640,6 +653,8 @@ void rc_stroke(RCANVAS *c, const RPATH *p, int32_t width, const int32_t *dash, i
 			}
 		}
 	}
+	if (cv_turn)
+		cv_turn();	/* (and between the outline and its fill) */
 	rc_fill(c, &o, 0, col, clip);
 	rp_free(&o);
 }
