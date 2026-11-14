@@ -2391,7 +2391,14 @@ int win_open(short x, short y, short w, short h)
 	win = wind_create(icon_kind(WKIND), desk_x, desk_y, desk_w, desk_h);
 	if (win < 0)
 		return -1;
-	sl_size = sl_pos = sl_px = hs_size = hs_pos = -1;	/* a new window: its sliders set */
+	sl_size = sl_pos = sl_px = -1;	/* a new window: its sliders set */
+	/* the horizontal slider full (nothing sideways till a zoom) before the
+	   window opens: set after, each wind_set drew it again, 40 ms on an ST
+	   (2.26's start on ST 705 -> 795 ms, speed.py) */
+	wind_set(win, WF_HSLSIZE, 1000, 0, 0, 0);
+	wind_set(win, WF_HSLIDE, 0, 0, 0, 0);
+	hs_size = 1000;
+	hs_pos = 0;
 	win_title();
 	wind_open(win, x, y, w, h);
 	iconified = 0;
