@@ -19,7 +19,8 @@ progressive and CMYK, a PNG with alpha, a scan) drawn 600 wide:
   the host's drawn so (no --jpeg-pic), and in bands (where pic.c draws
   it) against the host's as the others, not against the whole page;
 - with the DSP, each page's time (the stage's first goal: seconds);
-- on an ST, not loaded and said why; nothing else.
+- on an ST, and on a FireBee (FireBee:16, the hub's stand-in: FireTOS's _CF_),
+  not loaded and said why; nothing else.
 """
 import json
 import os
@@ -115,7 +116,7 @@ def main(argv):
     erz.setup()
     specs = argv[1:] or [erz.MACHINE, "ST:mono"]
     for spec in specs:
-        if spec.startswith("ST"):
+        if spec.startswith("ST") or spec.startswith("FireBee"):
             desc, lines, _ = run(work, spec, pdf, "")
             ok = lines and lines[0].get("failed") == "load" and "68020" in lines[0].get("why", "") and len(lines) == 1
             print("%s: %s" % (desc, "not loaded, said why" if ok else "FAIL %s" % lines))

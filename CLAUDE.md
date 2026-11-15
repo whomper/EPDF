@@ -420,7 +420,9 @@ at first. This section is kept up to date: the build, the tests, what a release 
   .INF setting so that it can be added in our testing but have no bearing outside"; a Vampire V4SA
   hung on the probe): every rig calls `tests/hatari/natfeats.py`'s `on(hd)` before it starts them,
   the test programs (`atari/*.c`) set `nf_on = 1`, and the rigs' builds (build/aprof, build/times)
-  link `atari/nfon.c`. Not in Settings. EPDF.PRG's, EConvert's and CONVTEST's pads (EP_PAD_A..C,
+  link `atari/nfon.c`. Not in Settings. A FireBee (FireTOS's `_CF_`, which also says `_CPU 60`) loads
+  no render.ovl and converts only through the Gateway, as an ST (rdraw_machine, EConvert's has_030;
+  rovl.py and gui.py on common's FireBee:16 stand-in). EPDF.PRG's, EConvert's and CONVTEST's pads (EP_PAD_A..D,
   EC_PAD, CT_PAD) keep their code at 2.30's cache places after common's code before it grew. A report names the
   machine and the TOS (`describe()`). The cloud session that made the measurement run had no TOS
   images: its numbers are on EmuTOS 1.4 (CPU-bound work is TOS-independent; file and GEM calls are not).

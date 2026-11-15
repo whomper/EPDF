@@ -2178,8 +2178,10 @@ int main(void)
 	wind_get(0, WF_WORKXYWH, &desk_x, &desk_y, &desk_w, &desk_h);
 	graf_mouse(ARROW, 0);
 	/* _CPU: a 68030 converts here; an ST only through the Gateway (its
-	   converter is built for the 68030: Makefile, build/m68030cv) */
-	has_030 = get_cookie(0x5F435055L) >= 20;
+	   converter is built for the 68030: Makefile, build/m68030cv), and so
+	   does a FireBee (_CF_: FireTOS says _CPU 60 for a ColdFire, which
+	   runs no 68030 code; as EPDF's rdraw_machine, 15 Nov 2026) */
+	has_030 = get_cookie(0x5F435055L) >= 20 && !get_cookie(0x5F43465FL);
 	if (!screen_check("EConvert", scr_w)) {
 		v_clsvwk(vdi_h);
 		appl_exit();
