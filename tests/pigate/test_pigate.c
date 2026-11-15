@@ -123,7 +123,7 @@ static int progress(void *u, int phase, long done, long total)
 
 int main(int argc, char **argv)
 {
-	PGOPT o = { "mono", NULL, "screen", 640, 640, 1, NULL };
+	PGOPT o = { "mono", NULL, "screen", 640, 640, 1, NULL, 0 };
 	char err[200], q[256];
 	int rc, fails = 0;
 
@@ -137,6 +137,14 @@ int main(int argc, char **argv)
 	pg_query(&o, "C:\\PDFS\\MY FILE+1.PDF", q, sizeof q);
 	if (strcmp(q, "?pages=mono&pictures=screen&page_width=640&picture_width=640&double=1&name=MY%20FILE_1.PDF")) {
 		printf("FAIL the query: %s\n", q);
+		fails++;
+	}
+	/* thumbs=1 only when asked (Erez, 15 Nov 2026: the previews off by default) */
+	o.thumbs = 1;
+	pg_query(&o, "A.PDF", q, sizeof q);
+	o.thumbs = 0;
+	if (strcmp(q, "?pages=mono&pictures=screen&page_width=640&picture_width=640&double=1&thumbs=1&name=A.PDF")) {
+		printf("FAIL the query with thumbs: %s\n", q);
 		fails++;
 	}
 	pg_query(NULL, ".hidden", q, sizeof q);

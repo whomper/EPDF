@@ -10,7 +10,7 @@
 - a click on the second cell goes to page 2 ("strip-click 2");
 - View > Page strip from the menu takes it away ("pagestrip 0"), the INF
   says PAGESTRIP=0, and the column is the text's again;
-- the showcase converted by build/econvert (every page its /Thumb): with
+- the showcase converted by build/econvert --thumbs (every page its /Thumb): with
   colours, the strip's cells are the pages' previews in colour.
 """
 import os
@@ -150,7 +150,7 @@ def main(argv):
     pdf = os.path.join(work, "show.pdf")
     conv = os.path.join(work, "show-conv.pdf")
     showcase.make(pdf)
-    subprocess.run([os.path.join(TOP, "build", "econvert"), "--fonts", FONTS, pdf, conv], check=True,
+    subprocess.run([os.path.join(TOP, "build", "econvert"), "--fonts", FONTS, "--thumbs", pdf, conv], check=True,
                    stdout=subprocess.DEVNULL)
     fails = 0
     for m in argv[1:] or ["ST:mono", "Falcon:16"]:

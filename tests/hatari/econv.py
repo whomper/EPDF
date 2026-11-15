@@ -40,6 +40,7 @@ SHORT = {"sans": "LiberationSans-Regular", "sansb": "LiberationSans-Bold", "seri
          "serifb": "LiberationSerif-Bold", "mono": "LiberationMono-Regular", "monob": "LiberationMono-Bold"}
 
 
+PREVIEWS = int(os.environ.get("ECONV_PREVIEWS", "0") or 0)   # 1: Settings' Page previews on
 WIN_AT = (40, 60)                   # the window's place from its INF (in Hatari's window, 1:1)
 
 
@@ -86,6 +87,8 @@ def run(work, machine, src):
             showcase.cut(os.path.join(r.hd, "IN.PDF"))
         make_pdf(os.path.join(r.hd, "IN2.PDF"), book(8))     # the second: stopped in the middle
         inf0 = "NATFEATS=1\nWRITETO=C:\\OUT\nWINDOW=%d,%d\n" % WIN_AT
+        if PREVIEWS:
+            inf0 += "PREVIEWS=1\n"
         r.write("ECONV/ECONVERT.INF", inf0)
         r.write("LAUNCH.TXT", "C:\\ECONV\\ECONVERT.PRG\nC:\\IN.PDF C:\\IN2.PDF\n")
         natfeats.on(r.hd)
@@ -124,6 +127,15 @@ def run(work, machine, src):
             bad.append("no converted file")
         elif b"/AERAPrepared" not in open(out, "rb").read():
             bad.append("the file isn't a converted PDF")
+        else:
+            # each page's preview only with Settings' Page previews (PREVIEWS=1;
+            # Erez, 15 Nov 2026: "a setting flag, off by default")
+            data = open(out, "rb").read()
+            pages = len(re.findall(rb"/Type\s*/Page[^s]", data))
+            thumbs = len(re.findall(rb"/Thumb \d+ 0 R", data))
+            if thumbs != (pages if PREVIEWS else 0):
+                bad.append("%d of %d pages with a /Thumb, PREVIEWS=%d" % (thumbs, pages, PREVIEWS))
+            print("  %d of %d pages with a preview (PREVIEWS=%d)" % (thumbs, pages, PREVIEWS))
         if os.path.exists(os.path.join(r.hd, "OUT", "IN2.PDF")):
             bad.append("the stopped file was left behind")
         for l in con.splitlines():

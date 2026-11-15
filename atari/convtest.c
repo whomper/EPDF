@@ -4,7 +4,7 @@
  * CONVTEST.PRG - EConvert's converter on the Atari, without its window:
  * C:\IN.PDF converted to C:\OUT.PDF with the fonts in C:\FONTS and the
  * settings in C:\CONVTEST.CFG ("pages none|mono|colour photos
- * indexed|jpeg"), a JSON line through NatFeats for each page (its time)
+ * indexed|jpeg thumbs"), a JSON line through NatFeats for each page (its time)
  * and one for the file (tests/hatari/convtest.py). "render" in the
  * settings: each page only drawn, at 600 pixels (what EPDF's stage 2
  * would draw for a window), its time a line: no conversion.
@@ -62,8 +62,8 @@ int main(void)
 			o.pages = CV_PAGES_NONE;
 		if (strstr(cfg, "pages colour"))
 			o.pages = CV_PAGES_COLOUR;
-		if (strstr(cfg, "nothumbs"))
-			o.no_thumbs = 1;	/* (no /Thumb: the pages' preview's own cost, paired) */
+		if (strstr(cfg, "thumbs"))
+			o.thumbs = 1;	/* (each page's /Thumb: its cost, paired with a run without) */
 		if (strstr(cfg, "photos jpeg"))
 			o.photos = CV_PHOTOS_JPEG;
 	}

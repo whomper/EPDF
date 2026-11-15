@@ -57,7 +57,8 @@ gives way to you at once.
   window width. **Pages**: each page whole, as it is printed: on a Falcon or a TT any PDF (see
   below), on an ST a converted PDF's; greyed where there are none. **Page strip**: ticked, a column
   of the pages at the window's left, one under another with its number; a page shows its own
-  preview where the PDF has one (a converted PDF's always), on a Falcon or a TT with View > Pages
+  preview where the PDF has one (a PDF converted with EConvert's **Page previews**, or opened on the
+  Gateway while the strip is shown), on a Falcon or a TT with View > Pages
   the page drawn small, else a box with its first line. A click
   on one goes to that page; the page at the top of the view has a double frame, and the column
   follows it. Not shown in a window too narrow for text beside it. **Zoom In** (^+, or the
@@ -206,6 +207,9 @@ Atari, an ST too, it can have the Gateway convert them instead.
   8 MHz ST). Charts and pictures of few colours are kept exact either way.
 - **Convert on:** This Atari, or the Gateway (its address and port in **Options > Settings...**, ^,;
   until you set them there, EPDF's, from `EPDF.INF` in the folder above). On an ST only the Gateway. The Gateway's converted PDFs are the same as the Falcon's.
+- **Page previews** (**Options > Settings...**, General; off at first): each converted page also
+  carries a small picture of itself, which EPDF's **View > Page strip** shows. Converting on a
+  Falcon, it takes about two seconds more a page; on the Gateway hardly any.
 - **Convert** (Return, ^R) works through the batch. Two bars show the file and the whole batch,
   each with how far it has got and about how long is left. **Stop** (Esc) stops at once; the file
   under way is left out, the ones done stay.

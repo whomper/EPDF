@@ -40,6 +40,12 @@ EConvert's settings:
 | `double`        | `1`, `0`                    | `--normal-pages` (0) |
 | `name`          | the PDF's own name          | (kept in the result) |
 | `translate`     | a language, ISO 639-1 (`en`, `he`, ...) | `--translate` (below) |
+| `thumbs`        | `1`                         | `--thumbs`           |
+
+`thumbs=1` (EPDF 2.33, Erez 15 Nov 2026; AERA-Gateway 1.48 on, an older one refuses it): each page carries
+its preview, its `/Thumb` (CONVERTED-PDF.md, "The page's preview"). EConvert sends it with **Page
+previews** ticked in its Settings, EPDF's Open on the Gateway while View > Page strip is ticked; without
+it the converted PDF has none.
 
 `translate` (Erez, 8 Nov 2026; EPDF with View > Translate ticked): the converted PDF also carries each
 page's text translated into that language (CONVERTED-PDF.md, `/Translation`), translated on the

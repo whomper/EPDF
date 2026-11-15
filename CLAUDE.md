@@ -336,7 +336,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   shows /Colour dithered. Through the Gateway pages=colouronly (AERA-Gateway 1.42, EPDF 2.9;
   gateway.py with GW_PAGES=colouronly).
   The page strip (Erez, 15 Nov 2026: "complete the functionality"; EPDF 2.33): View > Page strip
-  (PAGESTRIP=), a column of 112 pixels at the window's left, src/gem/strip.c (a column of cells shaped to
+  (PAGESTRIP=, off by default: Erez), a column of 112 pixels at the window's left, src/gem/strip.c (a column of cells shaped to
   move to common: common's panebar for its slider, press_track for its clicks), each cell an A4 box with
   its number: the page's /Thumb (a converted PDF's from EConvert or the Gateway, docs/CONVERTED-PDF.md),
   in View > Pages on a Falcon/TT the page drawn by render.ovl, else the page's first line; the view's top
@@ -347,10 +347,15 @@ at first. This section is kept up to date: the build, the tests, what a release 
   moved, pb_moved with pb_vdi); a layout that changes nothing leaves it be. Its 6x6 font is set on the
   VDI only (told to text.c, the text view lost its CPU path after each cell: Select all on an ST 40 ->
   80 ms). With the strip off it asks no AES (strip_width before pb_width, the menu ticked only when on).
-  EConvert's /Thumb is made from the page's rows as they are drawn (tb_rows: the canvas whole, or the
+  The /Thumb only when asked (Erez, 15 Nov 2026: the cost accepted, "make it a setting flag, off by
+  default"): EConvert's Options > Settings... > General > Page previews (PREVIEWS=1; gatedlg.c's
+  gate_dialog_conv), CVOPT.thumbs, econvert's --thumbs, the Gateway's thumbs=1 (AERA-Gateway 1.48 on: an
+  older pdfgate refuses it); EPDF's Open on the Gateway asks for it while the strip is shown
+  (gw_set_thumbs). Rigs: tests/hatari/econv_settings.py (the tick, OK, Esc), econv.py (none by default;
+  ECONV_PREVIEWS=1 every page). EConvert's /Thumb is made from the page's rows as they are drawn (tb_rows: the canvas whole, or the
   whole page's loops' bands), each row dithered as it is made: never drawn again (a 4 MB Falcon under
   NVDI lost its page 3 to memory). It costs CONVTEST about 1.9 s a page on Falcon-4:256 (the canvas read
-  again from ST-RAM); CONVTEST's "nothumbs" pairs it. Rig: tests/hatari/strip.py (`make strip-test`);
+  again from ST-RAM); CONVTEST's "thumbs" pairs it. Rig: tests/hatari/strip.py (`make strip-test`);
   speed.py's EPDF_STRIP=1.
   2.11 (Erez's photos and choices, 10 Nov 2026: "Both", "Band on the page"): a converted copy's
   View > Pages on a Falcon/TT in colour is drawn sharp from its original by render.ovl over the stored
