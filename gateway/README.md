@@ -17,7 +17,7 @@ Atari (EConvert, --a PDF, plain HTTP-->      Pi  pdfgate   (converted on the Pi,
 Atari (EMail,    --text, plain HTTP-->       Pi  translategate (a local engine, nothing onwards)
        EWeb, EPDF)
 Atari (EPlay)    --plain HTTP-->             Pi  radiogate --HTTP(S)--> any web radio station
-Atari (ClaudeST) --STinG or a serial cable-> Pi  claude-st --HTTPS--> claude.ai
+Atari (ClaudeST) --STinG-->                Pi  claude-st --HTTPS--> claude.ai
 ```
 
 One program, `aera-gateway`, sets them all up, brings them up to date and
@@ -34,7 +34,8 @@ of them.
 | `pdf`    | EConvert and EPDF   | `pdfgate.py` and aerapdf   | 8380                                     |
 | `translate` | EMail, EWeb, EPDF | `translategate.py`        | 8480                                     |
 | `radio`  | EPlay               | `radiogate.py`             | 8580                                     |
-| `claude` | ClaudeST            | ClaudeST's bridge          | 2323 (or a serial cable)                 |
+| `claude` | ClaudeST            | ClaudeST's bridge          | 2323                                     |
+| `dash`   | a browser at home   | `dashgate.py`              | 8888                                     |
 
 What each one speaks (requests, answers, refusals, limits) is in
 [docs/SERVICES.md](../docs/SERVICES.md).
@@ -67,6 +68,7 @@ sudo aera-gateway install pdf --allow ATARI_IP
 sudo aera-gateway install translate --allow ATARI_IP     (English and German; --languages en,de,he for more)
 sudo aera-gateway install radio --allow ATARI_IP
 sudo aera-gateway install claude --network --atari ATARI_IP
+sudo aera-gateway install dash                           (the dashboard, for the home network)
 ```
 
 `install pdf` builds EPDF's converter (a few minutes), `install translate`
@@ -460,6 +462,21 @@ a low priority; a station on the home network needs `--allow-local`. The
 log says which Atari listened to which station's host, for how long and
 how much, never the station's path or the titles.
 
+## dash: the dashboard
+
+```
+sudo aera-gateway install dash
+```
+
+From a browser on your Mac or PC: `http://GATEWAY_IP:8888/`. One page,
+read-only: each service running or not, its connections today and since
+it started, the Ataris that came and where they went, the settings (never
+a password or a key) and the Pi's memory, disk, load and temperature. It
+refreshes itself. The gateways tell it who connected through aeragate;
+the counts start again when it starts. The home network may see it, or
+only the computers named with `--allow`. `install all` includes it, for
+the home network. Details: [docs/SERVICES.md](../docs/SERVICES.md#dash-the-dashboard).
+
 ## claude: ClaudeST's bridge
 
 The bridge comes with AERA-Gateway, in `gateway/claude-st/` (it moved
@@ -469,10 +486,14 @@ copy you name with `--from`:
 
 ```
 sudo aera-gateway install claude --network --atari 192.168.1.20
-sudo aera-gateway install claude --serial /dev/ttyUSB0 --baud 9600
 sudo aera-gateway install claude --backend api
 sudo aera-gateway set-key        paste a new claude.ai session key
 ```
+
+ClaudeST reaches it through STinG. The serial cable went with
+ClaudeST 2.3 (Erez, 9 Nov 2026): a Gateway set up for it keeps its old
+bridge, on its cable, for the ClaudeST it has, and `update` says how to
+move to the network (the command above; ClaudeST 2.3 or later on the Atari).
 
 Its settings stay in `/etc/claude-st/claude-st.env` and its chats in
 `/var/lib/claude-st`; `remove claude` keeps both. ClaudeST's README says
