@@ -90,7 +90,10 @@ void rc_clear(RCANVAS *c, uint16_t px)
 #define APAD_A 64
 #endif
 #ifndef APAD_B
-#define APAD_B 86
+#define APAD_B 118
+#endif
+#ifndef APAD_F
+#define APAD_F 116
 #endif
 #define APAD_S2(n) #n
 #define APAD_S(n) APAD_S2(n)
@@ -359,6 +362,15 @@ static void clip_to(const RCANVAS *c, const RCLIP *in, RCLIP *out)
 	}
 }
 
+/* the fills' work since the last turn (pixels across a row and its
+   crossings, the edges made and sorted), shared by every fill: a turn when
+   about 8 rows of a page-wide fill are done. Counted rows (a turn every 8)
+   held a Falcon 55 ms in 8 rows of a fill with many crossings, and a long
+   outline's edges and sort 75 ms before its first row (the showcase's
+   pages 2 and 5) */
+static long fill_work;
+#define FILL_TURN 5000L
+
 void rc_fill(RCANVAS *c, const RPATH *p, int evenodd, uint16_t col, const RCLIP *clip)
 {
 	RCLIP k, b;
@@ -386,7 +398,15 @@ void rc_fill(RCANVAS *c, const RPATH *p, int evenodd, uint16_t col, const RCLIP 
 	}
 	if (!c->ne)
 		return;
+	if ((fill_work += c->ne * 8) >= FILL_TURN && cv_turn) {
+		fill_work = 0;
+		cv_turn();	/* (the edges made: a division each) */
+	}
 	qsort(c->e, (size_t)c->ne, sizeof *c->e, edge_cmp);
+	if ((fill_work += c->ne * 8) >= FILL_TURN && cv_turn) {
+		fill_work = 0;
+		cv_turn();
+	}
 	if (c->capx < c->ne * 2) {
 		int32_t *q = realloc(c->xs, (size_t)c->ne * 2 * sizeof *q);
 
@@ -398,11 +418,14 @@ void rc_fill(RCANVAS *c, const RPATH *p, int evenodd, uint16_t col, const RCLIP 
 	act = malloc((size_t)c->ne * sizeof *act);
 	if (!act)
 		return;
+	APAD(APAD_F);		/* (jumped once a fill: the row loop at its place) */
 	for (y = k.y0; y < k.y1; y++) {
 		int sub, any = 0;
 
-		if ((y & 7) == 7 && cv_turn)
+		if ((fill_work += (k.x1 - k.x0) + 32 * nact) >= FILL_TURN && cv_turn) {
+			fill_work = 0;
 			cv_turn();
+		}
 		int32_t lo = k.x0 << 16, hi = k.x1 << 16;
 
 		for (sub = 0; sub < SUB; sub++) {
