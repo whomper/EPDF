@@ -29,6 +29,7 @@ TOP = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 import erz  # noqa: E402
 from pdfgen import make_pdf, book  # noqa: E402
+import natfeats  # noqa: E402 (NATFEATS=1 in the programs' INFs)
 _spec = importlib.util.spec_from_file_location("aera_speed", os.path.join(TOP, "common", "tests", "speed", "speed.py"))
 speed = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(speed)
@@ -66,6 +67,7 @@ def run(work, machine):
         make_pdf(os.path.join(r.hd, "PDFS", "IN.PDF"), book(2))
         r.write("ECONV/ECONVERT.INF", "FOLDER=C:\\PDFS\n")
         r.write("LAUNCH.TXT", "C:\\ECONV\\ECONVERT.PRG\n")
+        natfeats.on(r.hd)
         r.start("C:\\LAUNCH.PRG", ready="ECONVERT started")
         end = time.time() + 120
         while time.time() < end and "ECONVERT started" not in r.console():

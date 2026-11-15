@@ -11,6 +11,8 @@
 #include "tos.h"
 #include "gem.h"
 
+long nf_on = 1;		/* a test program: NatFeats always (common's nf.S has 0) */
+
 int main(void)
 {
 	static char text[300], tail[130];

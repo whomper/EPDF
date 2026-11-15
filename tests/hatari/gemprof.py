@@ -32,6 +32,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TOP = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 from pdfgen import make_pdf, book  # noqa: E402
+import natfeats  # noqa: E402 (NATFEATS=1 in the programs' INFs)
 
 # common's gemprof by its path (this file has its name); it imports
 # common's speed.py, not this directory's
@@ -79,6 +80,7 @@ def main(argv):
         else:
             make_pdf(os.path.join(r.hd, "BOOK.PDF"), book(30))
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\BOOK.PDF\n")
+        natfeats.on(r.hd)
         r.start("C:\\LAUNCH.PRG")
         time.sleep(120 if machine.startswith("ST") else 60)      # the reading done
         p.begin()

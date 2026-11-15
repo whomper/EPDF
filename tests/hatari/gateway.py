@@ -41,6 +41,7 @@ TOP = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 from pdfgen import make_pdf, book  # noqa: E402
 import showcase  # noqa: E402
+import natfeats  # noqa: E402 (NATFEATS=1 in the programs' INFs)
 _spec = importlib.util.spec_from_file_location("aera_speed", os.path.join(TOP, "common", "tests", "speed", "speed.py"))
 speed = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(speed)
@@ -98,6 +99,7 @@ def run(work, machine, port, there=True):
         r.write("ECONV/ECONVERT.INF", "WRITETO=C:\\OUT\nCONVERT=gateway\nGATE=127.0.0.1\nGATEPORT=%d\nPAGES=%s\n" %
                 (port if there else 1, PAGES))
         r.write("LAUNCH.TXT", "C:\\ECONV\\ECONVERT.PRG\nC:\\%s C:\\%s\n" % names)
+        natfeats.on(r.hd)
         r.start("C:\\LAUNCH.PRG", ready="ECONVERT started")
         end = time.time() + 120
         while time.time() < end and "ECONVERT started" not in r.console():
@@ -174,6 +176,7 @@ def run_epdf(work, machine, port, there=True):
         make_pdf(src, book(4))
         r.write("EPDF/epdf.inf", "GATEWAY=1\nGATE=127.0.0.1\nGATEPORT=%d\n" % (port if there else 1))
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\DOCS\\BOOK.PDF\n")
+        natfeats.on(r.hd)
         r.start("C:\\LAUNCH.PRG", ready="EPDF started")
         end = time.time() + 900
         k = 0

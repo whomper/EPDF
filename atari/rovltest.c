@@ -16,6 +16,8 @@
 #include "plat.h"
 #include "rdraw.h"
 
+long nf_on = 1;		/* a test program: NatFeats always (common's nf.S has 0) */
+
 long pdf_ms(void);
 void (*pf_idle)(void);
 static long turns;

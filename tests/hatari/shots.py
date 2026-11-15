@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.join(TOP, "common", "tools"))
 sys.path.insert(0, HERE)
 import machines  # noqa: E402
 from pdfgen import make_pdf, book  # noqa: E402
+import natfeats  # noqa: E402 (NATFEATS=1 in the programs' INFs)
 
 # the window's place in EPDF.INF, and the parts the front page numbers
 WINDOW = "40,40,560,400"
@@ -48,6 +49,7 @@ def main(argv):
     with open(os.path.join(hd, "LAUNCH.TXT"), "w", newline="") as f:
         f.write("C:\\EPDF\\EPDF.PRG\r\nC:\\BOOK.PDF\r\n")
     m = machines.Machine("Falcon:16", hd)
+    natfeats.on(hd)
     fifo = os.path.join(out, "hatari.fifo")
     log = os.path.join(out, "hatari.log")
     h = subprocess.Popen(["hatari"] + m.args() + ["--natfeats", "yes", "--statusbar", "no", "--log-level", "fatal",

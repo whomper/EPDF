@@ -28,6 +28,7 @@ import erz  # noqa: E402
 import showcase  # noqa: E402
 from prepared import differ, park  # noqa: E402
 import importlib.util  # noqa: E402
+import natfeats  # noqa: E402 (NATFEATS=1 in the programs' INFs)
 _spec = importlib.util.spec_from_file_location("aera_speed", os.path.join(TOP, "common", "tests", "speed", "speed.py"))
 speed = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(speed)
@@ -56,6 +57,7 @@ def run(work, machine):
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
         showcase.make(os.path.join(r.hd, "SHOW.PDF"))
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\SHOW.PDF\n")
+        natfeats.on(r.hd)
         r.start("C:\\LAUNCH.PRG", ready="EPDF started")
         end = time.time() + 180
         while time.time() < end and r.console().count("EPDF page ") < 9:

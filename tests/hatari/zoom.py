@@ -32,6 +32,7 @@ sys.path.insert(0, HERE)
 import showcase  # noqa: E402
 from prepared import differ, park  # noqa: E402
 import importlib.util  # noqa: E402
+import natfeats  # noqa: E402 (NATFEATS=1 in the programs' INFs)
 _spec = importlib.util.spec_from_file_location("aera_speed", os.path.join(TOP, "common", "tests", "speed", "speed.py"))
 speed = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(speed)
@@ -87,6 +88,7 @@ def run(work, machine, converted):
                             os.path.join(r.hd, "ATARI", "SHOW.PDF")], check=True, stdout=subprocess.DEVNULL)
             doc = "C:\\ATARI\\SHOW.PDF"
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\n%s\n" % doc)
+        natfeats.on(r.hd)
         r.start("C:\\LAUNCH.PRG", ready="EPDF started")
         wait(r, "EPDF page ", 9, 180)
         park(r)

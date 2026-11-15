@@ -217,7 +217,7 @@ FT_OBJS = $(patsubst $(FT)/src/%.c,ft/%.o,$(filter $(FT)/src/%,$(FT_SRC))) ft/ep
 comma := ,
 FT_CV_KEEP = $(addprefix -Wl$(comma)-u$(comma),FT_Matrix_Invert FT_Get_Next_Char FT_Vector_Transform \
                FT_Outline_Get_Orientation FT_Outline_EmboldenXY FT_Get_Advances FT_Get_Advance \
-               ft_cv_pad ft_cv_pad_ro ft_cv_pad_str ft_cv_pad_data ft_cv_pad_init_ro lj_cv_pad pic_cv_pad cs_cv_pad ec_cv_pad ec_cv_pad_ro head_cv_pad)
+               ft_cv_pad ft_cv_pad_ro ft_cv_pad_str ft_cv_pad_data ft_cv_pad_init_ro lj_cv_pad pic_cv_pad cs_cv_pad ec_cv_pad ec_cv_pad_ro head_cv_pad ct_cv_pad)
 FT_CV_OBJS = $(patsubst ft/autofit/autofit.o,ft/ftpad_af.o,$(patsubst ft/base/ftinit.o,ft/base/ftinit_noaf.o ft/ftpad_init.o,$(FT_OBJS)))
 build/m68030/ft/ftpad_af.o: FT_PAD = -DFT_PAD_NAME=ft_cv_pad -DFT_PAD_TEXT=68 -DFT_PAD_RO=36 -DFT_PAD_STR=18 -DFT_PAD_DATA=8
 build/m68030/ft/ftpad_init.o: FT_PAD = -DFT_PAD_NAME=ft_cv_pad_init -DFT_PAD_TEXT=0 -DFT_PAD_RO=4 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
@@ -228,11 +228,14 @@ PIC_PAD ?= 134
 build/m68030/cspad.o: FT_PAD = -DFT_PAD_NAME=cs_cv_pad -DFT_PAD_TEXT=$(CS_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 CS_PAD ?= 178
 build/m68030/ecpad.o: FT_PAD = -DFT_PAD_NAME=ec_cv_pad -DFT_PAD_TEXT=$(EC_PAD) -DFT_PAD_RO=$(EC_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0
-EC_PAD ?= 184
+EC_PAD ?= 92
 EC_PAD_RO ?= 214
+# CONVTEST.PRG's own, after common's nf.o: its converter code where 2.30 had it
+build/m68030/ctpad.o: FT_PAD = -DFT_PAD_NAME=ct_cv_pad -DFT_PAD_TEXT=$(CT_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
+CT_PAD ?= 172
 build/m68030/headpad.o: FT_PAD = -DFT_PAD_NAME=head_cv_pad -DFT_PAD_TEXT=$(HEAD_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 HEAD_PAD ?= 220
-build/m68030/headpad.o build/m68030/ecpad.o build/m68030/cspad.o build/m68030/picpad.o build/m68030/ljpad.o build/m68030/ft/ftpad_af.o build/m68030/ft/ftpad_init.o: src/conv/ftpad.S Makefile | build/m68030
+build/m68030/ctpad.o build/m68030/headpad.o build/m68030/ecpad.o build/m68030/cspad.o build/m68030/picpad.o build/m68030/ljpad.o build/m68030/ft/ftpad_af.o build/m68030/ft/ftpad_init.o: src/conv/ftpad.S Makefile | build/m68030
 	@mkdir -p $(dir $@)
 	$(XCC) -m68030 $(FT_PAD) -c -o $@ $<
 build/m68030/ft/base/ftinit_noaf.o: $(FT)/src/base/ftinit.c | build/m68030
@@ -362,10 +365,10 @@ STREAM_PAD ?= 6
 CV_ATARI_OBJ = $(patsubst %/common/src/charset.o,%/common/src/charset.o build/m68030/cspad.o,$(patsubst %/common/src/pic.o,%/common/src/pic.o build/m68030/picpad.o,$(patsubst %/jdcoefct.o,%/jdcoefct.o build/m68030/ljpad.o,$(addprefix build/m68030cv/,$(patsubst %.c,%.o,$(CV_ATARI_SRC)))))) build/m68030/inflate_fast.o \
                $(addprefix build/m68030/,$(FT_CV_OBJS))
 binary/CONVTEST.PRG: XCPU = -m68030 -msoft-float
-binary/CONVTEST.PRG: $(CV_ATARI_OBJ) build/m68030cv/atari/convtest.o build/m68030/crt0.o build/m68030/nf.o common/atari/link.ld | binary
+binary/CONVTEST.PRG: $(CV_ATARI_OBJ) build/m68030cv/atari/convtest.o build/m68030/crt0.o build/m68030/nf.o build/m68030/ctpad.o common/atari/link.ld | binary
 	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections $(FT_CV_KEEP) \
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68030/convtest.elf \
-	  build/m68030/crt0.o build/m68030/nf.o build/m68030cv/atari/convtest.o $(CV_ATARI_OBJ) -lgcc
+	  build/m68030/crt0.o build/m68030/nf.o build/m68030/ctpad.o build/m68030cv/atari/convtest.o $(CV_ATARI_OBJ) -lgcc
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/m68030/convtest.elf $@
 
 # ---------------------------------------------------------------- render.ovl (stage 2)
@@ -478,11 +481,24 @@ EPDF_OBJS = $(GEM_OBJ) build/m68000/inflate_fast.o $(addprefix build/m68000/,$(p
 # the order they're linked in: the hot loops first (HOT_OBJS), in every
 # build of EPDF.PRG, so the rigs time the layout that ships
 EPDF_HOT = build/m68000/inflate_fast.o $(addprefix build/m68000/,$(HOT_OBJS))
-EPDF_ORDER = $(EPDF_HOT) $(filter-out $(EPDF_HOT),$(EPDF_OBJS))
-binary/EPDF.PRG: $(EPDF_ORDER) build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o common/atari/link.ld | binary
-	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
+# EPDF's pads (src/conv/ftpad.S): its code at its 2.30 places in a Falcon's
+# or TT's instruction cache (addresses mod 256) where common's code before it
+# grew: after nf.o (A, before the hot loops), epdf.o (B) and conn.o (C)
+build/m68000/eppad_a.o: FT_PAD = -DFT_PAD_NAME=ep_pad_a -DFT_PAD_TEXT=$(EP_PAD_A) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
+build/m68000/eppad_b.o: FT_PAD = -DFT_PAD_NAME=ep_pad_b -DFT_PAD_TEXT=$(EP_PAD_B) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
+build/m68000/eppad_c.o: FT_PAD = -DFT_PAD_NAME=ep_pad_c -DFT_PAD_TEXT=$(EP_PAD_C) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
+EP_PAD_A ?= 172
+EP_PAD_B ?= 208
+EP_PAD_C ?= 36
+build/m68000/eppad_a.o build/m68000/eppad_b.o build/m68000/eppad_c.o: src/conv/ftpad.S Makefile | build/m68000
+	@mkdir -p $(dir $@)
+	$(XCC) -m68000 $(FT_PAD) -c -o $@ $<
+EP_KEEP = -Wl,-u,ep_pad_a -Wl,-u,ep_pad_b -Wl,-u,ep_pad_c
+EPDF_ORDER = $(patsubst %/src/gem/epdf.o,%/src/gem/epdf.o build/m68000/eppad_b.o,$(patsubst %/common/src/conn.o,%/common/src/conn.o build/m68000/eppad_c.o,$(EPDF_HOT) $(filter-out $(EPDF_HOT),$(EPDF_OBJS))))
+binary/EPDF.PRG: $(EPDF_ORDER) build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/eppad_a.o build/m68000/crash_s.o build/m68000/coro.o common/atari/link.ld | binary
+	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections $(EP_KEEP) \
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68000/epdf.elf \
-	  build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o $(filter-out %/crt0_epdf.o %/nf.o %/crash_s.o %/coro.o %/link.ld,$(filter build/%,$^)) -lgcc
+	  build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/eppad_a.o build/m68000/crash_s.o build/m68000/coro.o $(filter-out %/crt0_epdf.o %/nf.o %/eppad_a.o %/crash_s.o %/coro.o %/link.ld,$(filter build/%,$^)) -lgcc
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/m68000/epdf.elf $@
 
 # starts a program with a command line, for the rigs (atari/launch.c)
@@ -575,26 +591,30 @@ shots: binary/EPDF.PRG binary/LAUNCH.PRG
 # machines. EPDF's own code as it is released: textwin.c's timing marks
 # (EPDF_TIMES, a line logged through NatFeats at each) cost a page 25 ms on an
 # ST, so they are in build/times only, for breaking a stretch down
-AES_LINK = $(XCC) -m68000 -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
+AES_LINK = $(XCC) -m68000 -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections $(EP_KEEP) \
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments
 build/aprof/gem.o: common/atari/gem.c $(HDRS) | build
 	mkdir -p build/aprof
 	$(XCC) $(XFLAGS) -m68000 -mstrict-align -fdisable-tree-bswap -DAES_PROFILE=20 -c -o $@ $<
-build/aprof/EPDF.PRG: binary/EPDF.PRG build/aprof/gem.o
+# (nfon.o: NatFeats on from the start in the rigs' builds, atari/nfon.c)
+build/aprof/nfon.o: atari/nfon.c | build
+	mkdir -p build/aprof
+	$(XCC) $(XFLAGS) -m68000 -c -o $@ $<
+build/aprof/EPDF.PRG: binary/EPDF.PRG build/aprof/gem.o build/aprof/nfon.o
 	$(AES_LINK) -o build/aprof/epdf.elf \
-	  build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o \
+	  build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/eppad_a.o build/m68000/crash_s.o build/m68000/coro.o \
 	  $(filter-out build/m68000/common/atari/gem.o,$(filter build/%.o,$(EPDF_ORDER))) \
-	  build/aprof/gem.o -lgcc
+	  build/aprof/gem.o build/aprof/nfon.o -lgcc
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/aprof/epdf.elf $@
 # the same with textwin.c's marks ("EPDF t copy 35", "t rows 15"...), for a breakdown
 build/times/textwin.o: src/gem/textwin.c $(HDRS) | build
 	mkdir -p build/times
 	$(XCC) $(XFLAGS) -m68000 -mstrict-align -fdisable-tree-bswap -Isrc/gem -Isrc/rovl -Isrc/view -Icommon/ui -DEPDF_TIMES -c -o $@ $<
-build/times/EPDF.PRG: binary/EPDF.PRG build/aprof/gem.o build/times/textwin.o
+build/times/EPDF.PRG: binary/EPDF.PRG build/aprof/gem.o build/times/textwin.o build/aprof/nfon.o
 	$(AES_LINK) -o build/times/epdf.elf \
-	  build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o \
+	  build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/eppad_a.o build/m68000/crash_s.o build/m68000/coro.o \
 	  $(filter-out build/m68000/common/atari/gem.o build/m68000/src/gem/textwin.o,$(filter build/%.o,$(EPDF_ORDER))) \
-	  build/aprof/gem.o build/times/textwin.o -lgcc
+	  build/aprof/gem.o build/times/textwin.o build/aprof/nfon.o -lgcc
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/times/epdf.elf $@
 speed-test: build/aprof/EPDF.PRG binary/LAUNCH.PRG
 	python3 tests/hatari/speed.py build/speed
@@ -603,11 +623,11 @@ speed-test: build/aprof/EPDF.PRG binary/LAUNCH.PRG
 build/aprof/gem00ec.o: common/atari/gem.c $(HDRS) | build
 	mkdir -p build/aprof
 	$(XCC) $(XFLAGS) -m68000 -DDLG_CLICK -DAERA_NO_FLOAT -DAES_PROFILE=20 -c -o $@ $<
-build/aprof/ECONVERT.PRG: binary/ECONVERT.PRG build/aprof/gem00ec.o
+build/aprof/ECONVERT.PRG: binary/ECONVERT.PRG build/aprof/gem00ec.o build/aprof/nfon.o
 	$(XCC) -m68000 -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/aprof/econvert.elf \
 	  build/m68000ec/crt0_ec.o build/m68000/nf.o build/m68000ec/crash_s.o build/m68000ec/coro.o \
-	  $(filter-out build/m68000ec/common/atari/gem.o,$(EC_OBJS)) build/aprof/gem00ec.o -lgcc
+	  $(filter-out build/m68000ec/common/atari/gem.o,$(EC_OBJS)) build/aprof/gem00ec.o build/aprof/nfon.o -lgcc
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/aprof/econvert.elf $@
 econv-speed-test: build/aprof/ECONVERT.PRG binary/LAUNCH.PRG
 	python3 tests/hatari/econv_speed.py build/econv-speed
@@ -620,8 +640,8 @@ build/stk/doc.o: src/gem/doc.c $(HDRS) | build
 	$(XCC) $(XFLAGS) -m68000 -mstrict-align -fdisable-tree-bswap -Isrc/gem -Isrc/rovl -Isrc/view -Icommon/ui -I$(T)/tjpgd \
 	  -DEPDF_STACKS -c -o $@ $<
 build/stk/EPDF.PRG: binary/EPDF.PRG build/stk/doc.o
-	$(XCC) -m68000 -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
+	$(XCC) -m68000 -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections $(EP_KEEP) \
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/stk/epdf.elf \
-	  build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/crash_s.o build/m68000/coro.o \
+	  build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/eppad_a.o build/m68000/crash_s.o build/m68000/coro.o \
 	  $(filter-out build/m68000/src/gem/doc.o,$(filter build/%.o,$(EPDF_ORDER))) build/stk/doc.o -lgcc
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/stk/epdf.elf $@

@@ -35,6 +35,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TOP = os.path.dirname(os.path.dirname(HERE))
 
 import importlib.util  # noqa: E402
+import natfeats  # noqa: E402 (NATFEATS=1 in the programs' INFs)
 _spec = importlib.util.spec_from_file_location("aera_speed", os.path.join(TOP, "common", "tests", "speed", "speed.py"))
 speed = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(speed)
@@ -52,6 +53,7 @@ def one(work, machine, pdf, seconds, display, key="ctrl+Right", every=20):
         import shutil
         shutil.copy(pdf, os.path.join(r.hd, "DOC.PDF"))
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\DOC.PDF\n")
+        natfeats.on(r.hd)
         r.start("C:\\LAUNCH.PRG", ready="EPDF started", boot=120)
         end = time.time() + seconds
         nxt = time.time() + every

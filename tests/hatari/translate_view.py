@@ -44,6 +44,7 @@ _spec = importlib.util.spec_from_file_location("aera_speed", os.path.join(TOP, "
 speed = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(speed)
 from gateway import free_port, FONTS  # noqa: E402
+import natfeats  # noqa: E402 (NATFEATS=1 in the programs' INFs)
 
 GW = os.path.join(TOP, "gateway")
 
@@ -160,6 +161,7 @@ def run(work, machine, tg_port, pdf_port, tglog, mode, he_port=0):
         r.write("EPDF/epdf.inf", inf)
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\DOCS\\BOOK.PDF\n")
         before = requests(tglog) if mode != "hebrew" else 0
+        natfeats.on(r.hd)
         r.start("C:\\LAUNCH.PRG", ready="EPDF started")
         end = time.time() + 600
         if mode == "off":

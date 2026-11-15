@@ -129,6 +129,8 @@ static void epdf_gateway(void)
 	}
 }
 
+extern long nf_on;		/* common's nf.S: NatFeats looked for only when set */
+
 static void settings_read(void)
 {
 	long n;
@@ -141,6 +143,10 @@ static void settings_read(void)
 		free(t);
 	} else
 		inf_parse(&inf, inf_head, (long)strlen(inf_head));
+	/* NatFeats only where the INF asks (NATFEATS=1: the test rigs; not in
+	   Settings), before the first log_event, as EPDF's (Erez, 15 Nov 2026) */
+	if ((v = inf_get(&inf, "NATFEATS")) != NULL && v[0] == '1')
+		nf_on = 1;
 	if ((v = inf_get(&inf, "PAGES")) != NULL)
 		pages_set = !strcmp(v, "none") ? CV_PAGES_NONE : !strcmp(v, "colour") ? CV_PAGES_COLOUR :
 			    !strcmp(v, "colouronly") ? CV_PAGES_COLOUR_ONLY : CV_PAGES_MONO;

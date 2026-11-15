@@ -24,6 +24,8 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
+long nf_on = 1;		/* a test program: NatFeats always (common's nf.S has 0) */
+
 long nf_find(const char *name);
 long nf_call2(long id, long arg);
 extern long heap_use, heap_peak;

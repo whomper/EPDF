@@ -27,6 +27,7 @@ import erz  # noqa: E402
 import quitcheck  # noqa: E402
 from pdfgen import make_pdf, book  # noqa: E402
 import importlib.util  # noqa: E402
+import natfeats  # noqa: E402 (NATFEATS=1 in the programs' INFs)
 _spec = importlib.util.spec_from_file_location("aera_speed", os.path.join(TOP, "common", "tests", "speed", "speed.py"))
 speed = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(speed)
@@ -61,6 +62,7 @@ def run(work, machine):
             subprocess.run([os.path.join(TOP, "build", "econvert"), "--pages", os.environ.get("PAGES", "colour"), src, os.path.join(r.hd, "CONV.PDF")],
                            check=True, stdout=subprocess.DEVNULL)
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\CONV.PDF\n")
+        natfeats.on(r.hd)
         r.start("C:\\LAUNCH.PRG", ready="EPDF started")
         end = time.time() + 120
         while time.time() < end and r.console().count("EPDF page ") < 6:

@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.join(TOP, "common", "tools"))
 import machines  # noqa: E402
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pdfgen import make_pdf, jpeg  # noqa: E402
+import natfeats  # noqa: E402 (NATFEATS=1 in the programs' INFs)
 
 DOWN, UP, HOME, SPACE, CTRL = 0x50, 0x48, 0x47, 0x39, 0x1D
 RIGHT, LEFT, Q = 0x4D, 0x4B, 0x10
@@ -46,6 +47,7 @@ def main(argv):
     with open(os.path.join(hd, "LAUNCH.TXT"), "w", newline="") as f:
         f.write("C:\\EPDF.PRG\r\nC:\\TWO.PDF\r\n")
     m = machines.Machine(spec, hd)
+    natfeats.on(hd)
     fifo = os.path.join(out, "hatari.fifo")
     if os.path.exists(fifo):
         os.remove(fifo)

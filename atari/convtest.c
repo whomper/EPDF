@@ -19,6 +19,8 @@
 #include "pic.h"
 #include "dspjpeg.h"
 
+long nf_on = 1;		/* a test program: NatFeats always (common's nf.S has 0) */
+
 long pdf_ms(void);
 static unsigned long ms_clock(void) { return (unsigned long)pdf_ms(); }
 extern long heap_peak;

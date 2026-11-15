@@ -30,6 +30,7 @@ import quitcheck  # noqa: E402
 from pdfgen import make_pdf, book  # noqa: E402
 import showcase  # noqa: E402
 import importlib.util  # noqa: E402
+import natfeats  # noqa: E402 (NATFEATS=1 in the programs' INFs)
 _spec = importlib.util.spec_from_file_location("aera_speed", os.path.join(TOP, "common", "tests", "speed", "speed.py"))
 speed = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(speed)
@@ -84,9 +85,10 @@ def run(work, machine, src):
             # fonts and Hebrew in 4 pages, about 40 s on Falcon-4)
             showcase.cut(os.path.join(r.hd, "IN.PDF"))
         make_pdf(os.path.join(r.hd, "IN2.PDF"), book(8))     # the second: stopped in the middle
-        inf0 = "WRITETO=C:\\OUT\nWINDOW=%d,%d\n" % WIN_AT
+        inf0 = "NATFEATS=1\nWRITETO=C:\\OUT\nWINDOW=%d,%d\n" % WIN_AT
         r.write("ECONV/ECONVERT.INF", inf0)
         r.write("LAUNCH.TXT", "C:\\ECONV\\ECONVERT.PRG\nC:\\IN.PDF C:\\IN2.PDF\n")
+        natfeats.on(r.hd)
         r.start("C:\\LAUNCH.PRG", ready="ECONVERT started")
         end = time.time() + 120
         while time.time() < end and "ECONVERT started" not in r.console():

@@ -96,6 +96,8 @@ int settings_lines(void)
 static const char inf_head[] =
 	"; EPDF's settings. EPDF writes this file itself; a line it doesn't know is kept.\r\n\r\n";
 
+extern long nf_on;		/* common's nf.S: NatFeats looked for only when set */
+
 static void settings_read(void)
 {
 	long n;
@@ -109,6 +111,14 @@ static void settings_read(void)
 	} else {
 		inf_parse(&inf, inf_head, (long)strlen(inf_head));
 	}
+	/* NatFeats (the emulator's console, the rigs' log) only where the INF
+	   asks: NATFEATS=1, which only the test rigs write; not in Settings.
+	   Read before the first log_event: a probe made with nf_on 0 is
+	   never made again (Erez, 15 Nov 2026: "make it a .INF setting so
+	   that it can be added in our testing but have no bearing outside";
+	   a Vampire V4SA hung on the probe's illegal instruction) */
+	if ((v = inf_get(&inf, "NATFEATS")) != NULL && v[0] == '1')
+		nf_on = 1;
 	if ((v = inf_get(&inf, "LINES")) != NULL)
 		lines_mode = v[0] == '1';
 	if ((v = inf_get(&inf, "FOLDER")) != NULL && strlen(v) < sizeof open_dir)

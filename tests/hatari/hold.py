@@ -24,6 +24,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TOP = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 from pdfgen import make_pdf, book  # noqa: E402
+import natfeats  # noqa: E402 (NATFEATS=1 in the programs' INFs)
 
 _spec = importlib.util.spec_from_file_location("aera_speed", os.path.join(TOP, "common", "tests", "speed", "speed.py"))
 speed = importlib.util.module_from_spec(_spec)
@@ -80,6 +81,7 @@ def run(work, machine):
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
         make_pdf(os.path.join(r.hd, "BOOK.PDF"), book(30))
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\BOOK.PDF\n")
+        natfeats.on(r.hd)
         r.start("C:\\LAUNCH.PRG", ready="EPDF started")
         wait_for(r, "EPDF opened", 1)
         time.sleep(120 if machine.startswith("ST") else 60)    # the reading done

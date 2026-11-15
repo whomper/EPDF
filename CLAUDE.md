@@ -415,7 +415,13 @@ at first. This section is kept up to date: the build, the tests, what a release 
   --author="AERA | Erez Yaary <yaary@me.com>"`, ending with the session's Co-Authored-By and
   Claude-Session lines. No model name in a commit or a file.
 - **Hatari rigs** boot the machines through `common/tools/machines.py` (ST, ST-1, TT, Falcon,
-  Falcon-4), on Erez's TOS 1.04 and 4.04 where present (`~/.aera/tos`), else EmuTOS. A report names the
+  Falcon-4), on Erez's TOS 1.04 and 4.04 where present (`~/.aera/tos`), else EmuTOS. EPDF and
+  EConvert log through NatFeats only when their INF has `NATFEATS=1` (Erez, 15 Nov 2026: "make it a
+  .INF setting so that it can be added in our testing but have no bearing outside"; a Vampire V4SA
+  hung on the probe): every rig calls `tests/hatari/natfeats.py`'s `on(hd)` before it starts them,
+  the test programs (`atari/*.c`) set `nf_on = 1`, and the rigs' builds (build/aprof, build/times)
+  link `atari/nfon.c`. Not in Settings. EPDF.PRG's, EConvert's and CONVTEST's pads (EP_PAD_A..C,
+  EC_PAD, CT_PAD) keep their code at 2.30's cache places after common's code before it grew. A report names the
   machine and the TOS (`describe()`). The cloud session that made the measurement run had no TOS
   images: its numbers are on EmuTOS 1.4 (CPU-bound work is TOS-independent; file and GEM calls are not).
 - **Build and test:** see the Makefile's header. `make` builds `binary/EPDF.PRG` (host tools under
