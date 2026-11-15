@@ -23,9 +23,10 @@ Three changes in the library's own files; keep them if it is ever updated:
   machine's own 16-bit values (upstream swaps them to little-endian order
   everywhere, Android's), so pic.c can have libjpeg write a picture shown
   at its size straight into its pixels.
-- `src/jdcoefct.c` calls the progress monitor every 16 MCUs or blocks of
+- `src/jdcoefct.c` calls the progress monitor every 8 MCUs or blocks of
   an iMCU row too (`AERA_TICK`): a whole row of a big photo was one call,
-  up to 245 ms of a stock Falcon (EPDF, 14 Nov 2026).
+  up to 245 ms of a stock Falcon (EPDF, 14 Nov 2026; every 8, not 16, Erez
+  15 Nov).
 
 Build flags: `-DPIC_LIBJPEG -DNO_GETENV -DNO_PUTENV -DAERA_NO_FLOAT
 -Icommon/third_party/libjpeg-turbo/src -Icommon/third_party/libjpeg-turbo/config`.
