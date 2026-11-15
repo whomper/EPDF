@@ -62,6 +62,8 @@ int main(void)
 			o.pages = CV_PAGES_NONE;
 		if (strstr(cfg, "pages colour"))
 			o.pages = CV_PAGES_COLOUR;
+		if (strstr(cfg, "nothumbs"))
+			o.no_thumbs = 1;	/* (no /Thumb: the pages' preview's own cost, paired) */
 		if (strstr(cfg, "photos jpeg"))
 			o.photos = CV_PHOTOS_JPEG;
 	}

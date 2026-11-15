@@ -23,6 +23,8 @@ it, prepares PDFs so that EPDF opens them fast, on the Atari itself or through t
   and drawings, in the screen's colours (16 or 256), from the top down. Zoom with ^+ and ^- (or the
   keypad's + and -) from 150 to 400 % as memory allows, and drag the page with the mouse; a band on
   the page says while a sharper one is being drawn. JPEG pictures go through the Falcon's DSP.
+- **The page strip:** View > Page strip shows the pages in a column at the window's left, each its
+  own preview (a converted PDF's, in colour) or its first line; a click goes to the page.
 - **EConvert:** many PDFs or a whole folder made ready for the Atari, on a Falcon or TT or through
   the Gateway: the text reflowed already, the pictures at the size the screen shows them, and each
   page whole in mono, colour or both. EPDF opens such a file at once on any Atari and marks its

@@ -119,16 +119,18 @@ def menu_act(r, what, budget, title_x, row_y):
 def run(work, machine):
     # the hub's runs (switches, from the environment): AERA_WITH_NVDI=1
     # boots NVDI; EPDF_PROF_PRG another profiled build (0.3's, to compare);
-    # EPDF_FONT a font in EPDF.INF ("Courier 10 Pitch,14"); XDISPLAY the
-    # display
+    # EPDF_FONT a font in EPDF.INF ("Courier 10 Pitch,14"); EPDF_STRIP=1
+    # View > Page strip on; XDISPLAY the display
     r = speed.Rig(os.path.join(work, machine.replace(":", "_")), machine,
                   nvdi=os.environ.get("AERA_WITH_NVDI") == "1", display=os.environ.get("XDISPLAY", ":91"))
     try:
         prg = os.environ.get("EPDF_PROF_PRG") or os.path.join(TOP, "build", "aprof", "EPDF.PRG")
         os.makedirs(os.path.join(r.hd, "EPDF"), exist_ok=True)
         shutil.copy(prg, os.path.join(r.hd, "EPDF", "EPDF.PRG"))
-        if os.environ.get("EPDF_FONT"):
-            r.write("EPDF/EPDF.INF", "FONT=%s\n" % os.environ["EPDF_FONT"])
+        inf = ("FONT=%s\n" % os.environ["EPDF_FONT"] if os.environ.get("EPDF_FONT") else "") + \
+              ("PAGESTRIP=1\n" if os.environ.get("EPDF_STRIP") == "1" else "")
+        if inf:
+            r.write("EPDF/EPDF.INF", inf)
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
         make_pdf(os.path.join(r.hd, "BOOK.PDF"), book(30))
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\BOOK.PDF\n")
@@ -250,8 +252,10 @@ def bar_shot(work, machine):
         prg = os.environ.get("EPDF_PROF_PRG") or os.path.join(TOP, "build", "aprof", "EPDF.PRG")
         os.makedirs(os.path.join(r.hd, "EPDF"), exist_ok=True)
         shutil.copy(prg, os.path.join(r.hd, "EPDF", "EPDF.PRG"))
-        if os.environ.get("EPDF_FONT"):
-            r.write("EPDF/EPDF.INF", "FONT=%s\n" % os.environ["EPDF_FONT"])
+        inf = ("FONT=%s\n" % os.environ["EPDF_FONT"] if os.environ.get("EPDF_FONT") else "") + \
+              ("PAGESTRIP=1\n" if os.environ.get("EPDF_STRIP") == "1" else "")
+        if inf:
+            r.write("EPDF/EPDF.INF", inf)
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
         make_pdf(os.path.join(r.hd, "LONG.PDF"), book(400))
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\LONG.PDF\n")

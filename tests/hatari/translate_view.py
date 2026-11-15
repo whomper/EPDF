@@ -202,7 +202,7 @@ def run(work, machine, tg_port, pdf_port, tglog, mode, he_port=0):
             if not pieces or not asked:
                 bad.append("no request seen (%d pieces, %d at translategate)" % (pieces, asked))
             # View > Translate off: the original; on again: the kept translation, nothing asked
-            r.menu(184, 60)
+            r.menu(184, 76)           # (View > Translate, the fourth item since Page strip)
             time.sleep(4)
             park(r)
             r.still()
@@ -212,7 +212,7 @@ def run(work, machine, tg_port, pdf_port, tglog, mode, he_port=0):
             if differ(shot, off) < 2000:
                 bad.append("off: the window didn't change (%d pixels)" % differ(shot, off))
             n0 = requests(tglog)
-            r.menu(184, 60)
+            r.menu(184, 76)           # (View > Translate, the fourth item since Page strip)
             time.sleep(4)
             park(r)
             r.still()

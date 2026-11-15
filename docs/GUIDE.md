@@ -55,7 +55,12 @@ gives way to you at once.
 - **View:** **The page's lines**: ticked, each line is as it is on the page; not ticked (as EPDF
   starts), the lines of a paragraph are joined and wrapped to the window, so the text reads at any
   window width. **Pages**: each page whole, as it is printed: on a Falcon or a TT any PDF (see
-  below), on an ST a converted PDF's; greyed where there are none. **Zoom In** (^+, or the
+  below), on an ST a converted PDF's; greyed where there are none. **Page strip**: ticked, a column
+  of the pages at the window's left, one under another with its number; a page shows its own
+  preview where the PDF has one (a converted PDF's always), on a Falcon or a TT with View > Pages
+  the page drawn small, else a box with its first line. A click
+  on one goes to that page; the page at the top of the view has a double frame, and the column
+  follows it. Not shown in a window too narrow for text beside it. **Zoom In** (^+, or the
   keypad's +) shows the page in view at 200% (150% where the memory holds no more), ticked while
   it does; chosen again, or ^-, the keypad's -, ^0 or Esc, gives the pages back. A click on a page
   zooms it too, and a click back. On a Falcon or a TT the
@@ -135,6 +140,7 @@ Each setting has a note above it in the file:
 - `WINDOW=` the window's place and size, as you left it;
 - `FOLDER=` the folder **File > Open...** shows first: the one you last opened a document from;
 - `LINES=` 1 when **View > The page's lines** is ticked;
+- `PAGESTRIP=` 1 when **View > Page strip** is ticked;
 - `GATEWAY=` 1 when **Options > Open on the Gateway** is ticked;
 - `GATE=` and `GATEPORT=` the Gateway's address and port (**Options > Settings...**, Secure).
 

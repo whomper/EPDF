@@ -93,6 +93,16 @@ the page's shape (an A4 page 905 rows).
 EPDF shows them with View > Pages, one page after another. The menu item is greyed out for a file without
 them.
 
+### The page's preview (EPDF 2.33; Erez, 15 Nov 2026)
+
+Each page carries the PDF's own `/Thumb` (ISO 32000 12.3.4), whatever the whole-page setting: an image
+XObject 96 pixels wide, its height the page's shape (an A4 page 136 rows), `/Indexed /DeviceRGB 15` with TOS's
+16 colours, 4 bits a pixel, FlateDecode, about half a kilobyte. It is the page as the converter drew it, made 96
+wide (each pixel the mean of those under it). A page the converter held in bands (a machine short of memory) has
+one only when a whole page is written too; a reader falls back to its own view of the page. EPDF's page strip (View > Page strip) shows it,
+dithered on a mono screen. A file from before 2.33 has none: the strip shows a box with the page's first line.
+EPDF shows any PDF's `/Thumb` so, converted or not.
+
 ### What other viewers see
 
 The page's `/Contents` draws the prepared parts, so any viewer shows something sensible:

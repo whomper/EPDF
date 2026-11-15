@@ -722,6 +722,148 @@ static int stop_asked(CV *c, long page, long sub)
 	return stopped;
 }
 
+/* ------------------------------------------------------------------ the page's /Thumb */
+/* TOS's 16 colours, in their registers' order (the colour page's) */
+static const unsigned char thumb_pal[16][3] = {
+	{ 255, 255, 255 }, { 255, 0, 0 }, { 0, 255, 0 }, { 255, 255, 0 }, { 0, 0, 255 },
+	{ 255, 0, 255 }, { 0, 255, 255 }, { 187, 187, 187 }, { 136, 136, 136 }, { 170, 0, 0 },
+	{ 0, 170, 0 }, { 170, 170, 0 }, { 0, 0, 170 }, { 170, 0, 170 }, { 0, 170, 170 }, { 0, 0, 0 } };
+
+/* the page made tw wide as its rows come (the canvas whole, or a band at a
+   time as the whole page's loops walk it): each pixel the mean of the
+   canvas's pixels under it (a hairline fainter than a pen's step is lost:
+   the darkest of them made the text a block). The page is never drawn
+   again for it: drawn again 96 wide, a 4 MB Falcon's canvas in bands
+   wasn't had back for the next page (econv.py, 15 Nov 2026) */
+typedef struct {
+	int sw, sh, tw, th;
+	int ty, next;			/* the row being made; the canvas's row it wants next */
+	int *xs;
+	long *acc;
+	uint16_t *row;			/* the row being made, 5-6-5 */
+	unsigned char *t;		/* the preview in TOS's 16 colours, 4 bits, each row as it is made
+					   (the 5-6-5 page held whole, 26 KB, cost a 4 MB Falcon under
+					   NVDI its page 3: econv.py, 15 Nov 2026) */
+} THUMB;
+
+static int tb_start(THUMB *b, int sw, int sh, int tw)
+{
+	int tx;
+
+	memset(b, 0, sizeof *b);
+	if (sw < tw || sh < 1 || sw / tw + 1 > 64)
+		return -1;			/* (a cell's row of more than 64 pixels: blue's sum into red's) */
+	b->sw = sw;
+	b->sh = sh;
+	b->tw = tw;
+	b->th = (int)(((long)sh * tw + sw / 2) / sw);
+	if (b->th < 1)
+		b->th = 1;
+	b->t = malloc((size_t)(tw + 1) / 2 * b->th);
+	b->row = malloc((size_t)tw * sizeof *b->row);
+	b->acc = calloc((size_t)tw * 3, sizeof *b->acc);
+	b->xs = malloc((size_t)(tw + 1) * sizeof *b->xs);
+	if (!b->t || !b->row || !b->acc || !b->xs) {
+		free(b->t);
+		free(b->row);
+		free(b->acc);
+		free(b->xs);
+		memset(b, 0, sizeof *b);
+		return -1;
+	}
+	for (tx = 0; tx <= tw; tx++)
+		b->xs[tx] = (int)((long)tx * sw / tw);
+	return 0;
+}
+
+/* rows y .. y + k - 1 of the canvas (px their first), taken only in turn;
+   a turn after each row made (about TURN_PX of the canvas's pixels) */
+static void tb_rows(THUMB *b, const uint16_t *px, int y, int k)
+{
+	int yy;
+
+	if (!b->t || y != b->next)
+		return;
+	for (yy = y; yy < y + k && b->ty < b->th; yy++, px += b->sw) {
+		int y1 = (int)((long)(b->ty + 1) * b->sh / b->th), tx;
+		long *a = b->acc;
+
+		/* the fields added as they lie: red and blue in one sum along the
+		   row's pixels under a cell (blue's six bits of room above it hold
+		   64), green in another: two ANDs and two adds a pixel (each made
+		   8-bit first, CONVTEST 2.8 s a page on a Falcon) */
+		for (tx = 0; tx < b->tw; tx++, a += 3) {
+			const uint16_t *q = px + b->xs[tx], *e = px + b->xs[tx + 1];
+			unsigned long rb = 0, g = 0;
+
+			while (q < e) {
+				unsigned int c = *q++;
+
+				rb += c & 0xF81Fu;
+				g += c & 0x07E0u;
+			}
+			a[0] += (long)(rb >> 11);
+			a[1] += (long)(g >> 5);
+			a[2] += (long)(rb & 0x7FFu);
+		}
+		if (yy + 1 >= y1) {
+			int y0 = (int)((long)b->ty * b->sh / b->th);
+			long n = (long)(yy + 1 - y0);
+
+			for (tx = 0; tx < b->tw; tx++) {
+				long kk = (long)(b->xs[tx + 1] - b->xs[tx]) * n;
+				unsigned int rr, gg, bb;
+
+				if (kk < 1)
+					kk = 1;
+				rr = (unsigned int)(b->acc[tx * 3] / kk);
+				gg = (unsigned int)(b->acc[tx * 3 + 1] / kk);
+				bb = (unsigned int)(b->acc[tx * 3 + 2] / kk);
+				b->row[tx] = (uint16_t)((rr << 11) | (gg << 5) | bb);
+			}
+			dither_pal_rows(b->row, b->tw, 1, b->ty, (const unsigned char (*)[3])thumb_pal, 16,
+					b->t + (long)b->ty * ((b->tw + 1) / 2));
+			memset(b->acc, 0, (size_t)b->tw * 3 * sizeof *b->acc);
+			b->ty++;
+			turn_now();
+		}
+	}
+	b->next = yy;
+}
+
+/* the preview made whole: its 4-bit rows (the caller frees them), else
+   NULL; the rest let go either way */
+static unsigned char *tb_done(THUMB *b)
+{
+	unsigned char *t = b->t && b->ty >= b->th ? b->t : NULL;
+
+	if (!t)
+		free(b->t);
+	free(b->row);
+	free(b->acc);
+	free(b->xs);
+	memset(b, 0, sizeof *b);
+	return t;
+}
+
+/* the preview (pw x ph, 4 bits a pixel, TOS's 16 colours) as its image
+   XObject; its object */
+static long thumb_write(PW *w, const unsigned char *dp, int pw, int ph)
+{
+	long rb4 = (pw + 1) / 2, obj;
+	char dc[512];
+	int o, q;
+
+	obj = w_new(w);
+	o = snprintf(dc, sizeof dc, "/Type /XObject /Subtype /Image /Width %d /Height %d "
+		     "/ColorSpace [/Indexed /DeviceRGB 15 <", pw, ph);
+	for (q = 0; q < 16; q++)
+		o += snprintf(dc + o, sizeof dc - (size_t)o, "%02X%02X%02X", thumb_pal[q][0], thumb_pal[q][1], thumb_pal[q][2]);
+	snprintf(dc + o, sizeof dc - (size_t)o, ">] /BitsPerComponent 4");
+	w_stream(w, obj, dc, dp, rb4 * ph);
+	return obj;
+}
+
 static int convert_page(CV *c, long n)
 {
 	PW *w = &c->w;
@@ -729,7 +871,8 @@ static int convert_page(CV *c, long n)
 	RDRAWING dw[NDRAW];
 	int nd = 0, k, drawn;
 	fx cut[NDRAW * 4];
-	long cut_obj[NDRAW], textobj, mono = -1, colour = -1, dbl = -1, contobj, pageobj = c->pages[n], trobj = -1;
+	long cut_obj[NDRAW], textobj, mono = -1, colour = -1, dbl = -1, contobj, pageobj = c->pages[n], trobj = -1, thumb = -1;
+	THUMB tb = { 0 };
 	char trfrom[8] = "";
 	PTEXT t;
 	char *at = NULL;
@@ -912,6 +1055,16 @@ static int convert_page(CV *c, long n)
 			return -1;
 		}
 	}
+	/* the page's own preview, its /Thumb (ISO 32000 12.3.4; Erez's #97, 15
+	   Nov 2026: every page carries one for EPDF's page strip), made from
+	   the page as drawn: the canvas whole here, else as the whole page's
+	   loops below walk its bands (a page in bands with no whole page asked
+	   has none) */
+	if (!c->o->no_thumbs && drawn && tb_start(&tb, r->c.w, r->c.h, CV_THUMB_W) == 0) {
+		cv_phase = "thumb";
+		if (r->c.y0 == 0 && r->c.rows >= r->c.h)
+			tb_rows(&tb, r->c.px, 0, r->c.h);
+	}
 	/* the page whole */
 	if (drawn && c->o->pages != CV_PAGES_NONE) {
 		long rb = (r->c.w + 7) / 8;
@@ -944,6 +1097,7 @@ static int convert_page(CV *c, long n)
 
 					if (band_at(r, n, y, k))
 						break;
+					tb_rows(&tb, r->c.px + (long)(y - r->c.y0) * r->c.w, y, k);
 					dither_pal_rows(r->c.px + (long)(y - r->c.y0) * r->c.w, r->c.w, k, y,
 							(const unsigned char (*)[3])pal, nc, dp + (long)y * rb4);
 				}
@@ -983,6 +1137,7 @@ static int convert_page(CV *c, long n)
 
 				if (band_at(r, n, y, k))
 					break;
+				tb_rows(&tb, r->c.px + (long)(y - r->c.y0) * r->c.w, y, k);
 				dither_mono_rows(r->c.px + (long)(y - r->c.y0) * r->c.w, r->c.w, k, y, d + (long)y * rb);
 			}
 			mono = w_new(w);
@@ -1025,6 +1180,15 @@ static int convert_page(CV *c, long n)
 whole_done:
 		r->mono_glyphs = was;
 	}
+	{
+		int th = tb.th;
+		unsigned char *t = tb_done(&tb);
+
+		if (t) {
+			thumb = thumb_write(w, t, CV_THUMB_W, th);
+			free(t);
+		}
+	}
 	/* what other viewers draw */
 	if (colour >= 0 || mono >= 0)
 		sb_printf(&cont, "q %ld 0 0 %ld 0 0 cm /%s Do Q\n", pwpt, phpt, colour >= 0 ? "Pc" : "Pm");
@@ -1042,8 +1206,10 @@ whole_done:
 	contobj = w_new(w);
 	w_stream(w, contobj, "", (const unsigned char *)(cont.s ? cont.s : ""), cont.len);
 	w_obj(w, pageobj);
-	w_printf(w, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %ld %ld] /Contents %ld 0 R\n"
-		 "/Resources << /Font << /F1 %ld 0 R >> /XObject <<", pwpt, phpt, contobj, c->font);
+	w_printf(w, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %ld %ld] /Contents %ld 0 R\n", pwpt, phpt, contobj);
+	if (thumb >= 0)
+		w_printf(w, "/Thumb %ld 0 R\n", thumb);
+	w_printf(w, "/Resources << /Font << /F1 %ld 0 R >> /XObject <<", c->font);
 	if (mono >= 0)
 		w_printf(w, " /Pm %ld 0 R", mono);
 	if (colour >= 0)

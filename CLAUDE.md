@@ -335,6 +335,23 @@ at first. This section is kept up to date: the build, the tests, what a release 
   pages"): a page with colour gets /Colour only, one without its /Mono; EPDF on a mono screen
   shows /Colour dithered. Through the Gateway pages=colouronly (AERA-Gateway 1.42, EPDF 2.9;
   gateway.py with GW_PAGES=colouronly).
+  The page strip (Erez, 15 Nov 2026: "complete the functionality"; EPDF 2.33): View > Page strip
+  (PAGESTRIP=), a column of 112 pixels at the window's left, src/gem/strip.c (a column of cells shaped to
+  move to common: common's panebar for its slider, press_track for its clicks), each cell an A4 box with
+  its number: the page's /Thumb (a converted PDF's from EConvert or the Gateway, docs/CONVERTED-PDF.md),
+  in View > Pages on a Falcon/TT the page drawn by render.ovl, else the page's first line; the view's top
+  page framed twice, the column following it, drawn only when it changes. On an ST and a FireBee the box
+  and the /Thumb only. Never in the text's stretch: the frames moved at once (one polyline each), cells
+  that changed due and drawn one part a turn of the event loop (strip_turn: a cell's ground, box and
+  number; then its words a line a turn, or its preview; the bar in three pieces, or where its slider
+  moved, pb_moved with pb_vdi); a layout that changes nothing leaves it be. Its 6x6 font is set on the
+  VDI only (told to text.c, the text view lost its CPU path after each cell: Select all on an ST 40 ->
+  80 ms). With the strip off it asks no AES (strip_width before pb_width, the menu ticked only when on).
+  EConvert's /Thumb is made from the page's rows as they are drawn (tb_rows: the canvas whole, or the
+  whole page's loops' bands), each row dithered as it is made: never drawn again (a 4 MB Falcon under
+  NVDI lost its page 3 to memory). It costs CONVTEST about 1.9 s a page on Falcon-4:256 (the canvas read
+  again from ST-RAM); CONVTEST's "nothumbs" pairs it. Rig: tests/hatari/strip.py (`make strip-test`);
+  speed.py's EPDF_STRIP=1.
   2.11 (Erez's photos and choices, 10 Nov 2026: "Both", "Band on the page"): a converted copy's
   View > Pages on a Falcon/TT in colour is drawn sharp from its original by render.ovl over the stored
   page (doc.c's sharp_pages, pdbl.stand, doc_stand_in; the stored one decoded first, pics_next),
@@ -423,7 +440,8 @@ at first. This section is kept up to date: the build, the tests, what a release 
   link `atari/nfon.c`. Not in Settings. A FireBee (FireTOS's `_CF_`, which also says `_CPU 60`) loads
   no render.ovl and converts only through the Gateway, as an ST (rdraw_machine, EConvert's has_030;
   rovl.py and gui.py on common's FireBee:16 stand-in). EPDF.PRG's, EConvert's and CONVTEST's pads (EP_PAD_A..D,
-  EC_PAD, CT_PAD) keep their code at 2.30's cache places after common's code before it grew. A report names the
+  EP_PAD_A_RO for the tables, EC_PAD, CT_PAD) keep their code at 2.32's cache places (tools/rpad.py,
+  EPDF.PRG by nm against a 2.32 build) after the code before it grew. A report names the
   machine and the TOS (`describe()`). The cloud session that made the measurement run had no TOS
   images: its numbers are on EmuTOS 1.4 (CPU-bound work is TOS-independent; file and GEM calls are not).
 - **Build and test:** see the Makefile's header. `make` builds `binary/EPDF.PRG` (host tools under

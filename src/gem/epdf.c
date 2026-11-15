@@ -32,6 +32,7 @@
 #include "clip.h"
 #include "popup.h"
 #include "menu.h"
+#include "strip.h"
 #include "pics.h"
 #include "dspjpeg.h"
 #include "rdraw.h"
@@ -121,6 +122,8 @@ static void settings_read(void)
 		nf_on = 1;
 	if ((v = inf_get(&inf, "LINES")) != NULL)
 		lines_mode = v[0] == '1';
+	if ((v = inf_get(&inf, "PAGESTRIP")) != NULL)
+		strip_set(v[0] == '1');
 	if ((v = inf_get(&inf, "FOLDER")) != NULL && strlen(v) < sizeof open_dir)
 		strcpy(open_dir, v);
 	if ((v = inf_get(&inf, "GATEWAY")) != NULL)
@@ -671,6 +674,27 @@ static void click(short mx, short my, short kstate, int dbl)
 	static const GRECT anywhere = { 0, 0, 32767, 32767 };
 	int how;
 
+	{
+		/* the page strip: its page at the view's top (a zoom ended first) */
+		long sp;
+
+		if (strip_in(mx, my) && (sp = strip_press(mx, my, held_msg)) >= 0) {
+			if (win_zoomed()) {
+				win_zoom_end();
+				menu_states();
+			}
+			{
+				char a[16];
+
+				snprintf(a, sizeof a, "%ld", sp + 1);
+				log_event("strip-click", a, NULL);
+			}
+			win_goto_page(sp);
+			return;
+		}
+		if (strip_in(mx, my))
+			return;		/* (its bar, or a press let go elsewhere) */
+	}
 	if (win_zoomed()) {
 		/* held and moved: the page dragged under the mouse (Erez, 8 Nov
 		   2026); a click alone gives the text back */
@@ -1026,6 +1050,17 @@ static void command(int c)
 		if (has_menu)
 			menu_icheck(menu.tree, mbar_object(&menu, CMD_PAGES), doc_pages_mode());
 		log_event("pages", doc_pages_mode() ? "1" : "0", NULL);
+		win_layout();
+		win_draw_all();
+		strip_refresh();	/* (the cells' pages drawn, or their first lines again) */
+		break;
+	case CMD_STRIP:
+		/* the pages' column at the window's left (Erez, 15 Nov 2026) */
+		strip_set(!strip_on());
+		if (has_menu)
+			menu_icheck(menu.tree, mbar_object(&menu, CMD_STRIP), strip_on());
+		setting("PAGESTRIP", strip_on() ? "1" : "0", "1: the page strip, the pages' column at the window's left; 0: none");
+		log_event("pagestrip", strip_on() ? "1" : "0", NULL);
 		win_layout();
 		win_draw_all();
 		break;
@@ -1593,6 +1628,8 @@ int main(void)
 		}
 		if (has_menu) {
 			menu_icheck(menu.tree, mbar_object(&menu, CMD_LINES), lines_mode);
+			if (strip_on())		/* (unticked as built: an AES call less, 15 ms of an ST's start) */
+				menu_icheck(menu.tree, mbar_object(&menu, CMD_STRIP), 1);
 			menu_icheck(menu.tree, mbar_object(&menu, CMD_GATEWAY), gw_on);
 			menu_icheck(menu.tree, mbar_object(&menu, CMD_TRANSLATE), tr_on());
 		}
@@ -1628,6 +1665,7 @@ int main(void)
 		short which, flags = MU_MESAG | MU_KEYBD | MU_BUTTON;
 		unsigned long t;
 		pics_focus = doc_view() ? dv_page_at_top(doc_view()) : -1;
+		int strip_now;
 		int pending = doc_pending() || find_dir || doc_pic_busy() || pics_waiting() || cp.on || gw_busy() ||
 			      tr_busy() || ljob_on;
 
@@ -1635,11 +1673,12 @@ int main(void)
 
 		/* the sliders after a scroll, once no key waits; the reading
 		   on while nothing else does */
+		strip_now = strip_turn_due() && !win_iconified();	/* the page strip's cells, a turn each */
 		if (win_sliders_due() || menus_due || pending || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0 ||
-		    win_progress_due() || win_ahead_due())
+		    win_progress_due() || win_ahead_due() || strip_now)
 			flags |= MU_TIMER;
 		t = win_sliders_due() || menus_due || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0 ||
-		    win_progress_due() ? 0 : bg_timer(pending || win_ahead_due(), 1000);
+		    win_progress_due() || strip_now ? 0 : bg_timer(pending || win_ahead_due(), 1000);
 		{
 			long pw = win_progress_wait();	/* the row to go once nothing has run for a while */
 
@@ -1682,6 +1721,8 @@ int main(void)
 				win_sliders();
 			} else if (menus_due) {
 				menu_states();
+			} else if (strip_now) {
+				strip_turn();
 			} else if (cp.on) {
 				/* a copy the user asked for: before the reading and the
 				   pictures; a step starts only if one as long as the last

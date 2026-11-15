@@ -39,6 +39,7 @@ static const MBAR_ITEM edit_items[] = {
 static const MBAR_ITEM view_items[] = {
 	{ "The page's lines", NULL, CMD_LINES },
 	{ "Pages", NULL, CMD_PAGES },
+	{ "Page strip", NULL, CMD_STRIP },	/* a tick: the pages' column at the left (Erez, 15 Nov 2026) */
 	{ "Translate", NULL, CMD_TRANSLATE },	/* a tick: the text view translated (Erez, 8 Nov 2026) */
 	/* a tick while View > Pages' page is zoomed: two sizes, Normal and
 	   Zoom (Erez, 14 Nov 2026: "just one menu option called Zoom In with a

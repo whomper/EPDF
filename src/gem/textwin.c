@@ -27,6 +27,7 @@
 #include "epdf.h"
 #include "progbar.h"
 #include "badge.h"
+#include "strip.h"
 
 /* the speed build (make speed-test) times a scroll's parts */
 #ifdef EPDF_TIMES
@@ -83,13 +84,21 @@ int win_cols(void)
 	return cols;
 }
 
+static int strip_due;			/* the page strip to draw with the next win_draw_all (laid out again) */
+
 static void work_from(void)
 {
+	short sw = strip_width(whole.w);	/* the page strip's column, at the left */
+
 	bar_h = (short)(ch + (ch >= 16 ? 7 : 5));	/* (EWeb's: a line, the words, the progress line) */
 	if (whole.h < bar_h + 2 * ch)
 		bar_h = 0;			/* too low a window for it */
 	work = whole;
+	work.x = (short)(work.x + sw);
+	work.w = (short)(work.w - sw);
 	work.h = (short)(work.h - bar_h);
+	if (strip_layout(whole.x, whole.y, sw, (short)(whole.h - bar_h), win_redraw))
+		strip_due = 1;
 	bar_laid();
 	cols = (short)((work.w - 2 * MARGIN) / cw);
 	if (cols < 1)
@@ -150,6 +159,8 @@ void win_status(const char *st)
 		win_progress_draw();
 }
 
+static void strip_moved(long p);
+
 void win_info(void)
 {
 	DOCVIEW *v = doc_view();
@@ -160,6 +171,7 @@ void win_info(void)
 
 	if (win < 0)
 		return;
+	strip_moved(p);
 	/* (a line scrolled asks each time: the words made again only when
 	   they change) */
 	if (p == was_page && doc_pages() == was_pages && doc_opening() == was_opening && !strcmp(status, was_status) && bar_base[0])
@@ -1771,11 +1783,13 @@ int win_zoom_key(short scan)
 	return 1;
 }
 
+static int no_strip;			/* win_draw_all: the text and the bar only */
+
 void win_redraw(const GRECT *area)
 {
-	GRECT r, c, a = *area, ba;
+	GRECT r, c, a = *area, ba, sa;
 	long r0, r1;
-	int has_bar, has_text;
+	int has_bar, has_text, has_strip;
 
 	if (win < 0)
 		return;
@@ -1795,9 +1809,13 @@ void win_redraw(const GRECT *area)
 		b.y = (short)(whole.y + whole.h - bar_h);
 		b.h = bar_h;
 		has_bar = bar_h && overlap(area, &b, &ba);	/* the status bar's part */
+		b.y = whole.y;
+		b.w = (short)(work.x - whole.x);
+		b.h = work.h;
+		has_strip = !no_strip && b.w > 0 && overlap(area, &b, &sa);	/* the page strip's */
 	}
 	has_text = overlap(&a, &work, &a);
-	if (!has_text && !has_bar)
+	if (!has_text && !has_bar && !has_strip)
 		return;
 	r0 = (a.y - work.y) / ch;
 	r1 = (a.y + a.h - work.y + ch - 1) / ch;
@@ -1815,6 +1833,8 @@ void win_redraw(const GRECT *area)
 		}
 		if (has_bar && overlap(&r, &ba, &c))
 			draw_bar(&c);
+		if (has_strip && overlap(&r, &sa, &c))
+			strip_draw(&c);
 		wind_get(win, WF_NEXTXYWH, &r.x, &r.y, &r.w, &r.h);
 	}
 	graf_mouse(M_ON, NULL);
@@ -1834,7 +1854,26 @@ void win_draw_all(void)
 	ahead_again();
 	if (win < 0)
 		return;
+	/* the page strip never here: laid out again, its ground now and its
+	   cells in turns of their own (strip_turn); else its cells move with
+	   the page in view (strip_moved). With the text's an 8 MHz ST's next
+	   page went 190 -> 360 ms */
+	no_strip = 1;
 	win_redraw(&whole);		/* the progress row too */
+	no_strip = 0;
+	if (strip_due) {
+		strip_due = 0;
+		strip_blank();
+	}
+}
+
+/* the page strip after the view's top page became p: its frame moved,
+   or its cells on */
+static void strip_moved(long p)
+{
+	if (iconified || p < 0)
+		return;
+	strip_follow(p);		/* (the frames at once, or the cells due) */
 }
 
 /* rows [r0, r1) drawn again, where they show (a page that came in) */
@@ -2081,6 +2120,7 @@ void win_pic_ready(long obj)
 
 	if (!v || win < 0 || iconified)
 		return;
+	strip_pic_ready(obj);		/* a page's preview in the strip: drawn in a turn of its own */
 	if (zoom.on) {
 		if (obj == zoom.p.obj) {
 			PICE *e = pics_get(zoom.p.obj, zoom.p.w, zoom.p.h, zoom.p.flip);
@@ -2171,6 +2211,7 @@ void win_page_ready(long n)
 
 	if (!v || win < 0 || iconified)
 		return;
+	strip_page_ready(n);		/* its cell in the page strip (its first line): in a turn of its own */
 	sliders_due = 1;
 	for (r = 0; r <= rows; r++) {
 		int kind;
