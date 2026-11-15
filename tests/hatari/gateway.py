@@ -20,6 +20,10 @@ starts with CONVERT=gateway and two PDFs; Return converts. Checked:
 - an ST shows This Atari disabled (shot), and converts nothing itself;
 - the Gateway's log names no file;
 - GW_PAGES=colouronly: EConvert's Colour pages reach the converter as such;
+- GW_PREVIEWS=1: EConvert with Page previews ticked (PREVIEWS=1) and EPDF
+  with View > Page strip shown ask for thumbs=1 (AERA-Gateway 1.48 on):
+  every page of the copies carries its /Thumb, byte for byte econvert's
+  own with --thumbs;
 - a Gateway that isn't there: the alert, and the files stay in the list.
 Then EPDF with Open on the Gateway ticked (GATEWAY=1): a book opened is
 shown, converted by the Gateway meanwhile into EPDF's own copy beside the
@@ -96,8 +100,8 @@ def run(work, machine, port, there=True):
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
         showcase.cut(os.path.join(r.hd, names[0]))     # (pictures, drawings, fonts: the hub's cut)
         make_pdf(os.path.join(r.hd, names[1]), book(5))
-        r.write("ECONV/ECONVERT.INF", "WRITETO=C:\\OUT\nCONVERT=gateway\nGATE=127.0.0.1\nGATEPORT=%d\nPAGES=%s\n" %
-                (port if there else 1, PAGES))
+        r.write("ECONV/ECONVERT.INF", "WRITETO=C:\\OUT\nCONVERT=gateway\nGATE=127.0.0.1\nGATEPORT=%d\nPAGES=%s\n%s" %
+                (port if there else 1, PAGES, "PREVIEWS=1\n" if THUMBS else ""))
         r.write("LAUNCH.TXT", "C:\\ECONV\\ECONVERT.PRG\nC:\\%s C:\\%s\n" % names)
         natfeats.on(r.hd)
         r.start("C:\\LAUNCH.PRG", ready="ECONVERT started")
@@ -136,10 +140,12 @@ def run(work, machine, port, there=True):
                 want = os.path.join(r.work, "direct-" + n)
                 subprocess.run([os.path.join(TOP, "build", "econvert"), "--fonts", FONTS, "--pages", PAGES,
                                 "--photos", "indexed", "--pictures", "screen", "--page-width", sizes[0][0],
-                                "--picture-width", sizes[0][1], os.path.join(r.hd, n), want],
-                               check=True, stdout=subprocess.DEVNULL)
+                                "--picture-width", sizes[0][1]] + (["--thumbs"] if THUMBS else []) +
+                               [os.path.join(r.hd, n), want], check=True, stdout=subprocess.DEVNULL)
                 if not os.path.exists(got) or open(got, "rb").read() != open(want, "rb").read():
                     bad.append("%s differs from the direct conversion" % n)
+                else:
+                    bad += thumbs_ok(got)
         print("%s%s: %s  (%s)" % (r.describe(), "" if there else ", no Gateway", "ok" if not bad else "; ".join(bad),
                                   r.shots))
     finally:
@@ -148,17 +154,28 @@ def run(work, machine, port, there=True):
     return bad
 
 
+def thumbs_ok(path):
+    """[] if the copy's pages carry a /Thumb each with GW_PREVIEWS, none without"""
+    data = open(path, "rb").read()
+    pages = len(re.findall(rb"/Type\s*/Page[^s]", data))
+    thumbs = len(re.findall(rb"/Thumb \d+ 0 R", data))
+    print("  %s: %d of %d pages with a preview" % (os.path.basename(path), thumbs, pages))
+    return [] if thumbs == (pages if THUMBS else 0) else ["%s: %d of %d pages with a /Thumb" % (path, thumbs, pages)]
+
+
 def direct_same(src, sizes, got, work, pages="mono"):
     """got is byte for byte build/econvert's own conversion of src with sizes
     (pages: EPDF asks for colouronly on a screen of 16 colours or more)"""
     want = os.path.join(work, "direct-" + os.path.basename(src))
     subprocess.run([os.path.join(TOP, "build", "econvert"), "--fonts", FONTS, "--pages", pages,
                     "--photos", "indexed", "--pictures", "screen", "--page-width", sizes[0],
-                    "--picture-width", sizes[1], src, want], check=True, stdout=subprocess.DEVNULL)
+                    "--picture-width", sizes[1]] + (["--thumbs"] if THUMBS else []) + [src, want],
+                   check=True, stdout=subprocess.DEVNULL)
     return os.path.exists(got) and open(got, "rb").read() == open(want, "rb").read()
 
 
 PAGES = os.environ.get("GW_PAGES", "mono")    # EConvert's whole pages (colouronly: Gateway 1.42)
+THUMBS = os.environ.get("GW_PREVIEWS") == "1"   # Page previews and the page strip on (thumbs=1: Gateway 1.48)
 RATE = int(os.environ.get("GW_RATE", "0")) or None    # bytes a second on the serial line: the phases' shots
 
 
@@ -174,7 +191,8 @@ def run_epdf(work, machine, port, there=True):
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
         src = os.path.join(r.hd, "DOCS", "BOOK.PDF")
         make_pdf(src, book(4))
-        r.write("EPDF/epdf.inf", "GATEWAY=1\nGATE=127.0.0.1\nGATEPORT=%d\n" % (port if there else 1))
+        r.write("EPDF/epdf.inf", "GATEWAY=1\nGATE=127.0.0.1\nGATEPORT=%d\n%s" % (port if there else 1,
+                                                                              "PAGESTRIP=1\n" if THUMBS else ""))
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\DOCS\\BOOK.PDF\n")
         natfeats.on(r.hd)
         r.start("C:\\LAUNCH.PRG", ready="EPDF started")
@@ -212,6 +230,8 @@ def run_epdf(work, machine, port, there=True):
                 elif not direct_same(src, sizes[0], copies[0], r.work,
                                      "colouronly" if machine.split(":")[-1] in ("16", "256") else "mono"):
                     bad.append("EPDF's copy isn't the direct conversion")
+                else:
+                    bad += thumbs_ok(copies[0])
             if con.count("EPDF opening") < 2:
                 bad.append("the copy wasn't opened after")
         print("EPDF %s%s: %s  (%s)" % (r.describe(), "" if there else ", no Gateway", "ok" if not bad else "; ".join(bad),
