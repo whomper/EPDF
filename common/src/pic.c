@@ -2186,6 +2186,7 @@ static int decode_lj(const unsigned char *d, long n, PIC *p, SCALER *sc, int *wh
 	j->src.bytes_in_buffer = (size_t) n;
 	j->ci.src = &j->src;
 	jpeg_read_header(&j->ci, TRUE);
+	lj_progress((j_common_ptr) &j->ci);	/* (the headers read, before the decoder's setup: a turn, 55 ms of a stock Falcon in one piece to the DSP's first) */
 	/* CMYK (Adobe's, inverted) is made RGB below; the rest by libjpeg */
 	j->ci.out_color_space = j->ci.jpeg_color_space == JCS_CMYK || j->ci.jpeg_color_space == JCS_YCCK ?
 				JCS_CMYK : JCS_RGB;
