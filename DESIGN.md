@@ -19,3 +19,9 @@ questions still open about how EPDF is built.
   15 Nov 2026). A FireBee doesn't load render.ovl at all (`_CF_`:
   src/gem/rdraw.c's rdraw_machine), and EConvert converts there only through
   the Gateway.
+- **speed.py at a finer threshold (15 Nov 2026).** Built with
+  `-DAES_PROFILE=5` (every stretch of 5 ms or more logged, for comparing a
+  start turn by turn), tests/hatari/speed.py stops at "a press in the text":
+  "the screen didn't come to rest" (the logging itself keeps the machine
+  busy). The start's turns were read from the log instead. To look at with
+  the next change to the rig (the hub, AERA-Atari bf73699).
