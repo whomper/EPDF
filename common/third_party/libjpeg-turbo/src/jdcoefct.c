@@ -25,13 +25,15 @@
 #include "jsamplecomp.h"
 
 
-/* AERA: the progress monitor every 16 MCUs or blocks of an iMCU row too: a
+/* AERA: the progress monitor every 8 MCUs or blocks of an iMCU row too: a
    whole row of a big photo is 75-250 ms of a stock Falcon's 68030 (EPDF's
    rovl.py, 14 Nov 2026), and the monitors the family gives (pic.c's
-   lj_progress, EPDF's cv_progress) only poll */
+   lj_progress, EPDF's cv_progress) only poll. Every 16 left a progressive
+   photo 70 ms between them; every 8, 45-50 (Erez, 15 Nov 2026: yes, for
+   +80-90 ms on a 9 s page) */
 #define AERA_TICK(cinfo, n) \
   do { \
-    if (((n) & 15) == 15 && (cinfo)->progress != NULL) \
+    if (((n) & 7) == 7 && (cinfo)->progress != NULL) \
       (*(cinfo)->progress->progress_monitor) ((j_common_ptr)(cinfo)); \
   } while (0)
 
