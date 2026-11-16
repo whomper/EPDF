@@ -5,7 +5,9 @@
  * named in C:\JPXJOB.CFG (a line each: FILE REDUCE) decoded as EPDF takes
  * it, its time, the heap's peak and its rows' hash (h * 31 + b, the
  * host's jpxdec gives the same bytes) written as a JSON line to
- * C:\JPXBENCH.OUT and NatFeats. tests/hatari/jpxbench.py runs it.
+ * C:\JPXBENCH.OUT and NatFeats. tests/hatari/jpxbench.py runs it. A
+ * first line "!" is a profiling run: the program ends on an illegal
+ * instruction for Hatari's debugger (jpxbench.py --profile).
  */
 #include <stdlib.h>
 #include <string.h>
@@ -62,9 +64,16 @@ static void row(void *u, long y, const uint8_t *px)
 }
 
 static int poll_count;
+static long last_us, gap_us;
 
+/* the decoder's turn: how often, and the longest stretch without one */
 static int poll(void)
 {
+	long now = pdf_us();
+
+	if (now - last_us > gap_us)
+		gap_us = now - last_us;
+	last_us = now;
 	poll_count++;
 	return 1;
 }
@@ -89,13 +98,16 @@ static void one(const char *file, int reduce)
 	rw = w;
 	bpp = c >= 3 ? 3 : 1;
 	t0 = pdf_us();
+	last_us = t0;
+	gap_us = 0;
 	if (r == JPX_OK)
 		r = jpx_decode(d, n, reduce, row, NULL, poll, &w, &h, &c);
 	t = pdf_us() - t0;
 	snprintf(line, sizeof line,
 		 "{\"file\":\"%s\",\"bytes\":%ld,\"reduce\":%d,\"w\":%d,\"h\":%d,\"c\":%d,\"r\":%d,\"ms\":%ld,\"first_row_ms\":%ld,"
-		 "\"heap_kb\":%ld,\"polls\":%d,\"hash\":%lu}",
-		 file, n, reduce, w, h, c, r, t / 1000, first_row_us / 1000, (heap_peak - heap_use) / 1024, poll_count, hsh);
+		 "\"heap_kb\":%ld,\"polls\":%d,\"gap_ms\":%ld,\"hash\":%lu}",
+		 file, n, reduce, w, h, c, r, t / 1000, first_row_us / 1000, (heap_peak - heap_use) / 1024, poll_count, gap_us / 1000,
+		 hsh);
 	emit(line);
 	free(d);
 }
@@ -104,6 +116,7 @@ int main(void)
 {
 	unsigned char *cfg;
 	long n = load("C:\\JPXJOB.CFG", &cfg), i = 0;
+	int prof = 0;
 
 	out_h = Fcreate("C:\\JPXBENCH.OUT", 0);
 	if (n < 0) {
@@ -111,6 +124,8 @@ int main(void)
 		return 1;
 	}
 	cfg[n] = 0;
+	if (cfg[0] == '!')
+		prof = 1, i = 1;
 	while (i < n) {
 		long e = i;
 
@@ -133,5 +148,7 @@ int main(void)
 	emit("{\"done\":1}");
 	if (out_h >= 0)
 		Fclose((short)out_h);
+	if (prof)
+		__asm__ volatile("illegal");	/* Hatari's debugger takes over: the profile is read there */
 	return 0;
 }

@@ -32,6 +32,24 @@
 #define FRAC 5			/* the samples' fixed point: 1/32 (a band's values, an
 				   8-bit sample's, reach 670: in 16 bits) */
 
+#define IKK97 2707		/* the 9/7's 1 / K^2, 0.660795, in 1/4096 (synth_level) */
+
+/* a product 16 bits by 16: a 68000's one muls.w (GCC makes many of them a
+   call to __mulsi3, 32 bits by 32, an int being 32); a 68030's own (its
+   shifts and adds beat muls.w there) */
+static inline int32_t muls16(int16_t a, int16_t b)
+{
+#if defined(__GNUC__) && defined(__m68k__) && !defined(__mc68020__)
+	int32_t r = a;
+
+	__asm__("muls.w %1,%0" : "+d"(r) : "dmi"(b));
+	return r;
+#else
+	return (int32_t)a * b;
+#endif
+}
+#define MULS(a, k) muls16((int16_t)(a), (int16_t)(k))
+
 /* built for size (the Makefile's -Os), the inner loops for speed */
 #if defined(__GNUC__) && !defined(__clang__) && defined(__m68k__)
 #define HOT __attribute__((optimize("O2")))
@@ -687,179 +705,261 @@ static int packet(CS *cs, RES *R, long k, int l, const uint8_t **pp, const uint8
 
 /* ------------------------------------------------------------------ tier 1: a code-block */
 
-/* flags a coefficient: significant, its sign, coded in this bitplane,
-   refined before */
-#define F_SIG 1
-#define F_NEG 2
-#define F_VIS 4
-#define F_REF 8
+/* a coefficient's flags (T.800 annex D's state, kept as OpenJPEG keeps
+   it): its eight neighbours' significance and the four straight ones'
+   signs, set once as each becomes significant, so a context is one look-up
+   in a table; then its own state */
+#define N_N 0x0001
+#define N_S 0x0002
+#define N_W 0x0004
+#define N_E 0x0008
+#define N_NW 0x0010
+#define N_NE 0x0020
+#define N_SW 0x0040
+#define N_SE 0x0080
+#define S_N 0x0100			/* that neighbour negative */
+#define S_S 0x0200
+#define S_W 0x0400
+#define S_E 0x0800
+#define F_SIG 0x1000
+#define F_VIS 0x2000			/* coded in this bitplane's significance pass */
+#define F_REF 0x4000			/* refined before */
+#define F_NEG 0x8000
+#define N_ALL 0x00FF
+#define N_BELOW (N_S | N_SW | N_SE)	/* (masked in a stripe's last row when causal) */
 
 enum { CX_ZC = 0, CX_SC = 9, CX_MR = 14, CX_RL = 17, CX_UNI = 18 };
 
+/* the zero coding's context by the neighbours (N_ALL bits), for the LL
+   and LH bands, the HL (horizontal and vertical the other way round) and
+   the HH (T.800 table D.1); the sign's context and its turn by the
+   straight four (table D.3: N_N..N_E | S_N..S_E >> 4) */
+static uint8_t zc_lut[3][256], sc_lut[256];
+
+static void t1_tables(void)
+{
+	int k, o;
+
+	if (zc_lut[0][N_W])
+		return;
+	for (o = 0; o < 3; o++)
+		for (k = 0; k < 256; k++) {
+			int h = !!(k & N_W) + !!(k & N_E), v = !!(k & N_N) + !!(k & N_S);
+			int d = !!(k & N_NW) + !!(k & N_NE) + !!(k & N_SW) + !!(k & N_SE), c;
+
+			if (o == 2) {
+				int hv = h + v;
+
+				c = d >= 3 ? 8 : d == 2 ? (hv >= 1 ? 7 : 6) : d == 1 ? (hv >= 2 ? 5 : hv == 1 ? 4 : 3) : (hv >= 2 ? 2 : hv);
+			} else {
+				if (o == 1) {
+					int t = h;
+
+					h = v;
+					v = t;
+				}
+				c = h == 2 ? 8 : h == 1 ? (v >= 1 ? 7 : d >= 1 ? 6 : 5) : v == 2 ? 4 : v == 1 ? 3 : d >= 2 ? 2 : d;
+			}
+			zc_lut[o][k] = (uint8_t)c;
+		}
+	for (k = 0; k < 256; k++) {
+		/* a neighbour's part: +1 significant and positive, -1 negative */
+#define PART(sig, neg) ((k & (sig)) ? ((k & (neg)) ? -1 : 1) : 0)
+		int H = PART(N_W, S_W >> 4) + PART(N_E, S_E >> 4), V = PART(N_N, S_N >> 4) + PART(N_S, S_S >> 4), c, x;
+#undef PART
+
+		H = H > 1 ? 1 : H < -1 ? -1 : H;
+		V = V > 1 ? 1 : V < -1 ? -1 : V;
+		if (H == 0) {
+			x = V < 0;
+			c = V == 0 ? 0 : 1;
+		} else {
+			x = H < 0;
+			if (H < 0)
+				V = -V;
+			c = V == 1 ? 4 : V == 0 ? 3 : 2;
+		}
+		sc_lut[k] = (uint8_t)((CX_SC + c) | x << 7);
+	}
+}
+
 typedef struct {
-	int w, h;
+	int w, h, stride;		/* stride: the flags' row, w + 2 */
 	int32_t *v;			/* magnitude, twice (half a step's room) */
-	uint8_t *f;			/* (w + 2) x (h + 2), a border round */
-	int orient, causal;
+	uint16_t *f;			/* (w + 2) x (h + 2), a border round */
+	const uint8_t *zc;		/* the band's zc_lut */
+	int causal;
 	uint8_t cx[19];
 	MQ m;
 } T1;
 
-#define FL(t, x, y) ((t)->f[((y) + 1) * ((t)->w + 2) + (x) + 1])
+/* the coefficient at f (its value at v) significant from bitplane bp,
+   its sign decoded: its neighbours told */
+#define SIGNIFICANT(t, fp, vp, bp, ctxmask)                                                                 \
+	do {                                                                                                \
+		unsigned sl_ = sc_lut[((fp)[0] & (ctxmask) & 0x0F) | (((fp)[0] & (ctxmask)) >> 4 & 0xF0)];   \
+		int s_, st_ = st;                                                                           \
+		MQ_DECODE(&(t)->m, c, a, ct, &cx[sl_ & 0x7F], s_);                                          \
+		s_ ^= sl_ >> 7;                                                                             \
+		*(vp) = (int32_t)(3L << (bp));	/* (1.5 steps of the bitplane, twice) */                     \
+		(fp)[0] |= (uint16_t)(F_SIG | (s_ ? F_NEG : 0));                                            \
+		(fp)[-st_ - 1] |= N_SE;                                                                     \
+		(fp)[-st_ + 1] |= N_SW;                                                                     \
+		(fp)[st_ - 1] |= N_NE;                                                                      \
+		(fp)[st_ + 1] |= N_NW;                                                                      \
+		(fp)[-st_] |= (uint16_t)(N_S | (s_ ? S_S : 0));                                             \
+		(fp)[st_] |= (uint16_t)(N_N | (s_ ? S_N : 0));                                              \
+		(fp)[-1] |= (uint16_t)(N_E | (s_ ? S_E : 0));                                               \
+		(fp)[1] |= (uint16_t)(N_W | (s_ ? S_W : 0));                                                \
+	} while (0)
 
-HOT static int zc_ctx(T1 *t, int x, int y)
-{
-	int h = 0, v = 0, d = 0, below = !(t->causal && (y & 3) == 3);
-
-	h = (FL(t, x - 1, y) & F_SIG) + (FL(t, x + 1, y) & F_SIG);
-	v = (FL(t, x, y - 1) & F_SIG) + (below ? FL(t, x, y + 1) & F_SIG : 0);
-	d = (FL(t, x - 1, y - 1) & F_SIG) + (FL(t, x + 1, y - 1) & F_SIG) +
-	    (below ? (FL(t, x - 1, y + 1) & F_SIG) + (FL(t, x + 1, y + 1) & F_SIG) : 0);
-	if (t->orient == 3) {
-		int hv = h + v;
-
-		if (d >= 3)
-			return 8;
-		if (d == 2)
-			return hv >= 1 ? 7 : 6;
-		if (d == 1)
-			return hv >= 2 ? 5 : hv == 1 ? 4 : 3;
-		return hv >= 2 ? 2 : hv;
-	}
-	if (t->orient == 1) {		/* HL: h and v the other way round */
-		int s = h;
-
-		h = v;
-		v = s;
-	}
-	if (h == 2)
-		return 8;
-	if (h == 1)
-		return v >= 1 ? 7 : d >= 1 ? 6 : 5;
-	if (v == 2)
-		return 4;
-	if (v == 1)
-		return 3;
-	return d >= 2 ? 2 : d;
-}
-
-HOT static int contrib(uint8_t f)
-{
-	return f & F_SIG ? (f & F_NEG ? -1 : 1) : 0;
-}
-
-/* D.3.2: the sign's context and the bit it is turned by */
-HOT static int sc_ctx(T1 *t, int x, int y, int *xr)
-{
-	int below = !(t->causal && (y & 3) == 3);
-	int H = contrib(FL(t, x - 1, y)) + contrib(FL(t, x + 1, y));
-	int V = contrib(FL(t, x, y - 1)) + (below ? contrib(FL(t, x, y + 1)) : 0);
-
-	H = H > 1 ? 1 : H < -1 ? -1 : H;
-	V = V > 1 ? 1 : V < -1 ? -1 : V;
-	if (H == 0) {
-		*xr = V < 0;
-		return CX_SC + (V == 0 ? 0 : 1);
-	}
-	*xr = H < 0;
-	if (H < 0)
-		V = -V;
-	return CX_SC + (V == 1 ? 4 : V == 0 ? 3 : 2);
-}
-
-HOT static int any_sig(T1 *t, int x, int y)
-{
-	int below = !(t->causal && (y & 3) == 3);
-
-	return (FL(t, x - 1, y) | FL(t, x + 1, y) | FL(t, x, y - 1) | FL(t, x - 1, y - 1) | FL(t, x + 1, y - 1) |
-		(below ? FL(t, x, y + 1) | FL(t, x - 1, y + 1) | FL(t, x + 1, y + 1) : 0)) & F_SIG;
-}
-
-HOT static void becomes_sig(T1 *t, int x, int y, int bp)
-{
-	int xr, s = mq_decode(&t->m, &t->cx[sc_ctx(t, x, y, &xr)]) ^ xr;
-
-	t->v[(long)y * t->w + x] = (int32_t)(3L << bp);	/* (1.5 steps of the bitplane, twice) */
-	FL(t, x, y) |= (uint8_t)(F_SIG | (s ? F_NEG : 0));
-}
+/* (the mask for row y of a stripe: its neighbours below hidden in the
+   vertically causal mode's last row) */
+#define ROWMASK(t, k) (causal && (k) == 3 ? (unsigned)~(N_BELOW | S_S) : 0xFFFFu)
 
 HOT static void pass_sig(T1 *t, int bp)
 {
-	int y0, x, y;
+	int y0, x, k, st = t->stride, w = t->w, h = t->h, causal = t->causal;
+	uint8_t *cx = t->cx;
+	const uint8_t *zc = t->zc;
+	uint16_t *fb = t->f;
+	int32_t *vb = t->v;
+	uint32_t c, a;
+	int ct;
 
-	for (y0 = 0; y0 < t->h; y0 += 4)
-		for (x = 0; x < t->w; x++)
-			for (y = y0; y < y0 + 4 && y < t->h; y++) {
-				uint8_t *f = &FL(t, x, y);
+	MQ_LOAD(&t->m, c, a, ct);
+	for (y0 = 0; y0 < h; y0 += 4) {
+		int rows = h - y0 < 4 ? h - y0 : 4;
+		uint16_t *f0 = fb + (long)(y0 + 1) * st + 1;
+		int32_t *v0 = vb + (long)y0 * w;
 
-				if ((*f & F_SIG) || !any_sig(t, x, y))
+		for (x = 0; x < w; x++) {
+			uint16_t *fp = f0 + x;
+			int32_t *vp = v0 + x;
+
+			/* (a column of four none of whose neighbours is significant:
+			   nothing here) */
+			if (rows == 4 && !((fp[0] | fp[st] | fp[2 * st] | fp[3 * st]) & N_ALL))
+				continue;
+			for (k = 0; k < rows; k++, fp += st, vp += w) {
+				unsigned m = ROWMASK(t, k), f = *fp & m;
+				int d;
+
+				if ((f & F_SIG) || !(f & N_ALL))
 					continue;
-				*f |= F_VIS;
-				if (mq_decode(&t->m, &t->cx[CX_ZC + zc_ctx(t, x, y)]))
-					becomes_sig(t, x, y, bp);
+				*fp |= F_VIS;
+				MQ_DECODE(&t->m, c, a, ct, &cx[CX_ZC + zc[f & N_ALL]], d);
+				if (d)
+					SIGNIFICANT(t, fp, vp, bp, m);
 			}
+		}
+	}
+	MQ_SAVE(&t->m, c, a, ct);
 }
 
 HOT static void pass_ref(T1 *t, int bp)
 {
-	int y0, x, y;
+	int y0, x, k, st = t->stride, w = t->w, h = t->h, causal = t->causal;
+	uint8_t *cx = t->cx;
+	uint16_t *fb = t->f;
+	int32_t *vb = t->v;
+	int32_t one = (int32_t)(1L << bp);
+	uint32_t c, a;
+	int ct;
 
-	for (y0 = 0; y0 < t->h; y0 += 4)
-		for (x = 0; x < t->w; x++)
-			for (y = y0; y < y0 + 4 && y < t->h; y++) {
-				uint8_t *f = &FL(t, x, y);
-				int32_t *v = &t->v[(long)y * t->w + x];
-				int c;
+	MQ_LOAD(&t->m, c, a, ct);
+	for (y0 = 0; y0 < h; y0 += 4) {
+		int rows = h - y0 < 4 ? h - y0 : 4;
+		uint16_t *f0 = fb + (long)(y0 + 1) * st + 1;
+		int32_t *v0 = vb + (long)y0 * w;
 
-				if ((*f & (F_SIG | F_VIS)) != F_SIG)
+		for (x = 0; x < w; x++) {
+			uint16_t *fp = f0 + x;
+			int32_t *vp = v0 + x;
+
+			if (rows == 4 && !((fp[0] | fp[st] | fp[2 * st] | fp[3 * st]) & F_SIG))
+				continue;	/* (none significant: none refined) */
+			for (k = 0; k < rows; k++, fp += st, vp += w) {
+				unsigned f = *fp;
+				int d, ctx;
+
+				if ((f & (F_SIG | F_VIS)) != F_SIG)
 					continue;
-				c = *f & F_REF ? CX_MR + 2 : CX_MR + (any_sig(t, x, y) ? 1 : 0);
-				*v += mq_decode(&t->m, &t->cx[c]) ? (int32_t)(1L << bp) : -(int32_t)(1L << bp);
-				*f |= F_REF;
-			}
-}
-
-HOT static void pass_clean(T1 *t, int bp)
-{
-	int y0, x, y;
-
-	for (y0 = 0; y0 < t->h; y0 += 4)
-		for (x = 0; x < t->w; x++) {
-			y = y0;
-			if (y0 + 4 <= t->h) {
-				int k, quiet = 1;
-
-				for (k = 0; k < 4 && quiet; k++)
-					if ((FL(t, x, y0 + k) & (F_SIG | F_VIS)) || any_sig(t, x, y0 + k))
-						quiet = 0;
-				if (quiet) {
-					/* the run-length mode: four insignificant at once */
-					if (!mq_decode(&t->m, &t->cx[CX_RL]))
-						continue;
-					k = mq_decode(&t->m, &t->cx[CX_UNI]) << 1;
-					k |= mq_decode(&t->m, &t->cx[CX_UNI]);
-					becomes_sig(t, x, y0 + k, bp);
-					y = y0 + k + 1;
-				}
-			}
-			for (; y < y0 + 4 && y < t->h; y++) {
-				uint8_t *f = &FL(t, x, y);
-
-				if (*f & (F_SIG | F_VIS))
-					continue;
-				if (mq_decode(&t->m, &t->cx[CX_ZC + zc_ctx(t, x, y)]))
-					becomes_sig(t, x, y, bp);
+				ctx = f & F_REF ? CX_MR + 2 : CX_MR + ((f & ROWMASK(t, k) & N_ALL) ? 1 : 0);
+				MQ_DECODE(&t->m, c, a, ct, &cx[ctx], d);
+				*vp += d ? one : -one;
+				*fp = (uint16_t)(f | F_REF);
 			}
 		}
-	/* the bitplane's done: coded-this-plane marks cleared */
-	for (y = 0; y < t->h; y++)
-		for (x = 0; x < t->w; x++)
-			FL(t, x, y) &= (uint8_t)~F_VIS;
+	}
+	MQ_SAVE(&t->m, c, a, ct);
 }
 
-/* code-block c of band B decoded, its coefficients into out (stride os,
-   at the band's coordinates less bx0, by0): dequantised, FRAC fixed point */
-static int t1_block(CB *c, const BAND *B, int style, int rev, int prec, int16_t *out, long os, int32_t *v, uint8_t *f)
+/* the cleanup: every coefficient the significance pass didn't code (its
+   mark cleared as it goes), four at once by the run-length mode where a
+   stripe's column is quiet */
+HOT static void pass_clean(T1 *t, int bp)
+{
+	int y0, x, k, st = t->stride, w = t->w, h = t->h, causal = t->causal;
+	uint8_t *cx = t->cx;
+	const uint8_t *zc = t->zc;
+	uint16_t *fb = t->f;
+	int32_t *vb = t->v;
+	uint32_t c, a;
+	int ct;
+
+	MQ_LOAD(&t->m, c, a, ct);
+	for (y0 = 0; y0 < h; y0 += 4) {
+		int rows = h - y0 < 4 ? h - y0 : 4;
+		uint16_t *f0 = fb + (long)(y0 + 1) * st + 1;
+		int32_t *v0 = vb + (long)y0 * w;
+
+		for (x = 0; x < w; x++) {
+			uint16_t *fp = f0 + x;
+			int32_t *vp = v0 + x;
+
+			k = 0;
+			if (rows == 4 && !((fp[0] | fp[st] | fp[2 * st] | (fp[3 * st] & ROWMASK(t, 3))) & (F_SIG | F_VIS | N_ALL))) {
+				int d;
+
+				MQ_DECODE(&t->m, c, a, ct, &cx[CX_RL], d);
+				if (!d)
+					continue;
+				MQ_DECODE(&t->m, c, a, ct, &cx[CX_UNI], d);
+				k = d << 1;
+				MQ_DECODE(&t->m, c, a, ct, &cx[CX_UNI], d);
+				k |= d;
+				for (d = 0; d < k; d++) {	/* (no multiply: a 68000's is a call) */
+					fp += st;
+					vp += w;
+				}
+				SIGNIFICANT(t, fp, vp, bp, ROWMASK(t, k));
+				k++;
+				fp += st;
+				vp += w;
+			}
+			for (; k < rows; k++, fp += st, vp += w) {
+				unsigned m = ROWMASK(t, k), f = *fp;
+				int d;
+
+				if (f & (F_SIG | F_VIS)) {
+					*fp = (uint16_t)(f & ~F_VIS);
+					continue;
+				}
+				MQ_DECODE(&t->m, c, a, ct, &cx[CX_ZC + zc[f & m & N_ALL]], d);
+				if (d)
+					SIGNIFICANT(t, fp, vp, bp, m);
+			}
+		}
+	}
+	MQ_SAVE(&t->m, c, a, ct);
+}
+
+/* code-block c of band B decoded, its coefficients to their samples'
+   places (out its first, xs apart, its rows os apart): dequantised, FRAC
+   fixed point; fold: an HH band's 1/K^2 in it (synth_level) */
+static int t1_block(CB *c, const BAND *B, int style, int rev, int fold, int prec, int16_t *out, long xs, long os, int32_t *v,
+		    uint16_t *f)
 {
 	T1 t;
 	int w = c->x1 - c->x0, h = c->y1 - c->y0, x, y, pass, bp, type;
@@ -874,6 +974,8 @@ static int t1_block(CB *c, const BAND *B, int style, int rev, int prec, int16_t 
 		return JPX_UNSUPPORTED;
 	for (i = 0; i < c->nseg; i++)
 		n += c->seglen[i];
+	if (!c->passes || n <= 0)
+		return JPX_OK;		/* (the buffer's zeros) */
 	if (c->nseg == 1)
 		data = c->seg[0];
 	else {
@@ -886,123 +988,248 @@ static int t1_block(CB *c, const BAND *B, int style, int rev, int prec, int16_t 
 		}
 		data = buf;
 	}
+	t1_tables();
 	t.w = w;
 	t.h = h;
+	t.stride = w + 2;
 	t.v = v;
 	t.f = f;
-	t.orient = B->orient;
+	t.zc = zc_lut[B->orient == 3 ? 2 : B->orient == 1 ? 1 : 0];
 	t.causal = style >> 3 & 1;
 	memset(v, 0, (size_t)w * h * sizeof *v);
-	memset(f, 0, (size_t)(w + 2) * (h + 2));
+	memset(f, 0, (size_t)(w + 2) * (h + 2) * sizeof *f);
 	memset(t.cx, 0, sizeof t.cx);
 	t.cx[CX_UNI] = 46 << 1;
 	t.cx[CX_RL] = 3 << 1;
 	t.cx[CX_ZC] = 4 << 1;
-	if (c->passes && n > 0) {
-		mq_init(&t.m, data, n);
-		bp = c->numbps - 1;
-		type = 2;
-		for (pass = 0; pass < c->passes && bp >= 0; pass++) {
-			if (type == 0)
-				pass_sig(&t, bp);
-			else if (type == 1)
-				pass_ref(&t, bp);
-			else
-				pass_clean(&t, bp);
-			if (type == 2) {
-				type = 0;
-				bp--;
-			} else
-				type++;
-		}
+	mq_init(&t.m, data, n);
+	bp = c->numbps - 1;
+	type = 2;
+	for (pass = 0; pass < c->passes && bp >= 0; pass++) {
+		if (type == 0)
+			pass_sig(&t, bp);
+		else if (type == 1)
+			pass_ref(&t, bp);
+		else
+			pass_clean(&t, bp);
+		if (type == 2) {
+			type = 0;
+			bp--;
+		} else
+			type++;
 	}
 	free(buf);
 	/* out: the value (twice its magnitude, the sign) to the samples' fixed
 	   point, every component's brought to 8 bits; the 9/7's step
 	   2^(Rb - e) (1 + mu / 2^11), Rb the bits (8 here) and the band's gain */
 	{
-		int sh = 8 + gain - B->e - 12 + FRAC, sc = FRAC - (prec - 8);
+		int sh = 8 + gain - B->e - 12 + FRAC, sc = FRAC - (prec - 8), mult = 2048 + B->mu;
 
-		for (y = 0; y < h; y++)
-			for (x = 0; x < w; x++) {
-				int32_t m = v[(long)y * w + x];
+		if (fold && B->orient == 3)
+			mult = (mult * IKK97 + 2048) >> 12;
+		for (y = 0; y < h; y++) {
+			const int32_t *vp = v + (long)y * w;
+			const uint16_t *fp = f + (long)(y + 1) * t.stride + 1;
+			int16_t *op = out + (long)y * os;
+
+			for (x = 0; x < w; x++, op += xs) {
+				int32_t m = vp[x];
 				long q;
 
-				if (!m) {
-					out[(long)y * os + x] = 0;
-					continue;
-				}
+				if (!m)
+					continue;	/* (the buffer's zeros) */
 				if (rev) {
 					q = m >> 1;
 					q = sc >= 0 ? q << sc : (q + (1L << (-sc - 1))) >> -sc;
 				} else {
-					q = (long)m * (2048 + B->mu);
+					/* (16 bits by 16 where the value fits: a 68000's muls.w) */
+					q = m < 32768 ? MULS(m, mult) : (long)m * mult;
 					q = sh >= 0 ? q << sh : (q + (1L << (-sh - 1))) >> -sh;
 				}
 				if (q > 32767)
 					q = 32767;
-				out[(long)y * os + x] = (int16_t)(FL(&t, x, y) & F_NEG ? -q : q);
+				*op = (int16_t)(fp[x] & F_NEG ? -q : q);
 			}
+		}
 	}
 	return JPX_OK;
 }
 
 /* ------------------------------------------------------------------ the inverse wavelet */
 
-/* lifting constants, 1/4096 */
+/* lifting constants, 1/4096; each step's product 16 bits by 16 (a
+   68000's one muls.w: the sum of two neighbours halved first, a 1/64th
+   of a sample given up) */
 #define A97 (-6497)		/* alpha -1.586134342 */
 #define B97 (-217)		/* beta -0.052980119 */
 #define G97 3616		/* gamma 0.882911076 */
 #define D97 1817		/* delta 0.443506852 */
 #define K97 5039		/* K 1.230174105 */
 #define IK97 3330		/* 1 / K 0.812893066 */
-#define MUL(a, k) ((int32_t)(((long)(a) * (k) + 2048) >> 12))
+#define KK97 6198		/* K^2 1.513328 */
+#define LIFT(s, k) ((MULS((s) >> 1, (k)) + 1024) >> 11)
+#define SCALE(a, k) ((MULS((a), (k)) + 2048) >> 12)
 
-/* one line x (n samples, the first at even position when i0 is even)
-   synthesised in place: low samples first in x[0 .. sn), high after */
-HOT static void idwt_line(int16_t *x, int32_t *tmp, int n, int i0, int rev)
+/*
+ * The synthesis in place (T.800 F.3, lifting): every coefficient decoded
+ * straight to its sample's place in the kept resolution's buffer, a level
+ * j resolution's samples 2^(L - j) apart, so a level's lines are the
+ * buffer's rows and columns at that step and the vertical steps go row
+ * against row: nothing copied. The 9/7's scalings (K on the low samples,
+ * 1/K on the high, each way) are taken out: the HH bands' 1/K^2 in their
+ * dequantisation, the HL and LH bands' K / K none, and K^2 on the low
+ * band's samples as a level begins (a level a sample wide or high scales
+ * as it goes instead: its HH band's dequantised plain).
+ */
+enum { L_D, L_G, L_B, L_A, L_53LO, L_53HI, L_KLO, L_KHI };
+
+/* one lifting step on a line's samples of one parity: p the line's first,
+   s apart, n of them, the first of the step's at i0 (0 or 1) */
+HOT static void lift(int16_t *p, long s, int n, int i0, int kind)
 {
-	int sn, dn, i, ev = !(i0 & 1);
+	int i = i0;
+	int16_t *q = p + i0 * s;
+	const int32_t frac = ~((1 << FRAC) - 1);
 
-	if (n <= 1) {
-		if (n == 1 && !ev)
-			x[0] = (int16_t)(x[0] / 2);	/* (a lone high sample: T.800 F.3.7) */
-		return;
+#define ONE(l, r)                                                                       \
+	do {                                                                            \
+		int32_t sum_ = (int32_t)(l) + (r);                                      \
+		switch (kind) {                                                         \
+		case L_D: *q = (int16_t)(*q - LIFT(sum_, D97)); break;                   \
+		case L_G: *q = (int16_t)(*q - LIFT(sum_, G97)); break;                   \
+		case L_B: *q = (int16_t)(*q - LIFT(sum_, B97)); break;                   \
+		case L_A: *q = (int16_t)(*q - LIFT(sum_, A97)); break;                   \
+		case L_53LO: *q = (int16_t)(*q - ((sum_ + 2 * (1 << FRAC)) >> 2 & frac)); break; \
+		default: *q = (int16_t)(*q + (sum_ >> 1 & frac)); break;                \
+		}                                                                       \
+	} while (0)
+	if (i == 0) {			/* (x[-1] = x[1]) */
+		ONE(q[s], q[s]);
+		i += 2;
+		q += 2 * s;
 	}
-	sn = ev ? (n + 1) / 2 : n / 2;	/* the low ones */
-	dn = n - sn;
-	/* interleave into tmp at their places */
-	for (i = 0; i < sn; i++)
-		tmp[ev ? 2 * i : 2 * i + 1] = x[i];
-	for (i = 0; i < dn; i++)
-		tmp[ev ? 2 * i + 1 : 2 * i] = x[sn + i];
-#define L(k) tmp[(k) < 0 ? -(k) : (k) >= n ? 2 * (n - 1) - (k) : (k)]
-	if (rev) {
-		int s0 = ev ? 0 : 1, d0 = ev ? 1 : 0;
+	/* the inner ones: a loop each, the step's kind fixed in it */
+#define RUN(expr)                                               \
+	for (; i + 1 < n; i += 2, q += 2 * s) {                 \
+		int32_t sum = (int32_t)q[-s] + q[s];            \
+		*q = (int16_t)(expr);                           \
+	}
+	switch (kind) {
+	case L_D: RUN(*q - LIFT(sum, D97)); break;
+	case L_G: RUN(*q - LIFT(sum, G97)); break;
+	case L_B: RUN(*q - LIFT(sum, B97)); break;
+	case L_A: RUN(*q - LIFT(sum, A97)); break;
+	case L_53LO: RUN(*q - ((sum + 2 * (1 << FRAC)) >> 2 & frac)); break;
+	default: RUN(*q + (sum >> 1 & frac)); break;
+	}
+#undef RUN
+	if (i < n)			/* (x[n] = x[n - 2]) */
+		ONE(q[-s], q[-s]);
+#undef ONE
+}
 
-		for (i = s0; i < n; i += 2)
-			tmp[i] -= (L(i - 1) + L(i + 1) + 2 * (1 << FRAC)) >> 2 & ~((1 << FRAC) - 1);
-		for (i = d0; i < n; i += 2)
-			tmp[i] += (L(i - 1) + L(i + 1)) >> 1 & ~((1 << FRAC) - 1);
+/* the same step down a level's columns: row r's samples (w of them, s
+   apart) from the rows above and below it (rs apart), n rows */
+HOT static void lift_rows(int16_t *p, long s, int w, long rs, int n, int i0, int kind)
+{
+	int i, j;
+	const int32_t frac = ~((1 << FRAC) - 1);
+
+	for (i = i0; i < n; i += 2) {
+		int16_t *q = p + i * rs;
+		const int16_t *u = i > 0 ? q - rs : q + rs, *d = i + 1 < n ? q + rs : q - rs;
+
+#define RUN(expr)                                                       \
+	for (j = 0; j < w; j++, q += s, u += s, d += s) {               \
+		int32_t sum = (int32_t)*u + *d;                         \
+		*q = (int16_t)(expr);                                   \
+	}
+		switch (kind) {
+		case L_D: RUN(*q - LIFT(sum, D97)); break;
+		case L_G: RUN(*q - LIFT(sum, G97)); break;
+		case L_B: RUN(*q - LIFT(sum, B97)); break;
+		case L_A: RUN(*q - LIFT(sum, A97)); break;
+		case L_53LO: RUN(*q - ((sum + 2 * (1 << FRAC)) >> 2 & frac)); break;
+		default: RUN(*q + (sum >> 1 & frac)); break;
+		}
+#undef RUN
+	}
+}
+
+/* samples of one parity (n of them from i0, s apart) times k / 4096 */
+HOT static void scale(int16_t *p, long s, int n, int i0, int k)
+{
+	int16_t *q = p + i0 * s;
+	int i;
+
+	for (i = i0; i < n; i += 2, q += 2 * s)
+		*q = (int16_t)SCALE(*q, k);
+}
+
+/* a level synthesised in a (rows W apart): its w x h samples s apart from
+   (ox, oy); lo_x, lo_y its low samples' parity (its first sample's place's:
+   x0 & 1). fold: the 9/7's scalings taken out (see above), else made here */
+static void synth_level(int16_t *a, long W, long s, int ox, int oy, int w, int h, int lo_x, int lo_y, int rev, int fold,
+			int (*poll)(void), int *stop)
+{
+	int16_t *p = a + (long)oy * W + ox;
+	long rs = W * s;
+	int k;
+
+	if (fold) {
+		/* the low band's samples times K^2 */
+		for (k = lo_y; k < h; k += 2)
+			scale(p + k * rs, s, w, lo_x, KK97);
+	}
+	/* the rows */
+	for (k = 0; k < h; k++) {
+		int16_t *q = p + k * rs;
+
+		if (w == 1) {
+			if (lo_x)
+				*q = (int16_t)(*q / 2);	/* (a lone high sample: T.800 F.3.7) */
+		} else if (rev) {
+			lift(q, s, w, lo_x, L_53LO);
+			lift(q, s, w, 1 - lo_x, L_53HI);
+		} else {
+			if (!fold) {
+				scale(q, s, w, lo_x, K97);
+				scale(q, s, w, 1 - lo_x, IK97);
+			}
+			lift(q, s, w, lo_x, L_D);
+			lift(q, s, w, 1 - lo_x, L_G);
+			lift(q, s, w, lo_x, L_B);
+			lift(q, s, w, 1 - lo_x, L_A);
+		}
+		if ((k & 31) == 31 && poll && !poll()) {
+			*stop = 1;
+			return;
+		}
+	}
+	/* the columns, row against row */
+	if (h == 1) {
+		if (lo_y)
+			for (k = 0; k < w; k++)
+				p[k * s] = (int16_t)(p[k * s] / 2);
+	} else if (rev) {
+		lift_rows(p, s, w, rs, h, lo_y, L_53LO);
+		lift_rows(p, s, w, rs, h, 1 - lo_y, L_53HI);
 	} else {
-		int s0 = ev ? 0 : 1, d0 = ev ? 1 : 0;
+		if (!fold)
+			for (k = 0; k < h; k++) {
+				int16_t *q = p + k * rs;
+				int j, f = (k & 1) == lo_y ? K97 : IK97;
 
-		for (i = s0; i < n; i += 2)
-			tmp[i] = MUL(tmp[i], K97);
-		for (i = d0; i < n; i += 2)
-			tmp[i] = MUL(tmp[i], IK97);
-		for (i = s0; i < n; i += 2)
-			tmp[i] -= MUL(L(i - 1) + L(i + 1), D97);
-		for (i = d0; i < n; i += 2)
-			tmp[i] -= MUL(L(i - 1) + L(i + 1), G97);
-		for (i = s0; i < n; i += 2)
-			tmp[i] -= MUL(L(i - 1) + L(i + 1), B97);
-		for (i = d0; i < n; i += 2)
-			tmp[i] -= MUL(L(i - 1) + L(i + 1), A97);
+				for (j = 0; j < w; j++, q += s)
+					*q = (int16_t)SCALE(*q, f);
+			}
+		lift_rows(p, s, w, rs, h, lo_y, L_D);
+		lift_rows(p, s, w, rs, h, 1 - lo_y, L_G);
+		lift_rows(p, s, w, rs, h, lo_y, L_B);
+		lift_rows(p, s, w, rs, h, 1 - lo_y, L_A);
 	}
-#undef L
-	for (i = 0; i < n; i++)
-		x[i] = (int16_t)tmp[i];
+	if (poll && !poll())
+		*stop = 1;
 }
 
 /* ------------------------------------------------------------------ a tile */
@@ -1028,47 +1255,62 @@ static uint8_t clamp8(long v)
 
 /* row y's pixels from component 0's values s (8 bits, FRAC fixed point,
    no DC shift) and the planes' others */
-static void emit(DEC *dc, long y, const int16_t *s, int sgnd)
+#define CL8(v) ((v) < 0 ? 0 : (v) > 255 ? 255 : (v))
+#define RND (1 << (FRAC - 1))
+
+HOT static void emit(DEC *dc, long y, const int16_t *s, int sgnd)
 {
 	int x, w = dc->ow;
-	long half = sgnd && !dc->ycc ? 0 : 128;
+	long half = (sgnd && !dc->ycc ? 0 : 128L) << FRAC;
 	uint8_t *o = dc->line;
+	const uint8_t *p1, *p2;
 
-	for (x = 0; x < w; x++) {
-		long Y = (long)s[x] + (half << FRAC), R, G, B, U, V;
+	/* (each kind its own loop: nothing of dc read again in it, a byte
+	   stored may be anything to the compiler) */
+	if (dc->outc == 1) {
+		for (x = 0; x < w; x++) {
+			long v = ((long)s[x] + half + RND) >> FRAC;
 
-		if (dc->outc == 1) {
-			o[x] = clamp8((Y + (1 << (FRAC - 1))) >> FRAC);
-			continue;
+			o[x] = (uint8_t)CL8(v);
 		}
-		U = dc->plane[1][y * w + x];
-		V = dc->plane[2][y * w + x];
-		if (!dc->ycc) {
-			R = (Y + (1 << (FRAC - 1))) >> FRAC;
-			G = U;
-			B = V;
-		} else if (dc->cs->mct && dc->cs->tcc[0].rev) {
-			/* the RCT: G = Y - floor((U + V) / 4), R = V + G, B = U + G */
-			Y = ((Y + (1 << (FRAC - 1))) >> FRAC) - 128;
-			U -= 128;
-			V -= 128;
-			G = Y - ((U + V) >> 2) + 128;
-			R = V + G;
-			B = U + G;
-		} else {
-			/* the ICT: R = Y + 1.402 V, G = Y - 0.34413 U - 0.71414 V,
-			   B = Y + 1.772 U */
-			U -= 128;
-			V -= 128;
-			R = (Y + ((V * 5743) >> (12 - FRAC)) + (1 << (FRAC - 1))) >> FRAC;
-			G = (Y - ((U * 1410 + V * 2925) >> (12 - FRAC)) + (1 << (FRAC - 1))) >> FRAC;
-			B = (Y + ((U * 7258) >> (12 - FRAC)) + (1 << (FRAC - 1))) >> FRAC;
-		}
-		o[3 * x] = clamp8(R);
-		o[3 * x + 1] = clamp8(G);
-		o[3 * x + 2] = clamp8(B);
+		dc->row(dc->u, y, o);
+		return;
 	}
-	dc->row(dc->u, y, o);
+	p1 = dc->plane[1] + y * w;
+	p2 = dc->plane[2] + y * w;
+	if (!dc->ycc)
+		for (x = 0; x < w; x++, o += 3) {
+			long R = ((long)s[x] + half + RND) >> FRAC;
+
+			o[0] = (uint8_t)CL8(R);
+			o[1] = p1[x];
+			o[2] = p2[x];
+		}
+	else if (dc->cs->mct && dc->cs->tcc[0].rev)
+		for (x = 0; x < w; x++, o += 3) {
+			/* the RCT: G = Y - floor((U + V) / 4), R = V + G, B = U + G */
+			int Y = (int)(((long)s[x] + RND) >> FRAC), U = p1[x] - 128, V = p2[x] - 128;
+			int G = Y - ((U + V) >> 2) + 128, R = V + G, B = U + G;
+
+			o[0] = (uint8_t)CL8(R);
+			o[1] = (uint8_t)CL8(G);
+			o[2] = (uint8_t)CL8(B);
+		}
+	else
+		for (x = 0; x < w; x++, o += 3) {
+			/* the ICT: R = Y + 1.402 V, G = Y - 0.34413 U - 0.71414 V,
+			   B = Y + 1.772 U; Y to 1/32 */
+			long Y = (long)s[x] + half + RND;
+			int U = p1[x] - 128, V = p2[x] - 128;
+			long R = (Y + (MULS(V, 5743) >> (12 - FRAC))) >> FRAC;
+			long G = (Y - ((MULS(U, 1410) + MULS(V, 2925)) >> (12 - FRAC))) >> FRAC;
+			long B = (Y + (MULS(U, 7258) >> (12 - FRAC))) >> FRAC;
+
+			o[0] = (uint8_t)CL8(R);
+			o[1] = (uint8_t)CL8(G);
+			o[2] = (uint8_t)CL8(B);
+		}
+	dc->row(dc->u, y, dc->line);
 }
 
 /* the tile's tile-component c: its resolutions kept decoded into a buffer
@@ -1080,85 +1322,63 @@ static int tile_comp(DEC *dc, TC *tc, int ci, int keep)
 	RES *top = &tc->r[keep - 1];
 	int W = top->x1 - top->x0, H = top->y1 - top->y0, r, b, x, y;
 	int16_t *a;
-	int32_t *tmp = NULL, *cv = NULL;
-	uint8_t *cf = NULL;
-	int rc = JPX_OK, prec = cs->c[ci].prec;
+	int32_t *cv = NULL;
+	uint16_t *cf = NULL;
+	int rc = JPX_OK, prec = cs->c[ci].prec, L = keep - 1, rev = tc->t->rev, stop = 0;
 
 	if (W <= 0 || H <= 0)
 		return JPX_OK;
 	a = calloc((size_t)W * H, sizeof *a);
-	tmp = malloc((size_t)(W > H ? W : H) * sizeof *tmp);
 	{
 		int mw = 1 << tc->t->xcb, mh = 1 << tc->t->ycb;
 
 		cv = malloc((size_t)mw * mh * sizeof *cv);
-		cf = malloc((size_t)(mw + 2) * (mh + 2));
+		cf = malloc((size_t)(mw + 2) * (mh + 2) * sizeof *cf);
 	}
-	if (!a || !tmp || !cv || !cf) {
+	if (!a || !cv || !cf) {
 		rc = JPX_MEMORY;
 		goto out;
 	}
-	/* each resolution's bands into a, the low band at the top left and
-	   each level's three beside and below it (the synthesis's layout) */
+	/* each code-block's coefficients to their samples' places: resolution
+	   r's 2^(L - r) apart, a band's every other one of them */
 	for (r = 0; r < keep && rc == JPX_OK; r++) {
 		RES *R = &tc->r[r];
-		long k;
+		long k, sr = 1L << (L - r);
+		int fold = !rev && R->x1 - R->x0 > 1 && R->y1 - R->y0 > 1;
 
 		for (k = 0; k < (long)R->pw * R->ph && rc == JPX_OK; k++)
 			for (b = 0; b < R->nb && rc == JPX_OK; b++) {
 				PB *P = &R->pb[k * R->nb + b];
 				BAND *B = &R->b[b];
-				long i;
-				int ox, oy;
+				long i, xs = r ? 2 * sr : sr;
+				int xo = B->orient & 1, yo = B->orient >> 1 & 1;
 
-				if (r == 0)
-					ox = oy = 0;
-				else {
-					RES *L = &tc->r[r - 1];
-
-					ox = B->orient & 1 ? L->x1 - L->x0 : 0;
-					oy = B->orient & 2 ? L->y1 - L->y0 : 0;
-				}
 				for (i = 0; i < (long)P->ncx * P->ncy && rc == JPX_OK; i++) {
 					CB *c = &P->cb[i];
+					long px = (r ? sr * (2L * c->x0 + xo) : sr * c->x0) - top->x0;
+					long py = (r ? sr * (2L * c->y0 + yo) : sr * c->y0) - top->y0;
 
-					rc = t1_block(c, B, tc->t->style, tc->t->rev, prec,
-						      a + (long)(oy + c->y0 - B->y0) * W + ox + c->x0 - B->x0, W, cv, cf);
+					rc = t1_block(c, B, tc->t->style, rev, fold, prec, a + py * W + px, xs, xs * W, cv, cf);
 					if (dc->poll && !dc->poll())
 						rc = JPX_STOPPED;
 				}
 			}
 	}
-	if (rc != JPX_OK)
-		goto out;
-	/* the synthesis, level by level: rows, then columns */
-	for (r = 1; r < keep; r++) {
+	/* the synthesis, level by level, in place */
+	for (r = 1; r < keep && rc == JPX_OK; r++) {
 		RES *R = &tc->r[r];
+		long sr = 1L << (L - r);
 		int w = R->x1 - R->x0, h = R->y1 - R->y0;
 
-		for (y = 0; y < h; y++)
-			idwt_line(a + (long)y * W, tmp, w, R->x0, tc->t->rev);
-		{
-			int16_t *col = malloc((size_t)h * sizeof *col);
-
-			if (!col) {
-				rc = JPX_MEMORY;
-				goto out;
-			}
-			for (x = 0; x < w; x++) {
-				for (y = 0; y < h; y++)
-					col[y] = a[(long)y * W + x];
-				idwt_line(col, tmp, h, R->y0, tc->t->rev);
-				for (y = 0; y < h; y++)
-					a[(long)y * W + x] = col[y];
-			}
-			free(col);
-		}
-		if (dc->poll && !dc->poll()) {
+		if (w <= 0 || h <= 0)
+			continue;
+		synth_level(a, W, sr, (int)(sr * R->x0 - top->x0), (int)(sr * R->y0 - top->y0), w, h, R->x0 & 1, R->y0 & 1, rev,
+			    !rev && w > 1 && h > 1, dc->poll, &stop);
+		if (stop)
 			rc = JPX_STOPPED;
-			goto out;
-		}
 	}
+	if (rc != JPX_OK)
+		goto out;
 	if (dc->direct && ci == 0) {
 		/* one tile, the picture's whole: its rows out (8 bits: the
 		   precision shift done in emit, the colour transform there too) */
@@ -1174,23 +1394,21 @@ static int tile_comp(DEC *dc, TC *tc, int ci, int keep)
 		int ox = top->x0 - ceilpow(cs->X0, dc->reduce);
 		int oy = top->y0 - ceilpow(cs->Y0, dc->reduce);
 		int dcs = cs->c[ci].sgnd && !dc->ycc ? 0 : 128, pw = dc->ow;
-		for (y = 0; y < H; y++) {
+		int x0 = ox < 0 ? -ox : 0, x1 = ox + W > pw ? pw - ox : W;
+		const int16_t *s = a;
+
+		for (y = 0; y < H; y++, s += W) {
 			uint8_t *o;
 
 			if (oy + y < 0 || oy + y >= dc->oh)
 				continue;
-			o = dc->plane[ci] + (long)(oy + y) * pw;
-			for (x = 0; x < W; x++) {
-				long v = (((long)a[(long)y * W + x] + (1 << (FRAC - 1))) >> FRAC) + dcs;
-
-				if (ox + x >= 0 && ox + x < pw)
-					o[ox + x] = clamp8(v);
-			}
+			o = dc->plane[ci] + (long)(oy + y) * pw + ox;
+			for (x = x0; x < x1; x++)
+				o[x] = clamp8((((long)s[x] + (1 << (FRAC - 1))) >> FRAC) + dcs);
 		}
 	}
 out:
 	free(a);
-	free(tmp);
 	free(cv);
 	free(cf);
 	return rc;
@@ -1201,7 +1419,7 @@ static int tile(DEC *dc, int t, const uint8_t *body, long blen, TCC *tcc)
 {
 	CS *cs = dc->cs;
 	TC *tcs = calloc((size_t)cs->nc, sizeof *tcs);	/* (5 KB each: never on a picture's stack) */
-	int ci, r, l, rc = JPX_OK, maxres = 0, keep[16];
+	int ci, r, l, rc = JPX_OK, maxres = 0, maxkeep = 0, need, keep[16];
 	int tx = t % cs->ntx, ty = t / cs->ntx;
 	int tx0 = cs->TX0 + tx * cs->TW, ty0 = cs->TY0 + ty * cs->TH;
 	int tx1 = tx0 + cs->TW, ty1 = ty0 + cs->TH;
@@ -1237,7 +1455,17 @@ static int tile(DEC *dc, int t, const uint8_t *body, long blen, TCC *tcc)
 			keep[ci] = 1;
 		if (tc->nres > maxres)
 			maxres = tc->nres;
-		for (r = 0; r < tc->nres && rc == JPX_OK; r++) {
+		if (keep[ci] > maxkeep)
+			maxkeep = keep[ci];
+	}
+	/* the resolutions whose packets are read: where the finer ones all come
+	   after the kept ones' (resolution first, RLCP and RPCL, or LRCP with
+	   one layer), only those kept; else every one, to get past them */
+	need = cs->prog == 1 || cs->prog == 2 || (cs->prog == 0 && cs->layers == 1) ? maxkeep : maxres;
+	for (ci = 0; ci < cs->nc && rc == JPX_OK; ci++) {
+		TC *tc = &tcs[ci];
+
+		for (r = 0; r < tc->nres && r < need && rc == JPX_OK; r++) {
 			RES *R;
 			long k, b, n = 0;
 
@@ -1258,7 +1486,7 @@ static int tile(DEC *dc, int t, const uint8_t *body, long blen, TCC *tcc)
 		int L = cs->layers, prog = cs->prog;
 
 		if (prog == 0 || prog == 1) {
-			int o1, o2, nl1 = prog == 0 ? L : maxres, nl2 = prog == 0 ? maxres : L;
+			int o1, o2, nl1 = prog == 0 ? L : need, nl2 = prog == 0 ? need : L;
 
 			for (o1 = 0; o1 < nl1 && rc == JPX_OK && p < end; o1++)
 				for (o2 = 0; o2 < nl2 && rc == JPX_OK && p < end; o2++) {
@@ -1273,9 +1501,6 @@ static int tile(DEC *dc, int t, const uint8_t *body, long blen, TCC *tcc)
 						for (k = 0; k < (long)R->pw * R->ph && rc == JPX_OK; k++)
 							rc = packet(cs, R, k, lay, &p, end, inc);
 					}
-					/* (a reduced resolution-major stream: the rest unread) */
-					if (prog == 1 && res >= maxres - dc->reduce && dc->reduce > 0 && o2 == nl2 - 1)
-						o1 = nl1;
 				}
 		} else if (prog >= 2 && prog <= 4) {
 			/* RPCL, PCRL, CPRL: where every resolution has one precinct */
@@ -1284,7 +1509,7 @@ static int tile(DEC *dc, int t, const uint8_t *body, long blen, TCC *tcc)
 					if ((long)tcs[ci].r[r].pw * tcs[ci].r[r].ph > 1)
 						rc = JPX_UNSUPPORTED;
 			if (prog == 2) {
-				for (r = 0; r < maxres && rc == JPX_OK; r++)
+				for (r = 0; r < need && rc == JPX_OK; r++)
 					for (ci = 0; ci < cs->nc && rc == JPX_OK; ci++)
 						for (l = 0; l < L && rc == JPX_OK && r < tcs[ci].nres; l++)
 							rc = packet(cs, &tcs[ci].r[r], 0, l, &p, end, inc);
