@@ -548,15 +548,17 @@ static unsigned rctx(const JB2BM *b, const JB2BM *r, int x, int y, int dx, int d
    template 1's the reference's one, three and two */
 HOT static int refine_slide(MQ *m, uint8_t *cx, JB2BM *b, const JB2BM *r, int dx, int dy, int t)
 {
-	int x, y, W = b->w, RW = r->w;
+	int x, y, W = b->w, RW = r->w, RH = r->d ? r->h : 0;
 
+	if (W <= 0 || !b->d)
+		return JB2_OK;		/* (no pixels: nothing decoded, fuzz_jbig2) */
 	for (y = 0; y < b->h; y++) {
 		uint8_t *o = b->d + (long)y * b->stride;
 		const uint8_t *c = y >= 1 ? o - b->stride : NULL;
 		int ry = y - dy;
-		const uint8_t *rm = ry - 1 >= 0 && ry - 1 < r->h ? r->d + (long)(ry - 1) * r->stride : NULL;
-		const uint8_t *r0 = ry >= 0 && ry < r->h ? r->d + (long)ry * r->stride : NULL;
-		const uint8_t *rp = ry + 1 >= 0 && ry + 1 < r->h ? r->d + (long)(ry + 1) * r->stride : NULL;
+		const uint8_t *rm = ry - 1 >= 0 && ry - 1 < RH ? r->d + (long)(ry - 1) * r->stride : NULL;
+		const uint8_t *r0 = ry >= 0 && ry < RH ? r->d + (long)ry * r->stride : NULL;
+		const uint8_t *rp = ry + 1 >= 0 && ry + 1 < RH ? r->d + (long)(ry + 1) * r->stride : NULL;
 		unsigned vc = window(c, 3, 1, W), v0 = 0, acc = 0, va, vb, vd;
 
 		/* the reference's windows at x = 0, rx = -dx */
