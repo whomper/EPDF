@@ -662,12 +662,12 @@ typedef struct {
 int jb2_whole_page;		/* (the tests: every page decoded whole) */
 
 /* the most a page or a region (16 MB a bit a pixel: 128 megapixels, an A3
-   page at 600 dpi is 70) and a dictionary's symbols (8 MB) may take: more
-   is a picture too big for the memory, and a bomb's 6 KB of thousands of
-   page-sized symbols (fuzz_jbig2) is refused at once, not decoded for
-   minutes; the dictionaries' bytes are counted together */
+   page at 600 dpi is 70) and the dictionaries' symbols together (4 MB; the
+   corpus's biggest dictionary is 699 KB) may take: more is a picture too big
+   for the memory, and a bomb's 6 KB of thousands of page-sized symbols
+   (fuzz_jbig2) is refused at once, not decoded for minutes */
 #define JB2_MAX_BYTES (16L << 20)
-#define JB2_DICT_BYTES (8L << 20)
+#define JB2_DICT_BYTES (4L << 20)
 
 /* the work before a page's rows: its symbols and placements, as met
    (jb2_progress; one page is decoded at a time) */
@@ -1165,7 +1165,7 @@ static int symbol_dict(DEC *dc, SEG *s)
 	}
 	/* the exported symbols (6.5.10) */
 	{
-		uint32_t total = (uint32_t)nin + nnew, k = 0, got = 0;
+		uint32_t total = (uint32_t)nin + nnew, k = 0, got = 0, runs = 0;
 		int cur = 0;
 		uint8_t *flag = calloc(total ? total : 1, 1);
 
@@ -1176,7 +1176,9 @@ static int symbol_dict(DEC *dc, SEG *s)
 		while (k < total) {
 			int32_t run;
 
-			if (ia_int(&m, ex, &run) || run < 0 || k + (uint32_t)run > total) {
+			/* (no more runs than symbols and two: past the data's end the
+			   coder gives runs of 0 for ever, fuzz_jbig2) */
+			if (ia_int(&m, ex, &run) || run < 0 || k + (uint32_t)run > total || ++runs > total + 2) {
 				free(flag);
 				r = JB2_DAMAGED;
 				goto out;
@@ -1252,6 +1254,11 @@ static int page_grow(DEC *dc, int y)
 
 	if (dc->page_h_known || y <= p->h)
 		return 1;
+	/* (a page 0 bytes wide: realloc(d, 0) would free it, fuzz_jbig2; past
+	   JB2_MAX_BYTES, or a sum that wrapped: stride * y may not fit a
+	   68000's size_t) */
+	if (p->stride <= 0 || y < 0 || (long)y > JB2_MAX_BYTES / p->stride)
+		return 0;
 	nd = realloc(p->d, (size_t)p->stride * (size_t)y);
 	if (!nd)
 		return 0;
@@ -1439,6 +1446,8 @@ static int refine_segment(DEC *dc, SEG *s)
 		for (i = 0; i < 4; i++)
 			at[i] = (int8_t)s->d[p++];
 	}
+	if (!dc->page.d && dc->page.w == 0)
+		return JB2_DAMAGED;		/* (no page information) */
 	if (!page_grow(dc, ri.y + ri.h) || !bm_new(&ref, ri.w, ri.h, 0))
 		return JB2_MEMORY;
 	if (!ref.d)
