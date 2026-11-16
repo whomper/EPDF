@@ -412,8 +412,8 @@ at first. This section is kept up to date: the build, the tests, what a release 
   coordinates overflowing (TR_LIM, 2^24) and a bomb of page-sized symbols: a page or region past 16 MB
   a bit a pixel and the dictionaries' symbols past 8 MB together are JB2_MEMORY (JB2_MAX_BYTES,
   JB2_DICT_BYTES). Pads against 2.35: EP_PAD_J after doc.o, EP_PAD_H after pdfimg.o, EP_PAD_I after
-  jpx.o (and their _RO, with EP_PAD_A_RO), PIC_PAD / EC_PIC_PAD / RV_PIC_PAD after pic.o (52 / 174 /
-  132 at 2.36), render.c's RPAD_A and RPAD_E (image_hook's soft mask, render_progress).
+  jpx.o (and their _RO, with EP_PAD_A_RO), PIC_PAD / EC_PIC_PAD / RV_PIC_PAD after pic.o (52 / 2 /
+  216 at 2.36), render.c's RPAD_A and RPAD_E (image_hook's soft mask, render_progress).
   2.11 (Erez's photos and choices, 10 Nov 2026: "Both", "Band on the page"): a converted copy's
   View > Pages on a Falcon/TT in colour is drawn sharp from its original by render.ovl over the stored
   page (doc.c's sharp_pages, pdbl.stand, doc_stand_in; the stored one decoded first, pics_next),

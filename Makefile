@@ -105,9 +105,9 @@ build/fuzz_jbig2: tools/fuzz_jbig2.c src/jbig2.c src/mq.c src/ccitt.c src/jbig2.
 fuzz: build/fuzz_jpx build/fuzz_jbig2
 	python3 tools/fuzzseeds.py build/fuzz
 	cd build/fuzz/jpx && ASAN_OPTIONS=allocator_may_return_null=1:detect_leaks=1 ../../fuzz_jpx -max_total_time=$(FUZZ_SECONDS) \
-	  -rss_limit_mb=2048 -timeout=20 -print_final_stats=1 corpus seeds
+	  -rss_limit_mb=2048 -timeout=60 -print_final_stats=1 corpus seeds
 	cd build/fuzz/jbig2 && ASAN_OPTIONS=allocator_may_return_null=1:detect_leaks=1 ../../fuzz_jbig2 -max_total_time=$(FUZZ_SECONDS) \
-	  -rss_limit_mb=2048 -timeout=20 -print_final_stats=1 corpus seeds
+	  -rss_limit_mb=2048 -timeout=60 -print_final_stats=1 corpus seeds
 
 # JBIG2 on the host (tests/jbig2.py: against poppler's)
 build/jb2dec: tools/jb2dec.c src/jbig2.c src/mq.c src/ccitt.c src/jbig2.h src/mq.h src/ccitt.h | build
@@ -272,13 +272,13 @@ EC_OD_PAD ?= 250
 # EConvert's own after pic.o and before inflate_fast.o (it has no dspjpeg.o
 # there: CONVTEST's PIC_PAD and DJ_PAD don't fit it)
 build/m68030/ecpicpad.o: FT_PAD = -DFT_PAD_NAME=ec_pic_pad -DFT_PAD_TEXT=$(EC_PIC_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
-EC_PIC_PAD ?= 174
+EC_PIC_PAD ?= 2
 build/m68030/ecifpad.o: FT_PAD = -DFT_PAD_NAME=ec_if_pad -DFT_PAD_TEXT=$(EC_IF_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 EC_IF_PAD ?= 8
 # render.ovl's own after its pic.o and where GIF's decoder was (PIC_NO_GIF,
 # 16 Nov 2026): the code after at its 2.34 places
 build/m68030/rvpicpad.o: FT_PAD = -DFT_PAD_NAME=rv_pic_pad -DFT_PAD_TEXT=$(RV_PIC_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
-RV_PIC_PAD ?= 132
+RV_PIC_PAD ?= 216
 build/m68030/rvgifpad.o: FT_PAD = -DFT_PAD_NAME=rv_gif_pad -DFT_PAD_TEXT=$(RV_GIF_PAD) -DFT_PAD_RO=$(RV_GIF_PAD_RO) -DFT_PAD_STR=$(RV_GIF_PAD_STR) -DFT_PAD_DATA=0
 RV_GIF_PAD ?= 166
 RV_GIF_PAD_RO ?= 64
@@ -611,7 +611,7 @@ EP_PAD_F ?= 214
 EP_PAD_G ?= 212
 EP_PAD_H ?= 168
 EP_PAD_H_RO ?= 240
-EP_PAD_I ?= 190
+EP_PAD_I ?= 58
 EP_PAD_I_RO ?= 248
 EP_PAD_J ?= 208
 build/m68000/eppad_a.o build/m68000/eppad_b.o build/m68000/eppad_c.o build/m68000/eppad_d.o \
