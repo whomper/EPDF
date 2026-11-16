@@ -1248,7 +1248,9 @@ static void image_hook(void *u, long obj, const fx *ctm)
 	r->p_ih = h;		/* (the rows it is made at: the reader's calls count those) */
 	r->p_inimg = 1;
 	poll_page = r;
+	pdfimg_raw_smask = 1;		/* (its soft mask is drawn here) */
 	p = cv_image(r->d, obj, (int)w, (int)h, &why);
+	pdfimg_raw_smask = 0;
 	poll_page = NULL;
 	r->p_inimg = 0;
 	r->p_idone += r->p_icur > 0 ? r->p_icur : 0;
@@ -1260,11 +1262,40 @@ static void image_hook(void *u, long obj, const fx *ctm)
 		/* (the kept one given back for the memory, and tried again) */
 		pic_free((PIC *)r->ic_pic);
 		r->ic_pic = NULL;
+		pdfimg_raw_smask = 1;
 		p = cv_image(r->d, obj, (int)w, (int)h, &why);
+		pdfimg_raw_smask = 0;
 	}
 	if (!p) {
 		r->images_missed++;
 		return;
+	}
+	if (!mask && !p->alpha) {
+		/* a soft mask (/SMask, a stream of its own: archive.org's text
+		   pages' foreground through a JBIG2 mask): its brightness at the
+		   picture's size is how solid each pixel is */
+		POBJ *sm = pd_getraw(o, "SMask");
+
+		if (sm && sm->t == PO_REF) {
+			int swhy = 0;
+			PIC *a;
+
+			poll_page = r;
+			r->p_inimg = 1;
+			a = cv_image(r->d, sm->a, p->w, p->h, &swhy);
+			r->p_inimg = 0;
+			poll_page = NULL;
+			if (a && (p->alpha = malloc((size_t)p->w * p->h))) {
+				long i;
+
+				for (i = 0; i < (long)p->w * p->h; i++) {
+					uint16_t c = a->px[i];
+
+					p->alpha[i] = (unsigned char)(((c >> 11) * 8 + ((c >> 5) & 63) * 4 * 2 + (c & 31) * 8) / 4);
+				}
+			}
+			pic_free(a);
+		}
 	}
 	if (r->c.rows < r->c.h) {
 		/* kept for the next band, the one before let go */
@@ -1294,7 +1325,7 @@ draw:
 			free(a);
 		}
 	} else
-		rc_image(&r->c, p->px, NULL, p->w, p->h, m, 0, 0, &g->clip);
+		rc_image(&r->c, p->px, p->alpha, p->w, p->h, m, 0, 0, &g->clip);
 	if ((void *)p != r->ic_pic)
 		pic_free(p);
 }

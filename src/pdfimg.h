@@ -18,6 +18,10 @@ PIC *pdf_image(PDOC *d, long obj, int w, int h, long max_bytes, int *why);
 typedef void (*PIMG_ROW)(void *u, long y, const unsigned short *px);
 int pdf_image_rows(PDOC *d, long obj, int w, int h, PIMG_ROW row, void *u, long max_bytes, int *why);
 
+/* a picture with a soft mask (/SMask) comes from both as it looks on white
+   paper; with this set, as it is (render.c draws it through its mask) */
+extern int pdfimg_raw_smask;
+
 /* a picture of a palette's colours (Indexed, or 1 bit of grey; Flate or
    stored): 1, its colours (r g b) in pal (256 x 3) and their number in *n;
    0 any other (pics.c: one whose colours all have a pen near them is
