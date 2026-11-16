@@ -83,8 +83,10 @@ gives way to you at once.
 page a pixel at most), in the screen's colours. A frame stands in the picture's place until it is
 decoded, which a big JPEG takes a while on an ST; the text goes on being read meanwhile. A
 picture over most of a page that has text (a background, or the scan behind a text layer) is left
-out: the text is what you read. Pictures EPDF can't show (JPEG 2000, JBIG2) keep their frame and
-say so.
+out: the text is what you read. JBIG2 and JPEG 2000 pictures (scanned books have them) show too,
+but slowly: on a Falcon a JPEG 2000 picture takes from a few seconds to a minute and a JBIG2 page
+about half a minute, on an ST several times as long; the Gateway converts them in a moment. A
+picture EPDF can't show keeps its frame and says so.
 
 **Hebrew** shows in the Atari's own Hebrew letters, each line in the order it is read, and a line
 that starts in Hebrew is set at the right. A letter the Atari's character set doesn't have shows as
