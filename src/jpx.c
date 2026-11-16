@@ -836,7 +836,7 @@ HOT static int pass_sig(T1 *t, int bp)
 	for (y0 = 0; y0 < h; y0 += 4) {
 		int rows = h - y0 < 4 ? h - y0 : 4;
 
-		if (t->poll && y0 && !t->poll()) {
+		if (t->poll && !t->poll()) {
 			MQ_SAVE(&t->m, c, a, ct);
 			return 0;
 		}
@@ -882,7 +882,7 @@ HOT static int pass_ref(T1 *t, int bp)
 	for (y0 = 0; y0 < h; y0 += 4) {
 		int rows = h - y0 < 4 ? h - y0 : 4;
 
-		if (t->poll && y0 && !t->poll()) {
+		if (t->poll && !t->poll()) {
 			MQ_SAVE(&t->m, c, a, ct);
 			return 0;
 		}
@@ -929,7 +929,7 @@ HOT static int pass_clean(T1 *t, int bp)
 	for (y0 = 0; y0 < h; y0 += 4) {
 		int rows = h - y0 < 4 ? h - y0 : 4;
 
-		if (t->poll && y0 && !t->poll()) {
+		if (t->poll && !t->poll()) {
 			MQ_SAVE(&t->m, c, a, ct);
 			return 0;
 		}
@@ -1056,6 +1056,9 @@ static int t1_block(CB *c, const BAND *B, int style, int rev, int fold, int prec
 			const int32_t *vp = v + (long)y * w;
 			const uint16_t *fp = f + (long)(y + 1) * t.stride + 1;
 			int16_t *op = out + (long)y * os;
+
+			if ((y & 15) == 15 && poll && !poll())
+				return JPX_STOPPED;
 
 			for (x = 0; x < w; x++, op += xs) {
 				int32_t m = vp[x];
@@ -1523,6 +1526,8 @@ static int tile(DEC *dc, int t, const uint8_t *body, long blen, TCC *tcc)
 			long k, b, n = 0;
 
 			rc = res_init(tc, r, tc->t->guard, cs->c[ci].prec);
+			if (rc == JPX_OK && dc->poll && !dc->poll())
+				rc = JPX_STOPPED;
 			R = &tc->r[r];
 			if (R->pb)
 				for (k = 0; k < (long)R->pw * R->ph; k++)

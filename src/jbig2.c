@@ -63,6 +63,30 @@ static int bm_new(JB2BM *b, int w, int h, int fill)
 	return 1;
 }
 
+/* bm_new's blank bitmap, cleared 32 KB at a time with a turn between (a
+   big symbol's whole was 80 ms on Falcon-4): 1, 0 refused memory, -1
+   stopped */
+static int bm_new_turns(JB2BM *b, int w, int h, int (*poll)(void))
+{
+	long n, k;
+
+	b->w = w;
+	b->h = h;
+	b->stride = (w + 7) >> 3;
+	b->d = NULL;
+	if (w <= 0 || h <= 0)
+		return w >= 0 && h >= 0;
+	n = b->stride * (long)h;
+	if (!(b->d = malloc((size_t)n)))
+		return 0;
+	for (k = 0; k < n; k += 32768L) {
+		memset(b->d + k, 0, (size_t)(n - k < 32768L ? n - k : 32768L));
+		if (poll && !poll())
+			return -1;
+	}
+	return 1;
+}
+
 void jb2_bm_free(JB2BM *b)
 {
 	free(b->d);
@@ -476,7 +500,7 @@ static int generic_arith(MQ *m, uint8_t *cx, JB2BM *b, int t, int tpgdon, const 
 	gen_init(&g, cx, t, tpgdon, at);
 	for (y = 0; y < b->h; y++) {
 		gen_row(&g, b, y, zr);
-		if ((y & 3) == 3 && poll && !poll()) {
+		if (poll && !poll()) {	/* (every row: a wide symbol's 4 were 120 ms on Falcon-4) */
 			free(zr);
 			return JB2_STOPPED;
 		}
@@ -924,7 +948,7 @@ static int text_region(MQ *m, TXCX *c, const TXP *tp, PSINK *sink, JB2BM **syms,
 			else if (tp->transposed && (tp->refcorner == TL || tp->refcorner == TR))
 				curs += hi - 1;
 			ninst++;
-			if ((ninst & 255) == 0 && poll && !poll())
+			if ((ninst & 15) == 0 && poll && !poll())	/* (every 16: an instance is about 1 ms on Falcon-4) */
 				return JB2_STOPPED;
 		}
 	}
@@ -1021,12 +1045,13 @@ static int symbol_dict(DEC *dc, SEG *s)
 				r = JB2_DAMAGED;
 				goto out;
 			}
-			if (!bm_new(b, symw, hcheight, 0)) {
-				r = JB2_MEMORY;
+			if ((r = bm_new_turns(b, symw, hcheight, dc->poll)) <= 0) {
+				r = r ? JB2_STOPPED : JB2_MEMORY;
 				goto out;
 			}
+			r = JB2_OK;
 			if (!refagg) {
-				if (b->d && (r = generic_arith(&m, gb, b, tmpl, 0, at, NULL)) != JB2_OK)
+				if (b->d && (r = generic_arith(&m, gb, b, tmpl, 0, at, dc->poll)) != JB2_OK)
 					goto out;
 			} else {
 				int32_t ninst;
@@ -1074,7 +1099,7 @@ static int symbol_dict(DEC *dc, SEG *s)
 
 						memset(&k, 0, sizeof k);
 						k.region = b;
-						r = text_region(&m, &tc, &tp, &k, all, nin + (int)ndec, NULL);
+						r = text_region(&m, &tc, &tp, &k, all, nin + (int)ndec, dc->poll);
 					}
 					free(all);
 					if (r != JB2_OK)
@@ -1082,6 +1107,12 @@ static int symbol_dict(DEC *dc, SEG *s)
 				}
 			}
 			ndec++;
+			/* (a turn a symbol: sti's dictionary of 2,000 ran 1.9 s on
+			   Falcon-4 between its height classes' turns) */
+			if (dc->poll && !dc->poll()) {
+				r = JB2_STOPPED;
+				goto out;
+			}
 		}
 		if (dc->poll && !dc->poll()) {
 			r = JB2_STOPPED;
@@ -1514,21 +1545,49 @@ struct JB2 {
 
 /* ord (n) by the placements' top rows, kept in their order where alike (a
    shell sort: no qsort's statics) */
-static void sort_ord(const PLACE *pl, long *ord, long n)
+/* ord: the placements' indices by y, a tie by index (a merge sort,
+   stable: O(n log n) whatever order they came in, and a turn every pass,
+   shut-002's thousands were 107 ms without one); 0 when poll says stop or
+   memory is refused */
+static int sort_ord(const PLACE *pl, long *ord, long n, int (*poll)(void))
 {
-	long gap, i, j;
+	long w, i, *t, *a = ord, *b;
 
 	for (i = 0; i < n; i++)
 		ord[i] = i;
-	for (gap = n / 2; gap > 0; gap /= 2)
-		for (i = gap; i < n; i++) {
-			long v = ord[i];
+	if (n < 2)
+		return 1;
+	if (!(t = malloc((size_t)n * sizeof *t)))
+		return 0;
+	b = t;
+	for (w = 1; w < n; w *= 2) {
+		long lo;
 
-			for (j = i; j >= gap && (pl[ord[j - gap]].y > pl[v].y ||
-						 (pl[ord[j - gap]].y == pl[v].y && ord[j - gap] > v)); j -= gap)
-				ord[j] = ord[j - gap];
-			ord[j] = v;
+		for (lo = 0; lo < n; lo += 2 * w) {
+			long mid = lo + w < n ? lo + w : n, hi = lo + 2 * w < n ? lo + 2 * w : n, x = lo, y = mid, k = lo;
+
+			while (x < mid && y < hi)
+				b[k++] = pl[a[y]].y < pl[a[x]].y ? a[y++] : a[x++];
+			while (x < mid)
+				b[k++] = a[x++];
+			while (y < hi)
+				b[k++] = a[y++];
 		}
+		{
+			long *c = a;
+
+			a = b;
+			b = c;
+		}
+		if (poll && !poll()) {
+			free(t);
+			return 0;
+		}
+	}
+	if (a != ord)
+		memcpy(ord, a, (size_t)n * sizeof *ord);
+	free(t);
+	return 1;
 }
 
 static void reg_free(REG *g)
@@ -1753,7 +1812,10 @@ static int stream_open(JB2 *j)
 				r = JB2_MEMORY;
 				break;
 			}
-			sort_ord(g->k.pl, g->ord, g->k.n);
+			if (!sort_ord(g->k.pl, g->ord, g->k.n, dc->poll)) {
+				r = dc->poll && !dc->poll() ? JB2_STOPPED : JB2_MEMORY;
+				break;
+			}
 			break;
 		}
 		default:
@@ -1780,7 +1842,9 @@ JB2 *jb2_open(const uint8_t *globals, long gn, const uint8_t *data, long n, int 
 		r = read_segments(&j->dc, data, n);
 	if (r == JB2_OK) {
 		j->stream = !jb2_whole_page && streamable(&j->dc);
-		if (j->stream)
+		if (poll && !poll())
+			r = JB2_STOPPED;
+		else if (j->stream)
 			r = stream_open(j);
 		else {
 			r = run(&j->dc, 0);
@@ -1837,7 +1901,7 @@ int jb2_row(JB2 *j, uint8_t *row)
 		}
 	}
 	j->y++;
-	if ((j->y & 3) == 0 && j->dc.poll && !j->dc.poll()) {
+	if (j->dc.poll && !j->dc.poll()) {	/* (every row: a 1,656-wide region's 4 were 50 ms on Falcon-4) */
 		j->err = JB2_STOPPED;
 		return 0;
 	}

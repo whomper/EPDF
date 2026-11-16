@@ -377,6 +377,35 @@ at first. This section is kept up to date: the build, the tests, what a release 
   again. render.ovl built with PIC_NO_GIF (9 KB; its own pads RV_PIC_PAD, RV_GIF_PAD/_RO/_STR).
   Rigs: drawn.py with EPDF_BIN (a variant's: the luck test with a 100-byte log line), big.py --bin
   --rovl --erz (the corpus in the text view with render.ovl installed, against a release).
+  #48, JPX and JBIG2 pictures (Erez via the hub, 16 Nov 2026: "Approve your recommendations"; the
+  hub's conditions: both EPDF's own, not in common/ till another app asks; T.88 and T.800 only, never
+  jbig2dec's source; OpenJPEG and poppler host oracles only; make fuzz; every stretch under 50 ms on
+  Falcon-4; each decoder's size against render.ovl's reservation). JBIG2: src/jbig2.c + src/mq.c
+  (the MQ coder, shared) + src/jb2t0.S (template 0's whole bytes, 68000 code): generic regions
+  (arithmetic, MMR through ccitt.c), symbol dictionaries, text regions, refinement; a page a row at a
+  time (streamable(): a generic region's three rows, a text region's placements sorted by y), whole
+  only as a fallback; -Os with HOT inner loops. JPX: src/jpx.c + src/jpx.h (stdint only, rows to a
+  callback, a poll, JPX_STOPPED: movable to common/src unchanged), decoded reduced (the r finest
+  resolutions' code-blocks passed over, the synthesis stopped r levels early): tier 1 by neighbour
+  flags (OpenJPEG's way, from T.800 D), the synthesis in place on 16-bit coefficients (FRAC 5), the
+  9/7's K and 1/K folded out, products 16 x 16 (muls.w by asm on a 68000: GCC makes many a
+  __mulsi3 call), its state on the heap (a picture's stack is 12 KB). pdfimg.c reduces while the
+  picture stays at least as big as shown, smaller again when memory is refused. On the way: CCITT's
+  BlackIs1 and /Decode ink sense, an ImageMask's /Decode, a picture's /SMask over white (the text
+  view; render.c draws through it). Tests: tests/jbig2.py (synthetic streams, the corpus against
+  poppler, row and whole), tests/jpx.py (OpenJPEG-made code-streams at every reduction against
+  opj_decompress, the stop path under ASan), tests/onebit.py (13 one-bit and JPX cases in both views
+  against poppler); make fuzz (tools/fuzz_jpx.c, tools/fuzz_jbig2.c, libFuzzer, seeds by
+  tools/fuzzseeds.py). Benches: JPXBENCH/JPXB30 and JB2BENCH/JB2B30 (tests/hatari/jpxbench.py,
+  jb2bench.py; --profile for Hatari's profiler; gap_ms with gap_from/gap_at, the functions a stretch
+  began and ended in). Turns: JPX every stripe of a pass, 4 rows of a lifting step or the output,
+  32 code-blocks of a packet header; JBIG2 every row, symbol and 16 text-region instances, a big
+  symbol's bitmap cleared in pieces, the placements merge-sorted with a turn a pass: every stretch
+  35 ms or under on Falcon-4 (16 Nov 2026). Cost on Falcon-4: a JPX picture 13 s (181 x 424) to 61 s
+  (414 x 632 of a dense scan; the MQ coder's decisions and the lifting), a JBIG2 page 18-39 s;
+  ST-1 a 163 x 237 grey JPX 14 s. render.ovl +42 KB (JPX 20 KB, JBIG2 16 KB), its reservation the
+  same. Pads against 2.35: EP_PAD_H after pdfimg.o, EP_PAD_I after jpx.o (and their _RO, with
+  EP_PAD_A_RO), PIC_PAD / EC_PIC_PAD / RV_PIC_PAD +48, render.c's RPAD_A -96 (image_hook's soft mask).
   2.11 (Erez's photos and choices, 10 Nov 2026: "Both", "Band on the page"): a converted copy's
   View > Pages on a Falcon/TT in colour is drawn sharp from its original by render.ovl over the stored
   page (doc.c's sharp_pages, pdbl.stand, doc_stand_in; the stored one decoded first, pics_next),
