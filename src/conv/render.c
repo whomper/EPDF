@@ -1160,6 +1160,7 @@ static void glyph_hook(void *u, long prog, int kind, const char *base, int comp,
 #define RPAD_B 14
 #define RPAD_C 178
 #define RPAD_D 42
+#define RPAD_E 204
 #endif
 #define RPAD_S2(n) #n
 #define RPAD_S(n) RPAD_S2(n)
@@ -1369,17 +1370,22 @@ int render_progress(const RPAGE *r)
 	long tot = r->p_ctot + r->p_itot, done, img;
 	int pp = r->d ? r->d->page_prog : 0;
 
-	if (tot <= 0 || r->p_itot <= 0)
+	if (tot <= 0 || r->p_itot <= 0) {
+		RPAD(RPAD_E);		/* (render_init and on where they were: this grew by a decoder's work, #48) */
 		return pp;			/* (no pictures: the content alone, as before) */
+	}
 	img = r->p_idone;
 	if (r->p_inimg && r->p_icur > 0 && r->p_ih > 0) {
 		/* its rows so far: a call every 16 rows (64 in some of the
-		   reader's), at most 95 % of it until it is done */
+		   reader's), at most 95 % of it until it is done; a JPX or JBIG2
+		   picture's decoder says its own work (it turns far more often) */
 		long rows = r->p_polls * 16, f;
 
 		if (rows > r->p_ih)
 			rows = r->p_ih;
 		f = rows * 950L / r->p_ih;		/* (thousandths) */
+		if (pdfimg_work_of > 0)
+			f = (pdfimg_work_done > pdfimg_work_of ? pdfimg_work_of : pdfimg_work_done) * 950L / pdfimg_work_of;
 		img += r->p_icur / 1000 * f + r->p_icur % 1000 * f / 1000;
 	}
 	if (img > r->p_itot)

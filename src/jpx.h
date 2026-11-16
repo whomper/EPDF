@@ -26,4 +26,8 @@ int jpx_info(const uint8_t *d, long n, int reduce, int *w, int *h, int *comps, i
 typedef void (*JPX_ROW)(void *u, long y, const uint8_t *px);
 int jpx_decode(const uint8_t *d, long n, int reduce, JPX_ROW row, void *u, int (*poll)(void), int *w, int *h, int *comps);
 
+/* if set, told the decoding's progress before its rows come: done of of
+   (its code-blocks), often enough for a progress line */
+extern void (*jpx_progress)(long done, long of);
+
 #endif

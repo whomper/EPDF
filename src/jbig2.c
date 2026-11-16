@@ -658,6 +658,19 @@ typedef struct {
 
 int jb2_whole_page;		/* (the tests: every page decoded whole) */
 
+/* the work before a page's rows: its symbols and placements, as met
+   (jb2_progress; one page is decoded at a time) */
+void (*jb2_progress)(long done, long of);
+static long work_done, work_of;
+
+static void work(long done, long of)
+{
+	work_done += done;
+	work_of += of;
+	if (jb2_progress)
+		jb2_progress(work_done, work_of > work_done ? work_of : work_done);
+}
+
 static uint32_t r32(const uint8_t *p)
 {
 	return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3];
@@ -880,6 +893,7 @@ static int text_region(MQ *m, TXCX *c, const TXP *tp, PSINK *sink, JB2BM **syms,
 
 	if (ia_int(m, &c->dt, &stript))
 		return JB2_DAMAGED;
+	work(0, (long)tp->ninst);
 	stript *= -tp->strips;
 	while (ninst < tp->ninst) {
 		int first = 1;
@@ -948,6 +962,8 @@ static int text_region(MQ *m, TXCX *c, const TXP *tp, PSINK *sink, JB2BM **syms,
 			else if (tp->transposed && (tp->refcorner == TL || tp->refcorner == TR))
 				curs += hi - 1;
 			ninst++;
+			if ((ninst & 15) == 0)
+				work(16, 0);
 			if ((ninst & 15) == 0 && poll && !poll())	/* (every 16: an instance is about 1 ms on Falcon-4) */
 				return JB2_STOPPED;
 		}
@@ -1002,6 +1018,7 @@ static int symbol_dict(DEC *dc, SEG *s)
 		return JB2_MEMORY;
 	idlen = log2up((uint32_t)nin + nnew);
 	nw = calloc(nnew ? nnew : 1, sizeof *nw);
+	work(0, (long)nnew);
 	dh = calloc(1, sizeof *dh);
 	dw = calloc(1, sizeof *dw);
 	ex = calloc(1, sizeof *ex);
@@ -1107,6 +1124,7 @@ static int symbol_dict(DEC *dc, SEG *s)
 				}
 			}
 			ndec++;
+			work(1, 0);
 			/* (a turn a symbol: sti's dictionary of 2,000 ran 1.9 s on
 			   Falcon-4 between its height classes' turns) */
 			if (dc->poll && !dc->poll()) {
@@ -1837,6 +1855,7 @@ JB2 *jb2_open(const uint8_t *globals, long gn, const uint8_t *data, long n, int 
 		return NULL;
 	}
 	j->dc.poll = poll;
+	work_done = work_of = 0;
 	r = globals && gn > 0 ? read_segments(&j->dc, globals, gn) : JB2_OK;
 	if (r == JB2_OK)
 		r = read_segments(&j->dc, data, n);

@@ -1207,12 +1207,31 @@ static void row_through(void *u, long y, const unsigned short *px)
 	m->row(m->u, y, m->tmp);
 }
 
+/* the decoders' work before a picture's rows (pdfimg.h) */
+long pdfimg_work_done, pdfimg_work_of;
+
+static void work_hook(long done, long of)
+{
+	pdfimg_work_done = done;
+	pdfimg_work_of = of;
+}
+
+static void work_begin(void)
+{
+	pdfimg_work_done = pdfimg_work_of = 0;
+	jpx_progress = work_hook;
+	jb2_progress = work_hook;
+}
+
 PIC *pdf_image(PDOC *d, long obj, int w, int h, long max_bytes, int *why)
 {
-	PIC *p = image_whole(d, obj, w, h, max_bytes, why);
+	PIC *p;
 	POBJ *o;
 	long mo;
 	SMASK m;
+
+	work_begin();
+	p = image_whole(d, obj, w, h, max_bytes, why);
 
 	if (p && !pdfimg_raw_smask && (o = pdf_get(d, obj)) && (mo = smask_of(o)) >= 0 &&
 	    mask_load(d, mo, p->w, p->h, max_bytes, &m)) {
@@ -1232,6 +1251,7 @@ int pdf_image_rows(PDOC *d, long obj, int w, int h, PIMG_ROW row, void *u, long 
 	SMASK m;
 	int r;
 
+	work_begin();
 	if (pdfimg_raw_smask || !(o = pdf_get(d, obj)) || o->t != PO_DICT || (mo = smask_of(o)) < 0 ||
 	    !mask_load(d, mo, w, h, max_bytes, &m))
 		return image_rows(d, obj, w, h, row, u, max_bytes, why);

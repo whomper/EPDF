@@ -1286,7 +1286,17 @@ typedef struct {
 	void *u;
 	uint8_t *line;
 	int (*poll)(void);
+	long done, of;			/* progress: code-blocks (jpx_progress) */
 } DEC;
+
+void (*jpx_progress)(long done, long of);
+
+static void progress(DEC *dc, long n)
+{
+	dc->done += n;
+	if (jpx_progress)
+		jpx_progress(dc->done, dc->of > dc->done ? dc->of : dc->done);
+}
 
 static uint8_t clamp8(long v)
 {
@@ -1412,6 +1422,7 @@ static int tile_comp(DEC *dc, TC *tc, int ci, int keep)
 					long py = (r ? sr * (2L * c->y0 + yo) : sr * c->y0) - top->y0;
 
 					rc = t1_block(c, B, tc->t->style, rev, fold, prec, a + py * W + px, xs, xs * W, cv, cf, dc->poll);
+					progress(dc, 1);
 				}
 			}
 	}
@@ -1539,6 +1550,22 @@ static int tile(DEC *dc, int t, const uint8_t *body, long blen, TCC *tcc)
 	}
 	if (rc == JPX_OK && !(inc = malloc((size_t)(most ? most : 1) * sizeof *inc)))
 		rc = JPX_MEMORY;
+	if (rc == JPX_OK && t == 0) {
+		/* the work ahead: the shown components' code-blocks kept, every
+		   tile's as many as the first's */
+		long nb = 0, k, b;
+
+		for (ci = 0; ci < dc->outc; ci++)
+			for (r = 0; r < keep[ci]; r++) {
+				RES *R = &tcs[ci].r[r];
+
+				if (R->pb)
+					for (k = 0; k < (long)R->pw * R->ph; k++)
+						for (b = 0; b < R->nb; b++)
+							nb += (long)R->pb[k * R->nb + b].ncx * R->pb[k * R->nb + b].ncy;
+			}
+		dc->of = nb * cs->ntx * cs->nty;
+	}
 	/* tier 2: every packet read in the tile's order (a turn every 64) */
 	if (rc == JPX_OK) {
 		int L = cs->layers, prog = cs->prog;

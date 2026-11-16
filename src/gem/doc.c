@@ -403,6 +403,7 @@ int doc_prepared(void)
 }
 
 static void page_pic_stop(void);
+static int pics_held;		/* Esc: no picture begun till the view moves (doc_pic_hold) */
 
 /* the view on the pages' text or on their pictures: laid out again from
    the page at the top (the caller lays the window out and draws it) */
@@ -924,7 +925,7 @@ int doc_pic_start(void)
 {
 	PICE *e;
 
-	if (!doc || rpic || !doc_view_resting() || !(e = pics_next()))
+	if (!doc || rpic || pics_held || !doc_view_resting() || !(e = pics_next()))
 		return 0;
 	{
 		/* its stack: 12 KB, 64 KB once pages are drawn (render.ovl's);
@@ -1050,16 +1051,10 @@ int doc_pic_busy(void)
 	return rpic != NULL;
 }
 
-/* the picture being made is one ahead of the view and one shown waits:
-   the one ahead stopped, its slot let go (made again later, if room) */
-void doc_pic_drop_ahead(void)
+/* the picture being made stopped within a turn, its slot let go: made
+   again when it is wanted again */
+static void pic_give_way(const char *ev)
 {
-	/* one ahead of the view gives way to one it shows; one the window
-	   shows but not on the page in focus gives way to that page's (Erez,
-	   8 Nov 2026: the page in focus first) */
-	if (!rpic || !((rpic->ahead && pics_shown_waiting()) ||
-		       (!rpic->ahead && pics_focus >= 0 && rpic->page != pics_focus && pics_focus_busy())))
-		return;
 	abandon = 1;
 	while (!pdone) {
 		running = &pic_co;
@@ -1072,7 +1067,36 @@ void doc_pic_drop_ahead(void)
 	pics_release(rpic);
 	rpic = NULL;
 	abandon = 0;
-	log_event("picture", "ahead-stopped", NULL);
+	log_event("picture", ev, NULL);
+}
+
+/* Esc (the hub, 16 Nov 2026: a JPX picture is 12-61 s on Falcon-4): the
+   picture or page being made stopped within a turn, and none begun till
+   the view moves; 1 when there was one */
+
+int doc_pic_hold(void)
+{
+	if (!rpic)
+		return 0;
+	if (rpic->obj >= PICS_PAGE)
+		page_pic_stop();
+	else
+		pic_give_way("held");
+	pics_held = 1;
+	return 1;
+}
+
+/* the picture being made is one ahead of the view and one shown waits:
+   the one ahead stopped, its slot let go (made again later, if room) */
+void doc_pic_drop_ahead(void)
+{
+	/* one ahead of the view gives way to one it shows; one the window
+	   shows but not on the page in focus gives way to that page's (Erez,
+	   8 Nov 2026: the page in focus first) */
+	if (!rpic || !((rpic->ahead && pics_shown_waiting()) ||
+		       (!rpic->ahead && pics_focus >= 0 && rpic->page != pics_focus && pics_focus_busy())))
+		return;
+	pic_give_way("ahead-stopped");
 }
 
 /* the progress row's (Erez, 2 Nov 2026) */
@@ -1104,6 +1128,12 @@ int doc_pic_progress(long *page, long *made, long *of)
 	*page = rpic->page;
 	*made = rpic->made;
 	*of = rpic->h;			/* (made whole, by the DSP or as a standard bitmap: 0 until done) */
+	if (rpic->obj < PICS_PAGE && pdfimg_work_of > 0) {
+		/* (JPX, JBIG2: their decoders' work first, a JPX picture's whole
+		   before a row comes, the hub 16 Nov 2026; the rows the last tenth) */
+		*of = 1000;
+		*made = pdfimg_work_done * 900 / pdfimg_work_of + (rpic->h > 0 ? rpic->made * 100 / rpic->h : 0);
+	}
 	if (rpic->obj >= PICS_PAGE) {
 		/* a page drawn: its content read, four fifths; its rows shown, the rest */
 		const ROVL *o = rdraw_ovl();
@@ -1512,15 +1542,23 @@ void doc_view_moved(void)
 	if (view_moved_at && now - view_moved_at < 400)
 		view_rest_at = now + 400;
 	view_moved_at = now;
+	pics_held = 0;			/* (Esc's hold lasts till the view moves) */
 	/* (the pages in view only when a shown picture waits or a page is
 	   being drawn: the rows' walk cost the last page on Falcon-4 a tick,
 	   and the text with no pictures needs none of it) */
-	if (!pics_shown_waiting() && !(rpic && rpic->obj >= PICS_PAGE && !rpic->ahead))
+	if (!pics_shown_waiting() && !(rpic && !rpic->ahead))
 		return;
 	win_pages_shown(&p0, &p1);
 	pics_unwant_outside(p0, p1);
-	if (rpic && rpic->obj >= PICS_PAGE && !rpic->ahead && (rpic->page < p0 || rpic->page > p1))
-		page_pic_stop();
+	if (rpic && !rpic->ahead && (rpic->page < p0 || rpic->page > p1)) {
+		/* the page being drawn, or a picture being made, on a page left:
+		   stopped within a turn (the hub, 16 Nov 2026: a JPX picture is
+		   12-61 s on Falcon-4), made again when it is wanted again */
+		if (rpic->obj >= PICS_PAGE)
+			page_pic_stop();
+		else
+			pic_give_way("left");
+	}
 }
 
 /* the view has rested its 400 ms (or a picture is under way): the

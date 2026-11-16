@@ -43,4 +43,9 @@ void jb2_close(JB2 *j);
    both ways the same) */
 extern int jb2_whole_page;
 
+/* if set, told the work before the page's rows come: done of of (its
+   dictionaries' symbols and its text regions' placements, as they are
+   met), often enough for a progress line */
+extern void (*jb2_progress)(long done, long of);
+
 #endif

@@ -24,7 +24,8 @@ def jpeg(w, h):
 def make_pdf(path, pages, size=11, lead=13.5, pictures=None, drawings=None):
     """a PDF of Helvetica text, one list of lines a page; pictures: {page
     index: (JPEG bytes, its width and height in pixels, shown at w x h
-    points)}, drawn under the page's lines; drawings: {page index: content
+    points[, its filter: DCTDecode, or JPXDecode for a JP2 file's bytes])},
+    drawn under the page's lines; drawings: {page index: content
     operators} (paths, fills, their labels in /F1), added to the page"""
     objs = []
     streams = {}
@@ -54,7 +55,7 @@ def make_pdf(path, pages, size=11, lead=13.5, pictures=None, drawings=None):
         add("<< /Length %d >>\nstream\n%s\nendstream" % (len(content), content))
         if pic:
             add("<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB /BitsPerComponent 8"
-                " /Filter /DCTDecode /Length %d >>" % (pic[1], pic[2], len(pic[0])), pic[0])
+                " /Filter /%s /Length %d >>" % (pic[1], pic[2], pic[5] if len(pic) > 5 else "DCTDecode", len(pic[0])), pic[0])
         else:
             add("<< /Length 0 >>\nstream\n\nendstream")
     out = b"%PDF-1.4\n"

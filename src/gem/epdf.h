@@ -63,6 +63,7 @@ int doc_pic_busy(void);
 int win_ahead_due(void);		/* pictures ahead of the view to look for */
 void win_ahead(void);			/* (a few rows a turn) */
 void doc_pic_drop_ahead(void);	/* a picture ahead stopped for one shown */
+int doc_pic_hold(void);		/* Esc: the picture or page being made stopped, none begun till the view moves */
 /* the progress row's: the page being read (-1 none), *prog how far
    through it in thousandths; the picture being made, its page and
    rows made of all (*of 0: not made a row at a time) */
