@@ -96,7 +96,7 @@ void doc_pic_stop_page_unless(long obj, int w, int h);	/* a zoom: another page's
 #define EPAD_DV 74
 #endif
 #ifndef EPAD_PU
-#define EPAD_PU 78
+#define EPAD_PU 66
 #endif
 #define EPAD_S2(n) #n
 #define EPAD_S(n) EPAD_S2(n)

@@ -14,6 +14,7 @@ build/econvert --render's page (the window shows it: the screen changes
 by more than a page of text), its status words; the next page (a window
 down: Page Down) drawn too; back to the text. On an ST: View > Pages stays
 greyed (its click: no "pages 1"), render.ovl never looked for.
+EPDF_BIN=DIR takes EPDF.PRG and render.ovl from DIR instead of binary/.
 """
 import os
 import re
@@ -34,6 +35,7 @@ speed = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(speed)
 
 FONTS = os.path.join(TOP, "third_party", "liberation", "fonts")
+BIN = os.environ.get("EPDF_BIN") or os.path.join(TOP, "binary")   # (a release's or a variant's, for a pair)
 
 
 def differ_left(a, b, x1):
@@ -50,8 +52,8 @@ def run(work, machine):
     try:
         d = os.path.join(r.hd, "EPDF")
         os.makedirs(os.path.join(d, "FONTS"), exist_ok=True)
-        shutil.copy(os.path.join(TOP, "binary", "EPDF.PRG"), os.path.join(d, "EPDF.PRG"))
-        shutil.copy(os.path.join(TOP, "binary", "render.ovl"), os.path.join(d, "RENDER.OVL"))
+        shutil.copy(os.path.join(BIN, "EPDF.PRG"), os.path.join(d, "EPDF.PRG"))
+        shutil.copy(os.path.join(BIN, "render.ovl"), os.path.join(d, "RENDER.OVL"))
         for f in os.listdir(FONTS):
             shutil.copy(os.path.join(FONTS, f), os.path.join(d, "FONTS", f.upper()))
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))

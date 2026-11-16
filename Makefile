@@ -218,7 +218,7 @@ comma := ,
 FT_CV_KEEP = $(addprefix -Wl$(comma)-u$(comma),FT_Matrix_Invert FT_Get_Next_Char FT_Vector_Transform \
                FT_Outline_Get_Orientation FT_Outline_EmboldenXY FT_Get_Advances FT_Get_Advance \
                ft_cv_pad ft_cv_pad_ro ft_cv_pad_str ft_cv_pad_data ft_cv_pad_init_ro lj_cv_pad pic_cv_pad cs_cv_pad ec_cv_pad ec_cv_pad_ro head_cv_pad ct_cv_pad \
-               dj_cv_pad ec_ab_pad ec_od_pad ec_pic_pad ec_if_pad)
+               dj_cv_pad ec_ab_pad ec_od_pad ec_pic_pad ec_if_pad rv_pic_pad rv_gif_pad rv_gif_pad_ro rv_gif_pad_str)
 FT_CV_OBJS = $(patsubst ft/autofit/autofit.o,ft/ftpad_af.o,$(patsubst ft/base/ftinit.o,ft/base/ftinit_noaf.o ft/ftpad_init.o,$(FT_OBJS)))
 build/m68030/ft/ftpad_af.o: FT_PAD = -DFT_PAD_NAME=ft_cv_pad -DFT_PAD_TEXT=68 -DFT_PAD_RO=36 -DFT_PAD_STR=18 -DFT_PAD_DATA=8
 build/m68030/ft/ftpad_init.o: FT_PAD = -DFT_PAD_NAME=ft_cv_pad_init -DFT_PAD_TEXT=0 -DFT_PAD_RO=4 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
@@ -240,6 +240,14 @@ build/m68030/ecpicpad.o: FT_PAD = -DFT_PAD_NAME=ec_pic_pad -DFT_PAD_TEXT=$(EC_PI
 EC_PIC_PAD ?= 186
 build/m68030/ecifpad.o: FT_PAD = -DFT_PAD_NAME=ec_if_pad -DFT_PAD_TEXT=$(EC_IF_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 EC_IF_PAD ?= 8
+# render.ovl's own after its pic.o and where GIF's decoder was (PIC_NO_GIF,
+# 16 Nov 2026): the code after at its 2.34 places
+build/m68030/rvpicpad.o: FT_PAD = -DFT_PAD_NAME=rv_pic_pad -DFT_PAD_TEXT=$(RV_PIC_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
+RV_PIC_PAD ?= 144
+build/m68030/rvgifpad.o: FT_PAD = -DFT_PAD_NAME=rv_gif_pad -DFT_PAD_TEXT=$(RV_GIF_PAD) -DFT_PAD_RO=$(RV_GIF_PAD_RO) -DFT_PAD_STR=$(RV_GIF_PAD_STR) -DFT_PAD_DATA=0
+RV_GIF_PAD ?= 166
+RV_GIF_PAD_RO ?= 64
+RV_GIF_PAD_STR ?= 46
 build/m68030/cspad.o: FT_PAD = -DFT_PAD_NAME=cs_cv_pad -DFT_PAD_TEXT=$(CS_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 CS_PAD ?= 178
 build/m68030/ecpad.o: FT_PAD = -DFT_PAD_NAME=ec_cv_pad -DFT_PAD_TEXT=$(EC_PAD) -DFT_PAD_RO=$(EC_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0
@@ -251,7 +259,8 @@ CT_PAD ?= 106
 build/m68030/headpad.o: FT_PAD = -DFT_PAD_NAME=head_cv_pad -DFT_PAD_TEXT=$(HEAD_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 HEAD_PAD ?= 220
 build/m68030/ctpad.o build/m68030/headpad.o build/m68030/ecpad.o build/m68030/cspad.o build/m68030/picpad.o build/m68030/ljpad.o build/m68030/ft/ftpad_af.o build/m68030/ft/ftpad_init.o \
-build/m68030/djpad.o build/m68030/ecabpad.o build/m68030/ecodpad.o build/m68030/ecpicpad.o build/m68030/ecifpad.o: src/conv/ftpad.S Makefile | build/m68030
+build/m68030/djpad.o build/m68030/ecabpad.o build/m68030/ecodpad.o build/m68030/ecpicpad.o build/m68030/ecifpad.o \
+build/m68030/rvpicpad.o build/m68030/rvgifpad.o: src/conv/ftpad.S Makefile | build/m68030
 	@mkdir -p $(dir $@)
 	$(XCC) -m68030 $(FT_PAD) -c -o $@ $<
 build/m68030/ft/base/ftinit_noaf.o: $(FT)/src/base/ftinit.c | build/m68030
@@ -371,9 +380,10 @@ fttest: binary/FTTEST.PRG binary/FTTEST30.PRG
 CV_ATARI_SRC = $(CONV_SRC) src/conv/cvio_tos.c src/pdfio_tos.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) \
                src/pdfimg.c src/ccitt.c src/rscale.c common/src/pic.c common/src/png.c common/src/pic_lj8.c \
                $(T)/nsgif/src/gif.c $(T)/nsgif/src/lzw.c common/atari/dspjpeg.c $(LJ_SRC) $(RT_C)
-build/m68030cv/%.o: XFLAGS += -DPDF_DRAW -DPIC_LIBJPEG -DNO_GETENV -DNO_PUTENV -DAERA_NO_FLOAT -fwrapv -I$(LJ)/src -I$(LJ)/config \
-                              -I$(T)/nsgif/include -I$(T)/nsgif/src -Isrc/conv -Isrc/view $(FT_INC) '-DFT_CONFIG_OPTIONS_H="epdf/ftoption.h"' \
-                              '-DFT_CONFIG_MODULES_H="epdf/ftmodule.h"'
+CV_XFLAGS = -DPDF_DRAW -DPIC_LIBJPEG -DNO_GETENV -DNO_PUTENV -DAERA_NO_FLOAT -fwrapv -I$(LJ)/src -I$(LJ)/config \
+            -I$(T)/nsgif/include -I$(T)/nsgif/src -Isrc/conv -Isrc/view $(FT_INC) '-DFT_CONFIG_OPTIONS_H="epdf/ftoption.h"' \
+            '-DFT_CONFIG_MODULES_H="epdf/ftmodule.h"'
+build/m68030cv/%.o: XFLAGS += $(CV_XFLAGS)
 build/m68030cv/$(LJ)/%.o build/m68030cv/$(T)/%.o: XFLAGS += -w
 build/m68030cv/common/src/inflate.o build/m68030cv/src/pdffilt.o: XFLAGS += -DINFLATE_ASM
 build/m68030cv/src/pdffilt.o: XFLAGS += -DSTREAM_PAD=$(STREAM_PAD)
@@ -392,12 +402,18 @@ binary/CONVTEST.PRG: $(CV_ATARI_OBJ) build/m68030cv/atari/convtest.o build/m6803
 # renderer and the reader as CONVTEST.PRG has them, built for the 68030,
 # loaded by EPDF.PRG with common's ovl.c (an ST never loads it); its heap
 # is the program's (libc.c with LIBC_NO_HEAP)
+# (no GIF: a PDF holds none, and its decoder's 9 KB are a 4 MB Falcon's)
 ROVL_OBJ = build/m68030cv/src/rovl/head.o build/m68030/headpad.o build/m68030cv/src/rovl/pens.o build/m68030ovl/libc.o \
-           $(filter-out build/m68030cv/common/atari/libc.o build/m68030/cspad.o,$(CV_ATARI_OBJ))
+           $(patsubst build/m68030cv/common/src/pic.o,build/m68030ovl/pic.o,$(patsubst build/m68030/picpad.o,build/m68030/rvpicpad.o,\
+             $(patsubst build/m68030cv/$(T)/nsgif/src/gif.o,build/m68030/rvgifpad.o,$(filter-out build/m68030cv/common/atari/libc.o \
+             build/m68030/cspad.o build/m68030cv/$(T)/nsgif/src/lzw.o,$(CV_ATARI_OBJ)))))
 build/m68030cv/src/rovl/head.o build/m68030cv/src/rovl/pens.o: XFLAGS += -Isrc/rovl -DROVL_VERSION=\"$(VERSION_STR)\"
 build/m68030ovl/libc.o: common/atari/libc.c $(HDRS)
 	@mkdir -p $(dir $@)
 	$(XCC) $(XFLAGS) -DLIBC_NO_HEAP -c -o $@ $<
+build/m68030ovl/pic.o: common/src/pic.c $(HDRS)
+	@mkdir -p $(dir $@)
+	$(XCC) $(XFLAGS) $(CV_XFLAGS) -DPIC_NO_GIF -c -o $@ $<
 build/m68030ovl/%: XCPU = -m68030 -msoft-float
 binary/render.ovl: XCPU = -m68030 -msoft-float
 binary/render.ovl: $(ROVL_OBJ) common/tlsovl/ovl.ld | binary
@@ -510,10 +526,10 @@ build/m68000/eppad_e.o: FT_PAD = -DFT_PAD_NAME=ep_pad_e -DFT_PAD_TEXT=$(EP_PAD_E
 build/m68000/eppad_f.o: FT_PAD = -DFT_PAD_NAME=ep_pad_f -DFT_PAD_TEXT=$(EP_PAD_F) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 build/m68000/eppad_g.o: FT_PAD = -DFT_PAD_NAME=ep_pad_g -DFT_PAD_TEXT=$(EP_PAD_G) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 EP_PAD_A ?= 172
-EP_PAD_A_RO ?= 284
+EP_PAD_A_RO ?= 258
 EP_PAD_B ?= 208
 EP_PAD_C ?= 372
-EP_PAD_D ?= 508
+EP_PAD_D ?= 388
 EP_PAD_E ?= 130
 EP_PAD_F ?= 214
 EP_PAD_G ?= 212

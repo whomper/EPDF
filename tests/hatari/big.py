@@ -3,7 +3,8 @@
 # Copyright (C) 2026 AERA | Erez Yaary
 """EPDF on a 1 MB ST with big documents (phase 0.3):
 
-    big.py WORK [--machine ST-1] [--seconds 180] [--jobs 3] [NAME...]
+    big.py WORK [--machine ST-1] [--seconds 180] [--jobs 3] [--bin DIR] [--rovl]
+           [--display N] [--erz] [NAME...]
 
 Each PDF of the corpus (build/pdfs, tools/fetch-corpus.py; or the NAMEs
 given, without .pdf) is opened in EPDF.PRG on its own machine, through
@@ -19,6 +20,11 @@ EPDF's log (NatFeats):
            EPDF doesn't show at all (why 2: JPX, JBIG2) is a known limit,
            listed, not a failure
   crash    a CRASH.LOG, or the emulator's bombs
+--bin takes EPDF.PRG (and render.ovl) from DIR, a release's for a pair;
+--rovl puts render.ovl beside EPDF.PRG, as installed (on a Falcon/TT a
+document then sets render.ovl's room aside: "ovl-reserve", given back
+before a page or picture is refused, "ovl-unreserve"); --erz puts NVDI on
+the Falcons (erz.setup()); --display N the first display (95).
 A document passes when nothing failed, was lost or crashed; one whose
 first page isn't read in SECONDS (a map's on a 68000) is noted. Exit 1 if
 any didn't. Machines run --jobs at a time, each on a display of its own.
@@ -43,12 +49,15 @@ _spec.loader.exec_module(speed)
 PAGE = re.compile(r"EPDF page (\d+) (\d+) peak (\d+) heap (\d+) oom (\d+)( failed)?")
 
 
-def one(work, machine, pdf, seconds, display, key="ctrl+Right", every=20):
+def one(work, machine, pdf, seconds, display, key="ctrl+Right", every=20, bin=None, rovl=False):
     name = os.path.splitext(os.path.basename(pdf))[0]
     r = speed.Rig(os.path.join(work, name), machine, display=display)
     res = {"name": name, "opened": False}
+    bin = bin or os.path.join(TOP, "binary")
     try:
-        r.put(os.path.join(TOP, "binary", "EPDF.PRG"), "EPDF")
+        r.put(os.path.join(bin, "EPDF.PRG"), "EPDF")
+        if rovl:
+            r.put(os.path.join(bin, "render.ovl"), "EPDF")
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
         import shutil
         shutil.copy(pdf, os.path.join(r.hd, "DOC.PDF"))
@@ -78,6 +87,8 @@ def one(work, machine, pdf, seconds, display, key="ctrl+Right", every=20):
     res["unsupported"] = [f for f in failed if f.rstrip().endswith("why 2")]
     res["picfail"] = [f for f in failed if not f.rstrip().endswith("why 2")]
     res["back"] = re.findall(r"EPDF memory-back (\S+) (\d+)", con)
+    res["resv"] = re.findall(r"EPDF ovl-reserve (\d+)", con)
+    res["unresv"] = re.findall(r"EPDF ovl-unreserve (\S+)", con)
     crash = [os.path.join(d, f) for d, _, fs in os.walk(r.hd) for f in fs if f.upper() == "CRASH.LOG"]
     res["crash"] = bool(crash) or "Panic" in con or "bombs" in con
     res["openfail"] = re.findall(r"EPDF open-failed .*", con)
@@ -91,7 +102,14 @@ def main(argv):
     ap.add_argument("--machine", default="ST-1")
     ap.add_argument("--seconds", type=int, default=180)
     ap.add_argument("--jobs", type=int, default=3)
+    ap.add_argument("--bin")
+    ap.add_argument("--rovl", action="store_true")
+    ap.add_argument("--display", type=int, default=95)
+    ap.add_argument("--erz", action="store_true")
     a = ap.parse_args(argv)
+    if a.erz:
+        import erz
+        erz.setup()
     pdfs = sorted(glob.glob(os.path.join(TOP, "build", "pdfs", "*.pdf")))
     if a.names:
         pdfs = [p for p in pdfs if os.path.splitext(os.path.basename(p))[0] in a.names]
@@ -105,12 +123,12 @@ def main(argv):
                 if not queue:
                     return
                 pdf = queue.pop(0)
-            res = one(a.work, a.machine, pdf, a.seconds, display)
+            res = one(a.work, a.machine, pdf, a.seconds, display, bin=a.bin, rovl=a.rovl)
             with lock:
                 results.append(res)
                 print("  done %s" % res["name"], flush=True)
 
-    threads = [threading.Thread(target=worker, args=(":%d" % (95 + k),)) for k in range(a.jobs)]
+    threads = [threading.Thread(target=worker, args=(":%d" % (a.display + k),)) for k in range(a.jobs)]
     for t in threads:
         t.start()
     for t in threads:
@@ -128,6 +146,9 @@ def main(argv):
             notes.append("%d not shown (JPX/JBIG2)" % len(res["unsupported"]))
         if res["back"]:
             notes.append("memory given back %s" % ", ".join("%s %d KB" % (w, int(b) // 1024) for w, b in res["back"]))
+        if res["resv"]:
+            notes.append("room set aside %d KB%s" % (int(res["resv"][0]) // 1024,
+                         ", given back for a " + res["unresv"][0] if res["unresv"] else ""))
         if res["crash"]:
             notes.append("CRASH")
         if res["opened"] and not res["read"]:

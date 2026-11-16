@@ -21,6 +21,7 @@
 #include "pics.h"
 #include "pdfimg.h"
 #include "docview.h"
+#include "rdraw.h"
 
 /* pictures kept decoded: 8, or with room (a TT or Falcon with more than
    the stock memory, Erez 10 Nov 2026: "hold both Pages and Text views in
@@ -872,8 +873,8 @@ int pics_ahead(long obj, int w, int h, int flip, long page)
 	if (n >= AHEAD || slot < 0 || w <= 0 || h <= 0)
 		return -1;
 	bytes = (long)((w + 15) / 16) * 2 * (planes > 8 ? 16 : planes) * h;
-	if (pics_st_free() < 2 * bytes + AHEAD_SPARE)
-		return -1;
+	if (pics_st_free() + rdraw_spare() < 2 * bytes + AHEAD_SPARE)
+		return -1;	/* (render.ovl's room counted: a refusal gives it back, doc.c) */
 	memset(&cache[slot], 0, sizeof cache[slot]);
 	cache[slot].obj = obj;
 	cache[slot].w = w;

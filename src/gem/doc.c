@@ -594,12 +594,20 @@ static int pic_turn(void)
 }
 
 /* the text store's memory given back for a page or a picture refused it:
-   1 when there is enough to try again */
+   1 when there is enough to try again, 2 when that was render.ovl's room
+   (the store's still to give, if it's refused again) */
 static int give_back(const char *what)
 {
-	long b = ts_shrink(&store, STORE_KEEP);
+	long b, r = rdraw_reserved();
 	char a[24];
 
+	rdraw_unreserve();	/* render.ovl's room first, when it isn't in it (rdraw.c) */
+	if (r && !rdraw_reserved()) {
+		snprintf(a, sizeof a, "%ld", r);
+		log_event("ovl-unreserve", what, a);
+		return 2;
+	}
+	b = ts_shrink(&store, STORE_KEEP);
 	snprintf(a, sizeof a, "%ld", b);
 	log_event("memory-back", what, a);
 	if (b > 0)
@@ -992,6 +1000,8 @@ static void stacks_note(void)
 
 int doc_pic_slice(unsigned long ms, long *obj)
 {
+	int g;
+
 	if (!rpic)
 		return 0;
 	slice_end = tos_ms() + ms;
@@ -1001,8 +1011,9 @@ int doc_pic_slice(unsigned long ms, long *obj)
 	pics_band();			/* a band of colour rows to the screen's format */
 	if (!pdone)
 		return 0;
-	if ((rpic_rows ? !rpic_ok : !rpic_std) && rpic_why == PIC_MEMORY && retried_obj != rpic->obj && give_back("picture")) {
-		retried_obj = rpic->obj;
+	if ((rpic_rows ? !rpic_ok : !rpic_std) && rpic_why == PIC_MEMORY && retried_obj != rpic->obj && (g = give_back("picture"))) {
+		if (g == 1)
+			retried_obj = rpic->obj;
 		if (rpic_rows)
 			pics_made(rpic, 0, PIC_STOPPED);	/* its rows so far let go */
 		rpic->state = PICS_DECODING;
@@ -1208,6 +1219,7 @@ void doc_close(void)
 		rdraw_ovl()->close(rdoc);
 	rdoc = NULL;
 	rdraw_unload();			/* (its 676 KB back for the next document's text) */
+	rdraw_unreserve();
 	drawn = 0;
 	free(pdbl);
 	pdbl = NULL;
@@ -1230,6 +1242,12 @@ int doc_open(const char *path, int cols, int lines_mode, const char *cache)
 	const char *base;
 
 	doc_close();
+	if (rdraw_reserve()) {		/* render.ovl's room before the heap's blocks (rdraw.c) */
+		char a[24];
+
+		snprintf(a, sizeof a, "%ld", rdraw_reserved());
+		log_event("ovl-reserve", a, "");
+	}
 	{
 		/* a document's heap as the libc's has always been: a first block
 		   of a quarter of what is free (taken and given back to the heap
@@ -1336,7 +1354,7 @@ long doc_slice(unsigned long ms)
 {
 	long i, n = -1, len = 0;
 	char *a;
-	int rt_failed, was_read;
+	int rt_failed, was_read, g;
 
 	if (!doc_pending())
 		return -1;
@@ -1368,8 +1386,9 @@ long doc_slice(unsigned long ms)
 	if (!rdone)
 		return -1;
 	n = rpage;
-	if (rt->failed && doc->st.oom != rpage_oom && retried_page != n && give_back("page")) {
-		retried_page = n;
+	if (rt->failed && doc->st.oom != rpage_oom && retried_page != n && (g = give_back("page"))) {
+		if (g == 1)
+			retried_page = n;
 		ptext_free(rt);
 		rdone = 0;		/* the reader reads it again in the next slice */
 		return -1;

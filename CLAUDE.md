@@ -366,6 +366,17 @@ at first. This section is kept up to date: the build, the tests, what a release 
   a counting sort taking qsort's block (the heap as before), w_picture's loops in turns, the grey test
   as 2.33's compiled loop (inline asm: every C loop since missed the 68030's cache), convert_page left
   as it was. Under 098183d the comparison is the paired runs' medians (the hub, 16 Nov 2026).
+  2.35: render.ovl's room set aside (the hub's option 1, 16 Nov 2026): on a 4 MB Falcon under NVDI
+  render.ovl (643 KB, 99 % code) came after the document's heap blocks (about 577 KB each) and the
+  page's bitmap, and loaded only when two blocks lay end to end (2.34 by luck: 100 bytes more in the
+  program and View > Pages drew nothing; drawn.py). doc_open sets a GEMDOS block of its size aside
+  before the heap grows (rdraw_reserve: a 68020+, render.ovl beside EPDF.PRG, no TT RAM, under 4 MB
+  free in one piece; "ovl-reserve") and render.ovl is loaded into it (common's ovl_load_into,
+  AERA-Atari a6f6a46); when the text view or a picture is refused memory and render.ovl isn't in it,
+  it goes back to TOS first ("ovl-unreserve", give_back's 2) and the store's memory only if refused
+  again. render.ovl built with PIC_NO_GIF (9 KB; its own pads RV_PIC_PAD, RV_GIF_PAD/_RO/_STR).
+  Rigs: drawn.py with EPDF_BIN (a variant's: the luck test with a 100-byte log line), big.py --bin
+  --rovl --erz (the corpus in the text view with render.ovl installed, against a release).
   2.11 (Erez's photos and choices, 10 Nov 2026: "Both", "Band on the page"): a converted copy's
   View > Pages on a Falcon/TT in colour is drawn sharp from its original by render.ovl over the stored
   page (doc.c's sharp_pages, pdbl.stand, doc_stand_in; the stored one decoded first, pics_next),
