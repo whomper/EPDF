@@ -357,6 +357,15 @@ at first. This section is kept up to date: the build, the tests, what a release 
   NVDI lost its page 3 to memory). It costs CONVTEST about 1.9 s a page on Falcon-4:256 (the canvas read
   again from ST-RAM); CONVTEST's "thumbs" pairs it. Rig: tests/hatari/strip.py (`make strip-test`);
   speed.py's EPDF_STRIP=1.
+  2.34: pages passed over aren't drawn (#96, Erez 14 Nov 2026: moving away from the page read "kicks off
+  various rendering activities"): a move within 400 ms of another holds the pictures till the view has
+  been still 400 ms (doc.c's doc_view_moved, checked in doc_pic_start; main() as it was), a move on its
+  own draws at once, and the pictures asked for on pages left and not begun are forgotten
+  (pics_unwant_outside); rig tests/hatari/passing.py ("page-start" lines, "ahead" for those drawn ahead).
+  EConvert's turns in the same release ("Convert: its turns" on the showcase 160 -> 50): quant's split
+  a counting sort taking qsort's block (the heap as before), w_picture's loops in turns, the grey test
+  as 2.33's compiled loop (inline asm: every C loop since missed the 68030's cache), convert_page left
+  as it was. Under 098183d the comparison is the paired runs' medians (the hub, 16 Nov 2026).
   2.11 (Erez's photos and choices, 10 Nov 2026: "Both", "Band on the page"): a converted copy's
   View > Pages on a Falcon/TT in colour is drawn sharp from its original by render.ovl over the stored
   page (doc.c's sharp_pages, pdbl.stand, doc_stand_in; the stored one decoded first, pics_next),

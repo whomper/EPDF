@@ -27,6 +27,8 @@
 #include "coro.h"
 #include "pdfimg.h"
 #include "pics.h"
+
+static void note_start(const PICE *e);
 #include "rdraw.h"
 
 static PDOC *doc;
@@ -914,7 +916,7 @@ int doc_pic_start(void)
 {
 	PICE *e;
 
-	if (!doc || rpic || !(e = pics_next()))
+	if (!doc || rpic || !doc_view_resting() || !(e = pics_next()))
 		return 0;
 	{
 		/* its stack: 12 KB, 64 KB once pages are drawn (render.ovl's);
@@ -951,6 +953,8 @@ int doc_pic_start(void)
 		return 0;
 	}
 	rpic = e;
+	note_start(e);
+	EPAD(EPAD_DS);
 	rpic_planes = planes;
 	rpic_shown = 0;
 	rpic_rows = 0;
@@ -1466,4 +1470,55 @@ const char *doc_status(void)
 	else
 		snprintf(s, sizeof s, "%s  \xFA  %ld page%s", name, npages, npages == 1 ? "" : "s");
 	return s;
+}
+
+/* the window scrolled (Erez, 14 Nov 2026: a page
+   only passed over is no work for the machine). A move that follows another
+   within 400 ms (a held key, the arrows held, a page key pressed again and
+   again) holds the pictures till the view has been still 400 ms; one on its
+   own (a jump: the page strip, Find, a key pressed once) draws at once. A
+   page being drawn that left the view stops (drawn again when it is wanted
+   again) */
+static unsigned long view_rest_at, view_moved_at;
+/* (the bss after them where 2.32 had it, mod 256: 8 bytes and 248) */
+static char view_pad[248] __attribute__((used));
+
+void doc_view_moved(void)
+{
+	unsigned long now = tos_ms();
+	long p0, p1;
+
+	EPAD(EPAD_DV);
+	(void)*(volatile char *)view_pad;	/* (kept by the link: the pad above) */
+	if (view_moved_at && now - view_moved_at < 400)
+		view_rest_at = now + 400;
+	view_moved_at = now;
+	/* (the pages in view only when a shown picture waits or a page is
+	   being drawn: the rows' walk cost the last page on Falcon-4 a tick,
+	   and the text with no pictures needs none of it) */
+	if (!pics_shown_waiting() && !(rpic && rpic->obj >= PICS_PAGE && !rpic->ahead))
+		return;
+	win_pages_shown(&p0, &p1);
+	pics_unwant_outside(p0, p1);
+	if (rpic && rpic->obj >= PICS_PAGE && !rpic->ahead && (rpic->page < p0 || rpic->page > p1))
+		page_pic_stop();
+}
+
+/* the view has rested its 400 ms (or a picture is under way): the
+   pictures' turns again; till then the reading has them all */
+int doc_view_resting(void)
+{
+	return rpic || (long)(tos_ms() - view_rest_at) >= 0;
+}
+
+/* a page's drawing begun: said for the rigs (passing.py, #96), those drawn
+   ahead of the view marked */
+static void note_start(const PICE *e)
+{
+	if (e->obj >= PICS_PAGE) {
+		char a[24];
+
+		snprintf(a, sizeof a, "%ld%s", e->page, e->ahead ? " ahead" : "");
+		log_event("page-start", a, NULL);
+	}
 }

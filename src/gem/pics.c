@@ -1218,3 +1218,16 @@ void pics_exit(void)
 		pal = NULL;
 	}
 }
+
+/* the view moved to pages p0 to p1 (#96): the pictures it asked for on
+   the pages it passed over and left, not begun, are forgotten (asked for
+   again when drawn again); those ahead of it and those under way stay */
+void pics_unwant_outside(long p0, long p1)
+{
+	int i;
+
+	EPAD(EPAD_PU);
+	for (i = 0; i < npics; i++)
+		if (cache[i].state == PICS_WANTED && !cache[i].ahead && (cache[i].page < p0 || cache[i].page > p1))
+			let_go(&cache[i]);
+}

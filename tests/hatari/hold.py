@@ -10,7 +10,7 @@ new rows' text in the next (textwin.c's owed rows). EPDF as the speed rig
 runs it (build/aprof) opens the speed rig's 30-page book; once the pages
 are read, Down is held for 2 s, then Up, then Shift+Down (pages, their
 text drawn in bands over the turns after), and after each the
-window is shot, then drawn whole (View > Font... with OK: the same font,
+window is shot, then drawn whole (Options > Font... with OK: the same font,
 laid out and drawn again) and shot again. The two shots must be the same
 (as EContact's rig checks its card bands).
 """
@@ -25,6 +25,7 @@ TOP = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 from pdfgen import make_pdf, book  # noqa: E402
 import natfeats  # noqa: E402 (NATFEATS=1 in the programs' INFs)
+from prepared import park  # noqa: E402 (the pointer out of the shots: the menu's click moves it)
 
 _spec = importlib.util.spec_from_file_location("aera_speed", os.path.join(TOP, "common", "tests", "speed", "speed.py"))
 speed = importlib.util.module_from_spec(_spec)
@@ -38,6 +39,9 @@ def differ(a, b):
         return int(float(r.stderr.split()[0]))
     except (ValueError, IndexError):
         return -1
+
+
+OPTIONS_X = 284                         # the Options title (fontdlg.py's)
 
 
 def wait_for(r, what, n, timeout=60):
@@ -57,16 +61,18 @@ def held(r, key, tag):
     time.sleep(2)
     for k in reversed(keys):
         r.xdo("keyup", k)
+    park(r)
     r.still()
     a = shutil.copy(r.shot("still"), os.path.join(r.shots, "%s-held.png" % tag))
     n = r.console().count("EPDF dialog font")
-    r.key("shift+ctrl+f")
+    r.menu(OPTIONS_X, 44)               # Options > Font... (no key since 9 Nov 2026: Erez's D6)
     if not wait_for(r, "EPDF dialog font", n + 1):
         return -1
     time.sleep(4)
     m = r.console().count("EPDF dialog-closed")
     r.key("Return")
     wait_for(r, "EPDF dialog-closed", m + 1)
+    park(r)
     r.still()
     b = shutil.copy(r.shot("still"), os.path.join(r.shots, "%s-whole.png" % tag))
     return differ(a, b)
