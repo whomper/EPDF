@@ -29,6 +29,25 @@ sys.path.insert(0, os.path.join(TOP, "common", "tools"))
 import machines  # noqa: E402
 
 
+def where(elf, off):
+    """the function an address (less main's) falls in, by the ELF's symbols"""
+    syms = []
+    for ln in subprocess.run(["m68k-linux-gnu-nm", "-n", elf], capture_output=True, text=True).stdout.splitlines():
+        f = ln.split()
+        if len(f) == 3 and f[1] in "tT":
+            syms.append((int(f[0], 16), f[2]))
+    base = dict((n, a) for a, n in syms).get("main")
+    if base is None:
+        return off
+    at = base + off
+    name = "?"
+    for a, n in syms:
+        if a > at:
+            break
+        name = "%s+%d" % (n, at - a)
+    return name
+
+
 def main(argv):
     prof = "--profile" in argv
     if prof:
@@ -95,6 +114,9 @@ def main(argv):
         d = json.loads(line.replace("\\", "/"))   # (the Atari's paths unescaped)
         if "file" in d:
             d["file"] = names.get(d["file"], d["file"])
+        for k in ("gap_from", "gap_at"):
+            if d.get(k):
+                d[k] = where(elf, d[k])
         print(json.dumps(d))
 
 

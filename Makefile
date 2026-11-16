@@ -32,7 +32,7 @@ BSSL_SRC = $(addprefix $(BSSL)/src/, hash/md5.c hash/sha2small.c hash/sha2big.c 
            codec/dec32be.c codec/enc32be.c codec/dec32le.c codec/enc32le.c codec/dec64be.c codec/enc64be.c)
 HDRS     = $(wildcard src/*.h src/conv/*.h src/rovl/*.h src/gem/*.h src/view/*.h src/econv/*.h common/src/*.h common/ui/*.h common/atari/*.h common/atari/include/*.h)
 
-.PHONY: all test measure dist help clean atari measure-atari fttest imgbench gui-test files-test viewtest
+.PHONY: fuzz all test measure dist help clean atari measure-atari fttest imgbench gui-test files-test viewtest
 all: build/pdfmeasure build/pdftext build/pdfmem build/glyphjob build/imgdump binary/EPDF.PRG
 build:
 	mkdir -p build
@@ -90,6 +90,24 @@ build/test_xe: tests/test_xe.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HDRS) | bu
 # JPEG 2000 on the host (tests/jpx.py: against OpenJPEG's)
 build/jpxdec: tools/jpxdec.c src/jpx.c src/mq.c src/jpx.h src/mq.h | build
 	$(CC) $(HCFLAGS) -fsanitize=address,undefined -o $@ tools/jpxdec.c src/jpx.c src/mq.c
+
+# make fuzz: libFuzzer on the two decoders that take a PDF's untrusted
+# pictures (clang with its runtime, libclang-rt-*-dev), FUZZ_SECONDS each,
+# seeded from tests/jpx.py's and tests/jbig2.py's streams (make test makes
+# them); what it finds lands in build/fuzz/<target>/ as crash-* files
+FUZZ_CC ?= clang
+FUZZ_SECONDS ?= 120
+FUZZ_FLAGS = -g -O1 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -Isrc
+build/fuzz_jpx: tools/fuzz_jpx.c src/jpx.c src/mq.c src/jpx.h src/mq.h | build
+	$(FUZZ_CC) $(FUZZ_FLAGS) -o $@ tools/fuzz_jpx.c src/jpx.c src/mq.c
+build/fuzz_jbig2: tools/fuzz_jbig2.c src/jbig2.c src/mq.c src/ccitt.c src/jbig2.h src/mq.h src/ccitt.h | build
+	$(FUZZ_CC) $(FUZZ_FLAGS) -o $@ tools/fuzz_jbig2.c src/jbig2.c src/mq.c src/ccitt.c
+fuzz: build/fuzz_jpx build/fuzz_jbig2
+	python3 tools/fuzzseeds.py build/fuzz
+	cd build/fuzz/jpx && ASAN_OPTIONS=allocator_may_return_null=1:detect_leaks=1 ../../fuzz_jpx -max_total_time=$(FUZZ_SECONDS) \
+	  -rss_limit_mb=2048 -timeout=20 -print_final_stats=1 corpus seeds
+	cd build/fuzz/jbig2 && ASAN_OPTIONS=allocator_may_return_null=1:detect_leaks=1 ../../fuzz_jbig2 -max_total_time=$(FUZZ_SECONDS) \
+	  -rss_limit_mb=2048 -timeout=20 -print_final_stats=1 corpus seeds
 
 # JBIG2 on the host (tests/jbig2.py: against poppler's)
 build/jb2dec: tools/jb2dec.c src/jbig2.c src/mq.c src/ccitt.c src/jbig2.h src/mq.h src/ccitt.h | build

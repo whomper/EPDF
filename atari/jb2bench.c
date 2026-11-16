@@ -21,6 +21,31 @@ extern long jb2_t_decode, jb2_t_put, jb2_t_alloc, jb2_t_dict, jb2_t_text;
 
 static long out_h = -1;
 
+int main(void);
+
+static int poll_count;
+static long last_us, gap_us;
+static void *gap_at, *gap_from, *last_at;
+
+/* the decoder's turn: how often, and the longest stretch without one (where
+   it began and the call that ended it: their addresses less main's, named
+   by tests/hatari/jb2bench.py from the ELF) */
+static int __attribute__((noinline)) poll(void)
+{
+	long now = pdf_us();
+	void *at = __builtin_return_address(0);
+
+	if (now - last_us > gap_us) {
+		gap_us = now - last_us;
+		gap_at = at;
+		gap_from = last_at;
+	}
+	last_us = now;
+	last_at = at;
+	poll_count++;
+	return 1;
+}
+
 static void emit(const char *line)
 {
 	long n = (long)strlen(line);
@@ -69,7 +94,11 @@ static void one(const char *file, const char *globals)
 	heap_peak = heap_use;
 	jb2_t_decode = jb2_t_put = jb2_t_alloc = jb2_t_dict = jb2_t_text = 0;
 	t0 = pdf_us();
-	j = jb2_open(g, gn, d, n, NULL, &r);
+	last_us = t0;
+	gap_us = 0;
+	poll_count = 0;
+	gap_at = gap_from = last_at = NULL;
+	j = jb2_open(g, gn, d, n, poll, &r);
 	if (j) {
 		unsigned char *row;
 		long k, st;
@@ -89,9 +118,11 @@ static void one(const char *file, const char *globals)
 	t = pdf_us() - t0;
 	snprintf(line, sizeof line,
 		 "{\"file\":\"%s\",\"bytes\":%ld,\"w\":%d,\"h\":%d,\"r\":%d,\"ms\":%ld,\"heap_kb\":%ld,\"decode_ms\":%ld,"
-		 "\"put_ms\":%ld,\"alloc_ms\":%ld,\"dict_ms\":%ld,\"text_ms\":%ld,\"hash\":%lu}",
+		 "\"put_ms\":%ld,\"alloc_ms\":%ld,\"dict_ms\":%ld,\"text_ms\":%ld,\"polls\":%d,\"gap_ms\":%ld,"
+		 "\"gap_from\":%ld,\"gap_at\":%ld,\"hash\":%lu}",
 		 file, n, w, h, r, t / 1000, heap_peak / 1024, jb2_t_decode / 1000, jb2_t_put / 1000, jb2_t_alloc / 1000,
-		 jb2_t_dict / 1000, jb2_t_text / 1000, hsh);
+		 jb2_t_dict / 1000, jb2_t_text / 1000, poll_count, gap_us / 1000,
+		 gap_from ? (long)((char *)gap_from - (char *)main) : 0L, gap_at ? (long)((char *)gap_at - (char *)main) : 0L, hsh);
 	emit(line);
 	free(d);
 	free(g);

@@ -187,8 +187,20 @@ def main():
                     with open(os.path.join(d, j), "rb") as fh:
                         bad += check("corpus-%s-%s" % (f[:-4], j[:-4]), fh.read(), 3, False, work)
                     corpus += 1
-    print("jpx: %d cases, %d corpus pictures, %d checked, %d reductions OpenJPEG refused, %d differences" %
-          (n, corpus, checked[0], refused[0], bad))
+    # stopped part way, at its 1st, 5th, 50th... turn: it says so (exit 3)
+    # and frees everything (ASan's leak check)
+    stops = 0
+    for name in ("rgb-97", "tiles", "layers-53", "precincts"):
+        src = os.path.join(work, name + ".jp2")
+        for k in (1, 5, 50, 500):
+            p = subprocess.run([JPXDEC, "-r", "1", "-s", str(k), src, os.path.join(work, "stop.pnm")], capture_output=True,
+                               text=True)
+            if p.returncode not in (0, 3) or "Sanitizer" in p.stderr:
+                print("FAIL %s stopped at turn %d: exit %d %s" % (name, k, p.returncode, p.stderr.strip()[-300:]))
+                bad += 1
+            stops += p.returncode == 3
+    print("jpx: %d cases, %d corpus pictures, %d checked, %d reductions OpenJPEG refused, %d stopped, %d differences" %
+          (n, corpus, checked[0], refused[0], stops, bad))
     return 1 if bad else 0
 
 

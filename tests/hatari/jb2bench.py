@@ -20,6 +20,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TOP = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.join(TOP, "common", "tools"))
 import machines  # noqa: E402
+sys.path.insert(0, HERE)
+import jpxbench  # noqa: E402  (where: an address's function)
 
 
 def main(argv):
@@ -64,6 +66,10 @@ def main(argv):
         d = json.loads(line.replace("\\", "/"))   # (the Atari's paths unescaped)
         if "file" in d:
             d["file"] = names.get(d["file"], d["file"])
+        elf = os.path.join(TOP, "build", "m68000" if spec.startswith("ST") else "m68030", "jb2bench.elf")
+        for k in ("gap_from", "gap_at"):
+            if d.get(k):
+                d[k] = jpxbench.where(elf, d[k])
         print(json.dumps(d))
 
 

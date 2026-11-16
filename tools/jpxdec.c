@@ -5,7 +5,10 @@
  * code-stream), decoded on the host to a PGM or PPM (src/jpx.c): the rig's
  * tool against OpenJPEG (Pillow's reduce) and poppler.
  *
- *     jpxdec [-r REDUCE] IN OUT.pnm
+ *     jpxdec [-r REDUCE] [-s N] IN OUT.pnm
+ *
+ * -s N: the decoder told to stop at its Nth turn (it must then free all it
+ * took: the ASan build says if it doesn't).
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,9 +25,11 @@ static void row(void *u, long y, const uint8_t *px)
 	fwrite(px, (size_t)ncomp, (size_t)width, out);
 }
 
+static long stop_at = -1, polls;
+
 static int poll_none(void)
 {
-	return 1;
+	return stop_at < 0 || ++polls < stop_at;
 }
 
 int main(int argc, char **argv)
@@ -35,12 +40,17 @@ int main(int argc, char **argv)
 	long n;
 	char tmp[4096];
 
-	if (argc > 2 && !strcmp(argv[1], "-r")) {
-		reduce = atoi(argv[2]);
-		a = 3;
+	while (argc > a + 1 && argv[a][0] == '-' && argv[a][1] && !argv[a][2]) {
+		if (argv[a][1] == 'r')
+			reduce = atoi(argv[a + 1]);
+		else if (argv[a][1] == 's')
+			stop_at = atol(argv[a + 1]);
+		else
+			break;
+		a += 2;
 	}
 	if (argc - a != 2) {
-		fprintf(stderr, "jpxdec [-r REDUCE] IN OUT.pnm\n");
+		fprintf(stderr, "jpxdec [-r REDUCE] [-s N] IN OUT.pnm\n");
 		return 2;
 	}
 	fp = fopen(argv[a], "rb");
@@ -56,6 +66,7 @@ int main(int argc, char **argv)
 	r = jpx_info(d, n, reduce, &w, &h, &c, &lv);
 	if (r) {
 		fprintf(stderr, "jpx_info: %d\n", r);
+		free(d);
 		return 1;
 	}
 	ncomp = c >= 3 ? 3 : 1;
@@ -70,7 +81,8 @@ int main(int argc, char **argv)
 	if (r) {
 		fprintf(stderr, "jpx_decode: %d\n", r);
 		remove(tmp);
-		return 1;
+		free(d);
+		return r == JPX_STOPPED ? 3 : 1;
 	}
 	rename(tmp, argv[a + 1]);
 	free(d);

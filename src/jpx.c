@@ -82,6 +82,8 @@ typedef struct {
 	TCC tcc[16];
 	int ntx, nty;
 	int sycc;			/* the JP2's colr: sYCC (enumerated 18) */
+	int (*poll)(void);		/* (tier 2's turns, every 32 code-blocks) */
+	long turn;
 } CS;
 
 static unsigned rd16(const uint8_t *p)
@@ -653,6 +655,8 @@ static int packet(CS *cs, RES *R, long k, int l, const uint8_t **pp, const uint8
 				int in, np;
 				unsigned n;
 
+				if (cs->poll && (++cs->turn & 31) == 0 && !cs->poll())
+					return JPX_STOPPED;
 				if (!c->incl)
 					in = tt_decode(&P->incl, &bio, x, y, l + 1);
 				else
@@ -791,6 +795,7 @@ typedef struct {
 	int causal;
 	uint8_t cx[19];
 	MQ m;
+	int (*poll)(void);		/* asked every stripe: 0 stops */
 } T1;
 
 /* the coefficient at f (its value at v) significant from bitplane bp,
@@ -817,7 +822,7 @@ typedef struct {
    vertically causal mode's last row) */
 #define ROWMASK(t, k) (causal && (k) == 3 ? (unsigned)~(N_BELOW | S_S) : 0xFFFFu)
 
-HOT static void pass_sig(T1 *t, int bp)
+HOT static int pass_sig(T1 *t, int bp)
 {
 	int y0, x, k, st = t->stride, w = t->w, h = t->h, causal = t->causal;
 	uint8_t *cx = t->cx;
@@ -830,6 +835,11 @@ HOT static void pass_sig(T1 *t, int bp)
 	MQ_LOAD(&t->m, c, a, ct);
 	for (y0 = 0; y0 < h; y0 += 4) {
 		int rows = h - y0 < 4 ? h - y0 : 4;
+
+		if (t->poll && y0 && !t->poll()) {
+			MQ_SAVE(&t->m, c, a, ct);
+			return 0;
+		}
 		uint16_t *f0 = fb + (long)(y0 + 1) * st + 1;
 		int32_t *v0 = vb + (long)y0 * w;
 
@@ -855,9 +865,10 @@ HOT static void pass_sig(T1 *t, int bp)
 		}
 	}
 	MQ_SAVE(&t->m, c, a, ct);
+	return 1;
 }
 
-HOT static void pass_ref(T1 *t, int bp)
+HOT static int pass_ref(T1 *t, int bp)
 {
 	int y0, x, k, st = t->stride, w = t->w, h = t->h, causal = t->causal;
 	uint8_t *cx = t->cx;
@@ -870,6 +881,11 @@ HOT static void pass_ref(T1 *t, int bp)
 	MQ_LOAD(&t->m, c, a, ct);
 	for (y0 = 0; y0 < h; y0 += 4) {
 		int rows = h - y0 < 4 ? h - y0 : 4;
+
+		if (t->poll && y0 && !t->poll()) {
+			MQ_SAVE(&t->m, c, a, ct);
+			return 0;
+		}
 		uint16_t *f0 = fb + (long)(y0 + 1) * st + 1;
 		int32_t *v0 = vb + (long)y0 * w;
 
@@ -893,12 +909,13 @@ HOT static void pass_ref(T1 *t, int bp)
 		}
 	}
 	MQ_SAVE(&t->m, c, a, ct);
+	return 1;
 }
 
 /* the cleanup: every coefficient the significance pass didn't code (its
    mark cleared as it goes), four at once by the run-length mode where a
    stripe's column is quiet */
-HOT static void pass_clean(T1 *t, int bp)
+HOT static int pass_clean(T1 *t, int bp)
 {
 	int y0, x, k, st = t->stride, w = t->w, h = t->h, causal = t->causal;
 	uint8_t *cx = t->cx;
@@ -911,6 +928,11 @@ HOT static void pass_clean(T1 *t, int bp)
 	MQ_LOAD(&t->m, c, a, ct);
 	for (y0 = 0; y0 < h; y0 += 4) {
 		int rows = h - y0 < 4 ? h - y0 : 4;
+
+		if (t->poll && y0 && !t->poll()) {
+			MQ_SAVE(&t->m, c, a, ct);
+			return 0;
+		}
 		uint16_t *f0 = fb + (long)(y0 + 1) * st + 1;
 		int32_t *v0 = vb + (long)y0 * w;
 
@@ -953,13 +975,15 @@ HOT static void pass_clean(T1 *t, int bp)
 		}
 	}
 	MQ_SAVE(&t->m, c, a, ct);
+	return 1;
 }
 
 /* code-block c of band B decoded, its coefficients to their samples'
    places (out its first, xs apart, its rows os apart): dequantised, FRAC
-   fixed point; fold: an HH band's 1/K^2 in it (synth_level) */
+   fixed point; fold: an HH band's 1/K^2 in it (synth_level). poll every
+   stripe of a pass (a dense block's pass is 75 ms on Falcon-4) */
 static int t1_block(CB *c, const BAND *B, int style, int rev, int fold, int prec, int16_t *out, long xs, long os, int32_t *v,
-		    uint16_t *f)
+		    uint16_t *f, int (*poll)(void))
 {
 	T1 t;
 	int w = c->x1 - c->x0, h = c->y1 - c->y0, x, y, pass, bp, type;
@@ -1005,13 +1029,14 @@ static int t1_block(CB *c, const BAND *B, int style, int rev, int fold, int prec
 	mq_init(&t.m, data, n);
 	bp = c->numbps - 1;
 	type = 2;
+	t.poll = poll;
 	for (pass = 0; pass < c->passes && bp >= 0; pass++) {
-		if (type == 0)
-			pass_sig(&t, bp);
-		else if (type == 1)
-			pass_ref(&t, bp);
-		else
-			pass_clean(&t, bp);
+		int go = type == 0 ? pass_sig(&t, bp) : type == 1 ? pass_ref(&t, bp) : pass_clean(&t, bp);
+
+		if (!go) {
+			free(buf);
+			return JPX_STOPPED;
+		}
 		if (type == 2) {
 			type = 0;
 			bp--;
@@ -1129,13 +1154,16 @@ HOT static void lift(int16_t *p, long s, int n, int i0, int kind)
 }
 
 /* the same step down a level's columns: row r's samples (w of them, s
-   apart) from the rows above and below it (rs apart), n rows */
-HOT static void lift_rows(int16_t *p, long s, int w, long rs, int n, int i0, int kind)
+   apart) from the rows above and below it (rs apart), n rows; 0 when
+   poll (asked every 4 rows) says stop */
+HOT static int lift_rows(int16_t *p, long s, int w, long rs, int n, int i0, int kind, int (*poll)(void))
 {
 	int i, j;
 	const int32_t frac = ~((1 << FRAC) - 1);
 
 	for (i = i0; i < n; i += 2) {
+		if ((i & 6) == 6 && poll && !poll())
+			return 0;
 		int16_t *q = p + i * rs;
 		const int16_t *u = i > 0 ? q - rs : q + rs, *d = i + 1 < n ? q + rs : q - rs;
 
@@ -1154,6 +1182,7 @@ HOT static void lift_rows(int16_t *p, long s, int w, long rs, int n, int i0, int
 		}
 #undef RUN
 	}
+	return 1;
 }
 
 /* samples of one parity (n of them from i0, s apart) times k / 4096 */
@@ -1178,8 +1207,13 @@ static void synth_level(int16_t *a, long W, long s, int ox, int oy, int w, int h
 
 	if (fold) {
 		/* the low band's samples times K^2 */
-		for (k = lo_y; k < h; k += 2)
+		for (k = lo_y; k < h; k += 2) {
 			scale(p + k * rs, s, w, lo_x, KK97);
+			if (((k - lo_y) & 14) == 14 && poll && !poll()) {	/* (every 8 rows of these) */
+				*stop = 1;
+				return;
+			}
+		}
 	}
 	/* the rows */
 	for (k = 0; k < h; k++) {
@@ -1201,7 +1235,7 @@ static void synth_level(int16_t *a, long W, long s, int ox, int oy, int w, int h
 			lift(q, s, w, lo_x, L_B);
 			lift(q, s, w, 1 - lo_x, L_A);
 		}
-		if ((k & 31) == 31 && poll && !poll()) {
+		if ((k & 3) == 3 && poll && !poll()) {
 			*stop = 1;
 			return;
 		}
@@ -1212,8 +1246,10 @@ static void synth_level(int16_t *a, long W, long s, int ox, int oy, int w, int h
 			for (k = 0; k < w; k++)
 				p[k * s] = (int16_t)(p[k * s] / 2);
 	} else if (rev) {
-		lift_rows(p, s, w, rs, h, lo_y, L_53LO);
-		lift_rows(p, s, w, rs, h, 1 - lo_y, L_53HI);
+		if (!lift_rows(p, s, w, rs, h, lo_y, L_53LO, poll) || !lift_rows(p, s, w, rs, h, 1 - lo_y, L_53HI, poll)) {
+			*stop = 1;
+			return;
+		}
 	} else {
 		if (!fold)
 			for (k = 0; k < h; k++) {
@@ -1223,10 +1259,11 @@ static void synth_level(int16_t *a, long W, long s, int ox, int oy, int w, int h
 				for (j = 0; j < w; j++, q += s)
 					*q = (int16_t)SCALE(*q, f);
 			}
-		lift_rows(p, s, w, rs, h, lo_y, L_D);
-		lift_rows(p, s, w, rs, h, 1 - lo_y, L_G);
-		lift_rows(p, s, w, rs, h, lo_y, L_B);
-		lift_rows(p, s, w, rs, h, 1 - lo_y, L_A);
+		if (!lift_rows(p, s, w, rs, h, lo_y, L_D, poll) || !lift_rows(p, s, w, rs, h, 1 - lo_y, L_G, poll) ||
+		    !lift_rows(p, s, w, rs, h, lo_y, L_B, poll) || !lift_rows(p, s, w, rs, h, 1 - lo_y, L_A, poll)) {
+			*stop = 1;
+			return;
+		}
 	}
 	if (poll && !poll())
 		*stop = 1;
@@ -1258,7 +1295,7 @@ static uint8_t clamp8(long v)
 #define CL8(v) ((v) < 0 ? 0 : (v) > 255 ? 255 : (v))
 #define RND (1 << (FRAC - 1))
 
-HOT static void emit(DEC *dc, long y, const int16_t *s, int sgnd)
+HOT static int emit(DEC *dc, long y, const int16_t *s, int sgnd)
 {
 	int x, w = dc->ow;
 	long half = (sgnd && !dc->ycc ? 0 : 128L) << FRAC;
@@ -1274,7 +1311,7 @@ HOT static void emit(DEC *dc, long y, const int16_t *s, int sgnd)
 			o[x] = (uint8_t)CL8(v);
 		}
 		dc->row(dc->u, y, o);
-		return;
+		return (y & 3) != 3 || !dc->poll || dc->poll();
 	}
 	p1 = dc->plane[1] + y * w;
 	p2 = dc->plane[2] + y * w;
@@ -1311,6 +1348,7 @@ HOT static void emit(DEC *dc, long y, const int16_t *s, int sgnd)
 			o[2] = (uint8_t)CL8(B);
 		}
 	dc->row(dc->u, y, dc->line);
+	return (y & 3) != 3 || !dc->poll || dc->poll();	/* (a turn every 4 rows) */
 }
 
 /* the tile's tile-component c: its resolutions kept decoded into a buffer
@@ -1328,7 +1366,17 @@ static int tile_comp(DEC *dc, TC *tc, int ci, int keep)
 
 	if (W <= 0 || H <= 0)
 		return JPX_OK;
-	a = calloc((size_t)W * H, sizeof *a);
+	a = malloc((size_t)W * H * sizeof *a);
+	if (a) {
+		/* (cleared in pieces with turns: 2 MB whole is 120 ms on Falcon-4) */
+		long done, n = (long)W * H;
+
+		for (done = 0; done < n && rc == JPX_OK; done += 32768L) {
+			memset(a + done, 0, (size_t)(n - done < 32768L ? n - done : 32768L) * sizeof *a);
+			if (dc->poll && !dc->poll())
+				rc = JPX_STOPPED;
+		}
+	}
 	{
 		int mw = 1 << tc->t->xcb, mh = 1 << tc->t->ycb;
 
@@ -1339,6 +1387,8 @@ static int tile_comp(DEC *dc, TC *tc, int ci, int keep)
 		rc = JPX_MEMORY;
 		goto out;
 	}
+	if (rc != JPX_OK)
+		goto out;
 	/* each code-block's coefficients to their samples' places: resolution
 	   r's 2^(L - r) apart, a band's every other one of them */
 	for (r = 0; r < keep && rc == JPX_OK; r++) {
@@ -1358,9 +1408,7 @@ static int tile_comp(DEC *dc, TC *tc, int ci, int keep)
 					long px = (r ? sr * (2L * c->x0 + xo) : sr * c->x0) - top->x0;
 					long py = (r ? sr * (2L * c->y0 + yo) : sr * c->y0) - top->y0;
 
-					rc = t1_block(c, B, tc->t->style, rev, fold, prec, a + py * W + px, xs, xs * W, cv, cf);
-					if (dc->poll && !dc->poll())
-						rc = JPX_STOPPED;
+					rc = t1_block(c, B, tc->t->style, rev, fold, prec, a + py * W + px, xs, xs * W, cv, cf, dc->poll);
 				}
 			}
 	}
@@ -1385,7 +1433,8 @@ static int tile_comp(DEC *dc, TC *tc, int ci, int keep)
 		if (W != dc->ow || H != dc->oh)
 			rc = JPX_DAMAGED;
 		for (y = 0; y < H && rc == JPX_OK; y++)
-			emit(dc, y, a + (long)y * W, cs->c[0].sgnd);
+			if (!emit(dc, y, a + (long)y * W, cs->c[0].sgnd))
+				rc = JPX_STOPPED;
 		goto out;
 	}
 	/* into the component's plane at the tile's place: 8 bits, DC shifted
@@ -1400,6 +1449,10 @@ static int tile_comp(DEC *dc, TC *tc, int ci, int keep)
 		for (y = 0; y < H; y++, s += W) {
 			uint8_t *o;
 
+			if ((y & 15) == 15 && dc->poll && !dc->poll()) {
+				rc = JPX_STOPPED;
+				break;
+			}
 			if (oy + y < 0 || oy + y >= dc->oh)
 				continue;
 			o = dc->plane[ci] + (long)(oy + y) * pw + ox;
@@ -1481,9 +1534,14 @@ static int tile(DEC *dc, int t, const uint8_t *body, long blen, TCC *tcc)
 	}
 	if (rc == JPX_OK && !(inc = malloc((size_t)(most ? most : 1) * sizeof *inc)))
 		rc = JPX_MEMORY;
-	/* tier 2: every packet read in the tile's order */
+	/* tier 2: every packet read in the tile's order (a turn every 64) */
 	if (rc == JPX_OK) {
 		int L = cs->layers, prog = cs->prog;
+		long npk = 0;
+
+#define PACKET(cs_, R_, k_, l_)                                                              \
+	((rc = packet((cs_), (R_), (k_), (l_), &p, end, inc)) == JPX_OK && (++npk & 63) == 0 && \
+		 dc->poll && !dc->poll() ? JPX_STOPPED : rc)
 
 		if (prog == 0 || prog == 1) {
 			int o1, o2, nl1 = prog == 0 ? L : need, nl2 = prog == 0 ? need : L;
@@ -1499,7 +1557,7 @@ static int tile(DEC *dc, int t, const uint8_t *body, long blen, TCC *tcc)
 						if (res >= tcs[ci].nres)
 							continue;
 						for (k = 0; k < (long)R->pw * R->ph && rc == JPX_OK; k++)
-							rc = packet(cs, R, k, lay, &p, end, inc);
+							rc = PACKET(cs, R, k, lay);
 					}
 				}
 		} else if (prog >= 2 && prog <= 4) {
@@ -1512,15 +1570,16 @@ static int tile(DEC *dc, int t, const uint8_t *body, long blen, TCC *tcc)
 				for (r = 0; r < need && rc == JPX_OK; r++)
 					for (ci = 0; ci < cs->nc && rc == JPX_OK; ci++)
 						for (l = 0; l < L && rc == JPX_OK && r < tcs[ci].nres; l++)
-							rc = packet(cs, &tcs[ci].r[r], 0, l, &p, end, inc);
+							rc = PACKET(cs, &tcs[ci].r[r], 0, l);
 			} else {
 				for (ci = 0; ci < cs->nc && rc == JPX_OK; ci++)
 					for (r = 0; r < tcs[ci].nres && rc == JPX_OK; r++)
 						for (l = 0; l < L && rc == JPX_OK; l++)
-							rc = packet(cs, &tcs[ci].r[r], 0, l, &p, end, inc);
+							rc = PACKET(cs, &tcs[ci].r[r], 0, l);
 			}
 		} else
 			rc = JPX_UNSUPPORTED;
+#undef PACKET
 	}
 	/* tier 1 and the synthesis, a component at a time: those in the planes
 	   first, component 0 last (one tile: its rows go straight out); those
@@ -1605,6 +1664,7 @@ int jpx_decode(const uint8_t *d, long n, int reduce, JPX_ROW row, void *u, int (
 	dc.cs = cs;
 	dc.reduce = reduce;
 	dc.poll = poll;
+	cs->poll = poll;
 	dc.row = row;
 	dc.u = u;
 	dc.ow = ceilpow(cs->X1, reduce) - ceilpow(cs->X0, reduce);
@@ -1689,8 +1749,9 @@ int jpx_decode(const uint8_t *d, long n, int reduce, JPX_ROW row, void *u, int (
 			r = JPX_MEMORY;
 		for (y = 0; y < dc.oh && r == JPX_OK; y++) {
 			for (x = 0; x < dc.ow; x++)
-				v[x] = (int16_t)(((long)dc.plane[0][y * dc.ow + x] - half) << FRAC);
-			emit(&dc, y, v, cs->c[0].sgnd);
+				v[x] = (int16_t)(((long)dc.plane[0][y * dc.ow + x] - half) * (1 << FRAC));
+			if (!emit(&dc, y, v, cs->c[0].sgnd))
+				r = JPX_STOPPED;
 		}
 		free(v);
 	}

@@ -21,6 +21,8 @@ extern long heap_use, heap_peak;
 
 static long out_h = -1;
 
+int main(void);
+
 static void emit(const char *line)
 {
 	long n = (long)strlen(line);
@@ -65,15 +67,23 @@ static void row(void *u, long y, const uint8_t *px)
 
 static int poll_count;
 static long last_us, gap_us;
+static void *gap_at, *gap_from, *last_at;
 
-/* the decoder's turn: how often, and the longest stretch without one */
-static int poll(void)
+/* the decoder's turn: how often, and the longest stretch without one (where
+   it began and the call that ended it: their addresses, less main's, for
+   the ELF's nm) */
+static int __attribute__((noinline)) poll(void)
 {
 	long now = pdf_us();
+	void *at = __builtin_return_address(0);
 
-	if (now - last_us > gap_us)
+	if (now - last_us > gap_us) {
 		gap_us = now - last_us;
+		gap_at = at;
+		gap_from = last_at;
+	}
 	last_us = now;
+	last_at = at;
 	poll_count++;
 	return 1;
 }
@@ -100,14 +110,15 @@ static void one(const char *file, int reduce)
 	t0 = pdf_us();
 	last_us = t0;
 	gap_us = 0;
+	gap_at = gap_from = last_at = NULL;
 	if (r == JPX_OK)
 		r = jpx_decode(d, n, reduce, row, NULL, poll, &w, &h, &c);
 	t = pdf_us() - t0;
 	snprintf(line, sizeof line,
 		 "{\"file\":\"%s\",\"bytes\":%ld,\"reduce\":%d,\"w\":%d,\"h\":%d,\"c\":%d,\"r\":%d,\"ms\":%ld,\"first_row_ms\":%ld,"
-		 "\"heap_kb\":%ld,\"polls\":%d,\"gap_ms\":%ld,\"hash\":%lu}",
+		 "\"heap_kb\":%ld,\"polls\":%d,\"gap_ms\":%ld,\"gap_from\":%ld,\"gap_at\":%ld,\"hash\":%lu}",
 		 file, n, reduce, w, h, c, r, t / 1000, first_row_us / 1000, (heap_peak - heap_use) / 1024, poll_count, gap_us / 1000,
-		 hsh);
+		 gap_from ? (long)((char *)gap_from - (char *)main) : 0L, gap_at ? (long)((char *)gap_at - (char *)main) : 0L, hsh);
 	emit(line);
 	free(d);
 }
