@@ -404,8 +404,16 @@ at first. This section is kept up to date: the build, the tests, what a release 
   35 ms or under on Falcon-4 (16 Nov 2026). Cost on Falcon-4: a JPX picture 13 s (181 x 424) to 61 s
   (414 x 632 of a dense scan; the MQ coder's decisions and the lifting), a JBIG2 page 18-39 s;
   ST-1 a 163 x 237 grey JPX 14 s. render.ovl +42 KB (JPX 20 KB, JBIG2 16 KB), its reservation the
-  same. Pads against 2.35: EP_PAD_H after pdfimg.o, EP_PAD_I after jpx.o (and their _RO, with
-  EP_PAD_A_RO), PIC_PAD / EC_PIC_PAD / RV_PIC_PAD +48, render.c's RPAD_A -96 (image_hook's soft mask).
+  same. A picture's work in the status bar (the hub: a JPX page is a long wait): jpx_progress (code-blocks)
+  and jb2_progress (symbols and placements) into pdfimg_work_done/_of, 900 of the bar's 1000 the
+  decoder's (doc_pic_progress; render.c's render_progress the same); Esc stops the picture and holds
+  the rest till the view moves (doc_pic_hold, pics_held: "picture-stopped"), leaving its page stops it
+  within a turn (pic_give_way); rig tests/hatari/jpxview.py (Falcon-4). Fuzzing found a text region's
+  coordinates overflowing (TR_LIM, 2^24) and a bomb of page-sized symbols: a page or region past 16 MB
+  a bit a pixel and the dictionaries' symbols past 8 MB together are JB2_MEMORY (JB2_MAX_BYTES,
+  JB2_DICT_BYTES). Pads against 2.35: EP_PAD_J after doc.o, EP_PAD_H after pdfimg.o, EP_PAD_I after
+  jpx.o (and their _RO, with EP_PAD_A_RO), PIC_PAD / EC_PIC_PAD / RV_PIC_PAD after pic.o (52 / 174 /
+  132 at 2.36), render.c's RPAD_A and RPAD_E (image_hook's soft mask, render_progress).
   2.11 (Erez's photos and choices, 10 Nov 2026: "Both", "Band on the page"): a converted copy's
   View > Pages on a Falcon/TT in colour is drawn sharp from its original by render.ovl over the stored
   page (doc.c's sharp_pages, pdbl.stand, doc_stand_in; the stored one decoded first, pics_next),
