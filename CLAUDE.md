@@ -414,6 +414,14 @@ at first. This section is kept up to date: the build, the tests, what a release 
   JB2_DICT_BYTES). Pads against 2.35: EP_PAD_J after doc.o, EP_PAD_H after pdfimg.o, EP_PAD_I after
   jpx.o (and their _RO, with EP_PAD_A_RO), PIC_PAD / EC_PIC_PAD / RV_PIC_PAD after pic.o (52 / 170 /
   128 at 2.36), render.c's RPAD_A and RPAD_E (image_hook's soft mask, render_progress).
+  Next, after 2.36 (Erez, 17 Nov 2026: "go with Faster display as default and lets see that the UI is
+  real enough"): the converter prepares pictures and whole pages in the screen's own colours, so EPDF
+  only unpacks and copies (the rigs' logs: on Falcon-4:256 a photo 1.2 s decoding, 6.7 s fitting to
+  the screen's colours). EConvert's Settings > General "Optimise for: Smaller files / Faster display",
+  Faster display the default, for the converting machine's screen; the Gateway the same from EPDF's
+  Open on the Gateway, for the screen EPDF runs on; a 256-colour whole page and its double; a file so
+  made opens anywhere, at today's speed where the screen differs. Measure on the showcase first; show
+  Erez the Settings page as the rig shoots it.
   2.11 (Erez's photos and choices, 10 Nov 2026: "Both", "Band on the page"): a converted copy's
   View > Pages on a Falcon/TT in colour is drawn sharp from its original by render.ovl over the stored
   page (doc.c's sharp_pages, pdbl.stand, doc_stand_in; the stored one decoded first, pics_next),
