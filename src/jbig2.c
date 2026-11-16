@@ -653,10 +653,19 @@ typedef struct {
 	JB2BM page;
 	int page_h_known;
 	int def_op;
+	long sym_bytes;		/* the dictionaries' symbols so far (JB2_DICT_BYTES) */
 	int (*poll)(void);
 } DEC;
 
 int jb2_whole_page;		/* (the tests: every page decoded whole) */
+
+/* the most a page or a region (16 MB a bit a pixel: 128 megapixels, an A3
+   page at 600 dpi is 70) and a dictionary's symbols (8 MB) may take: more
+   is a picture too big for the memory, and a bomb's 6 KB of thousands of
+   page-sized symbols (fuzz_jbig2) is refused at once, not decoded for
+   minutes; the dictionaries' bytes are counted together */
+#define JB2_MAX_BYTES (16L << 20)
+#define JB2_DICT_BYTES (8L << 20)
 
 /* the work before a page's rows: its symbols and placements, as met
    (jb2_progress; one page is decoded at a time) */
@@ -1073,6 +1082,10 @@ static int symbol_dict(DEC *dc, SEG *s)
 				r = JB2_DAMAGED;
 				goto out;
 			}
+			if ((dc->sym_bytes += (long)((symw + 7) >> 3) * hcheight) > JB2_DICT_BYTES) {
+				r = JB2_MEMORY;
+				goto out;
+			}
 			if ((r = bm_new_turns(b, symw, hcheight, dc->poll)) <= 0) {
 				r = r ? JB2_STOPPED : JB2_MEMORY;
 				goto out;
@@ -1225,7 +1238,8 @@ static int region_info(const SEG *s, RINFO *ri)
 	ri->x = (int)r32(s->d + 8);
 	ri->y = (int)r32(s->d + 12);
 	ri->op = s->d[16] & 7;
-	return ri->w >= 0 && ri->h >= 0 && ri->w < 65536 && ri->h < 65536;
+	return ri->w >= 0 && ri->h >= 0 && ri->w < 65536 && ri->h < 65536 &&
+	       (long)((ri->w + 7) >> 3) * ri->h <= JB2_MAX_BYTES;
 }
 
 /* the page grown to hold rows to y (a page of unknown height, striped) */
@@ -1471,6 +1485,8 @@ static int page_info(DEC *dc, SEG *s)
 	}
 	if (h > 65535)
 		return JB2_DAMAGED;
+	if ((long)((w + 7) >> 3) * (long)h > JB2_MAX_BYTES)
+		return JB2_MEMORY;
 	dc->page_h_known = 1;
 	return bm_new(&dc->page, (int)w, (int)h, (fl >> 2) & 1) ? JB2_OK : JB2_MEMORY;
 }
@@ -1757,6 +1773,8 @@ static int stream_open(JB2 *j)
 			j->defpix = (s->d[16] >> 2) & 1;
 			if (j->w <= 0 || j->w > 65535 || j->h <= 0 || j->h > 65535)
 				r = JB2_DAMAGED;
+			else if ((long)((j->w + 7) >> 3) * j->h > JB2_MAX_BYTES)
+				r = JB2_MEMORY;
 			break;
 		case 38:
 		case 39: {
