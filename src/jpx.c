@@ -280,8 +280,16 @@ static int main_header(CS *c, long *p)
 				if (c->c[i].dx < 1 || c->c[i].dy < 1 || c->c[i].prec > 16)
 					return JPX_UNSUPPORTED;
 			}
+			/* the tiles' grid as T.800 has it (offsets from 0 up, the first
+			   tile over the picture's corner) and at most 65,535 tiles: their
+			   numbers are 16 bits (fuzz_jpx: a product past an int) */
+			if (c->X0 < 0 || c->Y0 < 0 || c->TX0 < 0 || c->TY0 < 0 || c->TX0 > c->X0 || c->TY0 > c->Y0 ||
+			    (long)c->TX0 + c->TW <= c->X0 || (long)c->TY0 + c->TH <= c->Y0)
+				return JPX_DAMAGED;
 			c->ntx = ceildiv(c->X1 - c->TX0, c->TW);
 			c->nty = ceildiv(c->Y1 - c->TY0, c->TH);
+			if (c->ntx < 1 || c->nty < 1 || (long)c->ntx * c->nty > 65535L)
+				return JPX_DAMAGED;
 			got_siz = 1;
 		} else if (got_siz) {
 			int r = header_marker(c, c->tcc, m, d + q + 4, (long)L - 2, &pm);
