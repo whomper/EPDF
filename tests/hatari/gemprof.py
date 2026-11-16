@@ -40,6 +40,17 @@ _spec = importlib.util.spec_from_file_location("aera_gemprof", os.path.join(TOP,
 gemprof = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(gemprof)
 
+# AERA_WITH_NVDI=1 (as speed.py takes it): the profiled machine with NVDI,
+# Erez's configuration (common's Profiler makes its Rig without it)
+if os.environ.get("AERA_WITH_NVDI") == "1":
+    _BaseRig = gemprof.speed.Rig
+
+    class _NvdiRig(_BaseRig):
+        def __init__(self, *a, **k):
+            k["nvdi"] = True
+            _BaseRig.__init__(self, *a, **k)
+    gemprof.speed.Rig = _NvdiRig
+
 ACTIONS = {
     "line": ("a line scrolled", lambda r: r.key("Down")),
     "lineup": ("a line scrolled up", lambda r: r.key("Up")),
