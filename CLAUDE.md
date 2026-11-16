@@ -412,8 +412,10 @@ at first. This section is kept up to date: the build, the tests, what a release 
   coordinates overflowing (TR_LIM, 2^24) and a bomb of page-sized symbols: a page or region past 16 MB
   a bit a pixel and the dictionaries' symbols past 4 MB together (the corpus's biggest is 699 KB) are JB2_MEMORY (JB2_MAX_BYTES,
   JB2_DICT_BYTES). Pads against 2.35: EP_PAD_J after doc.o, EP_PAD_H after pdfimg.o, EP_PAD_I after
-  jpx.o (and their _RO, with EP_PAD_A_RO), PIC_PAD / EC_PIC_PAD / RV_PIC_PAD after pic.o (52 / 170 /
-  128 at 2.36), render.c's RPAD_A and RPAD_E (image_hook's soft mask, render_progress).
+  jpx.o (and their _RO, with EP_PAD_A_RO), PIC_PAD (CONVTEST) / EC_PIC_PAD / RV_PIC_PAD after pic.o
+  (164 / 170 / 128 at 2.36), render.c's RPAD_A and RPAD_E (image_hook's soft mask, render_progress);
+  after common's crash.o and progbar.o (AERA-Atari 1c01cfd: crash.c's interrupt-time faults, the
+  256-colour bar without violets) EP_PAD_K / EP_PAD_L and EConvert's EC_CR_PAD / EC_PB_PAD.
   Next, after 2.36 (Erez, 17 Nov 2026: "go with Faster display as default and lets see that the UI is
   real enough"): the converter prepares pictures and whole pages in the screen's own colours, so EPDF
   only unpacks and copies (the rigs' logs: on Falcon-4:256 a photo 1.2 s decoding, 6.7 s fitting to
