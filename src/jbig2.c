@@ -885,22 +885,30 @@ static const JB2BM *place_bm(const PLACE *p)
 	return p->b ? p->b : &p->own;
 }
 
+/* a text region's coordinates are sums of numbers the stream gives, each
+   as big as 2^31: any beyond 2^24 (no page is near it) is damage, and the
+   sums can't overflow (fuzz_jbig2 found one) */
+#define TR_LIM (1L << 24)
+#define TR_OUT(v) ((v) > TR_LIM || (v) < -TR_LIM)
+
 static int text_region(MQ *m, TXCX *c, const TXP *tp, PSINK *sink, JB2BM **syms, int nsyms, int (*poll)(void))
 {
 	int32_t stript, firsts = 0, dt, curs, v;
 	uint32_t ninst = 0;
 	enum { BL, TL, BR, TR };
 
-	if (ia_int(m, &c->dt, &stript))
+	if (ia_int(m, &c->dt, &stript) || TR_OUT(stript))
 		return JB2_DAMAGED;
 	work(0, (long)tp->ninst);
 	stript *= -tp->strips;
 	while (ninst < tp->ninst) {
 		int first = 1;
 
-		if (ia_int(m, &c->dt, &dt))
+		if (ia_int(m, &c->dt, &dt) || TR_OUT(dt))
 			return JB2_DAMAGED;
 		stript += dt * tp->strips;
+		if (TR_OUT(stript))
+			return JB2_DAMAGED;
 		for (;;) {
 			int32_t curt = 0, t, x, y;
 			uint32_t id;
@@ -908,19 +916,21 @@ static int text_region(MQ *m, TXCX *c, const TXP *tp, PSINK *sink, JB2BM **syms,
 			int ri = 0, wi, hi, own = 0;
 
 			if (first) {
-				if (ia_int(m, &c->fs, &v))
+				if (ia_int(m, &c->fs, &v) || TR_OUT(v))
 					return JB2_DAMAGED;
 				firsts += v;
+				if (TR_OUT(firsts))
+					return JB2_DAMAGED;
 				curs = firsts;
 				first = 0;
 			} else {
 				if (ia_int(m, &c->ds, &v))
 					break;		/* OOB: the strip's end (read after the last too) */
-				if (ninst >= tp->ninst)
+				if (ninst >= tp->ninst || TR_OUT(v))
 					return JB2_DAMAGED;
 				curs += v + tp->dsoffset;
 			}
-			if (tp->strips != 1 && ia_int(m, &c->it, &curt))
+			if ((tp->strips != 1 && ia_int(m, &c->it, &curt)) || TR_OUT(curs) || TR_OUT(curt))
 				return JB2_DAMAGED;
 			t = stript + curt;
 			id = ia_id(m, c->id, c->idlen);
@@ -933,7 +943,8 @@ static int text_region(MQ *m, TXCX *c, const TXP *tp, PSINK *sink, JB2BM **syms,
 				int32_t rdw, rdh, rdx, rdy;
 
 				if (ia_int(m, &c->rdw, &rdw) || ia_int(m, &c->rdh, &rdh) || ia_int(m, &c->rdx, &rdx) ||
-				    ia_int(m, &c->rdy, &rdy))
+				    ia_int(m, &c->rdy, &rdy) || TR_OUT(rdw) || TR_OUT(rdh) || TR_OUT(rdx) || TR_OUT(rdy) ||
+				    ib->w + rdw < 0 || ib->w + rdw > 65535 || ib->h + rdh < 0 || ib->h + rdh > 65535)
 					return JB2_DAMAGED;
 				if (!bm_new(&rb, ib->w + rdw, ib->h + rdh, 0))
 					return JB2_MEMORY;
