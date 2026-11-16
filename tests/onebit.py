@@ -11,7 +11,7 @@ Each PDF shows the same picture, dark bars on white paper, through one
 encoding: DeviceGray samples (Flate) as they are and with /Decode [1 0];
 an ImageMask painted where 0 and, with /Decode [1 0], where 1; CCITT G4
 with BlackIs1 false and true; JBIG2 (a generic region, made here) with
-and without JBIG2Globals. A picture is right when its bars are dark and
+and without JBIG2Globals; JPEG 2000 in grey and in colour. A picture is right when its bars are dark and
 its paper light, as poppler draws it. Exit 1 if any isn't.
 """
 import os
@@ -145,6 +145,25 @@ def cases():
            [smask + b" /Filter /FlateDecode", zlib.compress(pack(ink))])
     yield ("smask-jbig2", img8 + b" /Filter /FlateDecode", black,
            [smask + b" /Filter /JBIG2Decode", jbig2_generic(False)])
+    # JPEG 2000 (src/jpx.c): the bars in grey and in colour, OpenJPEG's
+    yield "jpx-grey", b"<< /Type /XObject /Subtype /Image /Width %d /Height %d /Filter /JPXDecode" % (W, H), jpx("L"), False
+    yield ("jpx-rgb", b"<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB /BitsPerComponent 8"
+           b" /Filter /JPXDecode" % (W, H), jpx("RGB"), False)
+
+
+def jpx(mode):
+    """the bars as a JP2 file (Pillow's OpenJPEG), dark blue in colour"""
+    import io
+    from PIL import Image
+    im = Image.new(mode, (W, H), "white")
+    px = im.load()
+    for y in range(H):
+        for x in range(W):
+            if ink(x, y):
+                px[x, y] = 0 if mode == "L" else (10, 20, 90)
+    b = io.BytesIO()
+    im.save(b, "JPEG2000", irreversible=True)
+    return b.getvalue()
 
 
 def score(path, size):

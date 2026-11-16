@@ -11,8 +11,9 @@
  *   no image filter DeviceGray, DeviceRGB, Indexed (and CalGray, CalRGB,
  *                   ICCBased taken by their number of colours), 1 or 8
  *                   bits a component
- *   JBIG2Decode     src/jbig2.c, the page whole, then as CCITT
- * JPXDecode can't be shown (PIC_UNSUPPORTED).
+ *   JBIG2Decode     src/jbig2.c, a row at a time, then as CCITT
+ *   JPXDecode       src/jpx.c, reduced (a half, a quarter...) while it
+ *                   stays at least as big as shown, then sampled
  *
  * pic_poll (pic.h) is called every few rows here too: the caller's turn
  * for the machine, and its way to stop.
@@ -23,6 +24,7 @@
 #include "pic.h"
 #include "ccitt.h"
 #include "jbig2.h"
+#include "jpx.h"
 #include "rscale.h"
 #include "pdfimg.h"
 
@@ -441,6 +443,8 @@ static PIC *from_jbig2(PDOC *d, POBJ *o, const unsigned char *s, long n, long sh
 	return p;
 }
 
+static PIC *from_jpx(PDOC *d, POBJ *o, const unsigned char *s, long n, int w, int h, int *why);
+
 static PIC *image_whole(PDOC *d, long obj, int w, int h, long max_bytes, int *why)
 {
 	POBJ *o = pdf_get(d, obj), *cs;
@@ -481,8 +485,10 @@ static PIC *image_whole(PDOC *d, long obj, int w, int h, long max_bytes, int *wh
 		p = from_ccitt(d, o, (const unsigned char *)b.s, b.len, sw, sh, w, h, why);
 	else if (term && !strcmp(term, "JBIG2"))
 		p = from_jbig2(d, o, (const unsigned char *)b.s, b.len, sh, w, h, max_bytes, why);
+	else if (term && !strcmp(term, "JPX"))
+		p = from_jpx(d, o, (const unsigned char *)b.s, b.len, w, h, why);
 	else if (term)
-		*why = PIC_UNSUPPORTED;		/* JPX */
+		*why = PIC_UNSUPPORTED;
 	else if (nc == 0)
 		*why = PIC_UNSUPPORTED;
 	else
@@ -768,6 +774,115 @@ static int rows_jpeg(PDOC *d, POBJ *o, long obj, int w, int h, PIMG_ROW row, voi
 	return r;
 }
 
+/* a JPEG 2000 picture (its bytes s, n whole): decoded reduced by 2^r, the
+   largest r it stays at least w x h at, each shown row the decoded one at
+   its place (as from_samples); the PDF's Indexed colours taken for a grey
+   one's samples */
+typedef struct {
+	ROWS *out;
+	long rh;			/* the decoded rows */
+	SMK m;
+	int stop;
+} JXR;
+
+static void jpx_row(void *u, long y, const unsigned char *px)
+{
+	JXR *j = u;
+
+	j->m.r = px;
+	if (!j->stop && !emit(j->out, y, j->rh, make_samples, &j->m))
+		j->stop = 1;
+}
+
+static int jpx_why(int r)
+{
+	return r == JPX_MEMORY ? PIC_MEMORY : r == JPX_UNSUPPORTED ? PIC_UNSUPPORTED : r == JPX_STOPPED ? PIC_STOPPED : PIC_DAMAGED;
+}
+
+static int rows_jpx(PDOC *d, POBJ *o, const unsigned char *s, long n, ROWS *out, int *why)
+{
+	int jw, jh, jc, lv, r, red = 0, rw, rh, nc, hival = 0;
+	unsigned char pal[256 * 3];
+	long x, *xs;
+	JXR j;
+
+	if ((r = jpx_info(s, n, 0, &jw, &jh, &jc, &lv)) != JPX_OK) {
+		*why = jpx_why(r);
+		return 0;
+	}
+	while (red < lv && jw >> (red + 1) >= out->w && jh >> (red + 1) >= out->h)
+		red++;
+	nc = colours(d, pd_get(d, o, "ColorSpace"), pal, &hival);
+	if (!(nc < 0 && jc == 1))
+		nc = jc >= 3 ? 3 : 1;		/* (the code-stream's own colours) */
+	xs = malloc((size_t)out->w * sizeof *xs);
+	if (!xs) {
+		*why = PIC_MEMORY;
+		return 0;
+	}
+	/* refused memory before a row came (the decoder's 4 bytes a pixel kept,
+	   a 1 MB ST's): smaller, a half each time, rather than not at all */
+	do {
+		jpx_info(s, n, red, &rw, &rh, &jc, &lv);
+		for (x = 0; x < out->w; x++)
+			xs[x] = x * rw / out->w;
+		memset(&j, 0, sizeof j);
+		j.out = out;
+		j.rh = rh;
+		j.m.xs = xs;
+		j.m.w = out->w;
+		j.m.bpc = 8;
+		j.m.nc = nc;
+		j.m.pal = pal;
+		r = jpx_decode(s, n, red, jpx_row, &j, poll_ok, &jw, &jh, &jc);
+	} while (r == JPX_MEMORY && out->ny == 0 && red++ < lv);
+	free(xs);
+	if (r == JPX_OK && j.stop)
+		r = JPX_STOPPED;
+	if (r != JPX_OK) {
+		*why = jpx_why(r);
+		return 0;
+	}
+	return 1;
+}
+
+static void into_pic(void *u, long y, const unsigned short *px)
+{
+	PIC *p = u;
+
+	memcpy(p->px + y * p->w, px, (size_t)p->w * 2);
+}
+
+static PIC *from_jpx(PDOC *d, POBJ *o, const unsigned char *s, long n, int w, int h, int *why)
+{
+	PIC *p = pic_new(w, h);
+	ROWS out;
+
+	memset(&out, 0, sizeof out);
+	out.w = w;
+	out.h = h;
+	out.row = into_pic;
+	out.u = p;
+	out.out = malloc((size_t)w * 2);
+	if (!p || !out.out) {
+		free(out.out);
+		if (p)
+			pic_free(p);
+		*why = PIC_MEMORY;
+		return NULL;
+	}
+	if (!rows_jpx(d, o, s, n, &out, why) || out.ny < h) {
+		if (out.ny < h && *why == PIC_OK)
+			*why = PIC_DAMAGED;
+		free(out.out);
+		pic_free(p);
+		return NULL;
+	}
+	free(out.out);
+	p->how = PIC_PNG;
+	return p;
+}
+
 int pdf_image_palette(PDOC *d, long obj, unsigned char *pal, int *n)
 {
 	POBJ *o = pdf_get(d, obj), *fl;
@@ -885,8 +1000,6 @@ static int image_rows(PDOC *d, long obj, int w, int h, PIMG_ROW row, void *u, lo
 		fl = pdf_res(d, pa_at(fl, fl->a - 1));
 	if (fl && fl->t == PO_NAME)
 		fn = fl->u.p;
-	if (fn && !strcmp(fn, "JPXDecode"))
-		return -1;			/* not shown: pdf_image says so */
 	if (fn && (!strcmp(fn, "DCTDecode") || !strcmp(fn, "DCT")))
 		return rows_jpeg(d, o, obj, w, h, row, u, why);
 	sw = pd_int(d, o, "Width", 0);
@@ -930,7 +1043,7 @@ static int image_rows(PDOC *d, long obj, int w, int h, PIMG_ROW row, void *u, lo
 			r = rows_ccitt(d, o, NULL, (const unsigned char *)b.s, b.len, sw, sh, &out, why);
 		sb_free(&b);
 	} else if (fn && !strcmp(fn, "JBIG2Decode")) {
-		/* (decoded whole: a JBIG2 page's regions land anywhere on it) */
+		/* (its bytes whole; the page a row at a time, jbig2.c's streaming) */
 		SBUF b;
 		const char *term = NULL;
 		long oom = d->st.oom;
@@ -951,6 +1064,21 @@ static int image_rows(PDOC *d, long obj, int w, int h, PIMG_ROW row, void *u, lo
 			else
 				jbig2_done(&j, &gb, &(int){ 0 });
 		}
+		sb_free(&b);
+	} else if (fn && !strcmp(fn, "JPXDecode")) {
+		/* (decoded whole: a code-block's coefficients reach many rows) */
+		SBUF b;
+		const char *term = NULL;
+		long oom = d->st.oom;
+
+		sb_init(&b);
+		r = 0;
+		if (pdf_stream(d, o, obj, &b, &term, max_bytes) != 0)
+			*why = stream_why(d, &b, max_bytes, oom);
+		else if (!term || strcmp(term, "JPX"))
+			*why = PIC_DAMAGED;
+		else
+			r = rows_jpx(d, o, (const unsigned char *)b.s, b.len, &out, why);
 		sb_free(&b);
 	} else
 		r = rows_samples(d, o, obj, sw, sh, bpc, nc, pal, invert, &out, max_bytes, why);

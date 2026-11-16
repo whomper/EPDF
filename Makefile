@@ -45,7 +45,7 @@ build/textgold: tools/textgold.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSS
 build/pdftext: tools/pdftext.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HDRS) | build
 	$(CC) $(HCFLAGS) -o $@ tools/pdftext.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC)
 
-HPIC_SRC = src/pdfimg.c src/ccitt.c src/jbig2.c src/mq.c src/rscale.c common/src/pic.c common/src/png.c common/src/jpegdc.c \
+HPIC_SRC = src/pdfimg.c src/ccitt.c src/jbig2.c src/mq.c src/jpx.c src/rscale.c common/src/pic.c common/src/png.c common/src/jpegdc.c \
            common/third_party/tjpgd/tjpgd.c common/third_party/nsgif/src/gif.c common/third_party/nsgif/src/lzw.c
 build/imgshow: tools/imgshow.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HPIC_SRC) $(HDRS) | build
 	$(CC) $(HCFLAGS) -Icommon/third_party/tjpgd -Icommon/third_party/nsgif/include -Icommon/third_party/nsgif/src -w \
@@ -87,11 +87,15 @@ build/test_tstore build/test_docview: build/test_%: tests/test_%.c $(VIEW_TEST_S
 build/test_xe: tests/test_xe.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HDRS) | build
 	$(CC) $(HCFLAGS) -fsanitize=address,undefined -o $@ tests/test_xe.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC)
 
+# JPEG 2000 on the host (tests/jpx.py: against OpenJPEG's)
+build/jpxdec: tools/jpxdec.c src/jpx.c src/mq.c src/jpx.h src/mq.h | build
+	$(CC) $(HCFLAGS) -fsanitize=address,undefined -o $@ tools/jpxdec.c src/jpx.c src/mq.c
+
 # JBIG2 on the host (tests/jbig2.py: against poppler's)
 build/jb2dec: tools/jb2dec.c src/jbig2.c src/mq.c src/ccitt.c src/jbig2.h src/mq.h src/ccitt.h | build
 	$(CC) $(HCFLAGS) -fsanitize=address,undefined -o $@ tools/jb2dec.c src/jbig2.c src/mq.c src/ccitt.c
 
-test: build/test_xe build/test_ccitt build/test_textview build/test_inf build/test_tstore build/test_docview build/test_search build/pdftext build/econvert build/test_pens build/test_trpara build/jb2dec build/imgshow
+test: build/test_xe build/test_ccitt build/test_textview build/test_inf build/test_tstore build/test_docview build/test_search build/pdftext build/econvert build/test_pens build/test_trpara build/jb2dec build/jpxdec build/imgshow
 	build/test_xe
 	build/test_pens
 	build/test_trpara
@@ -99,6 +103,7 @@ test: build/test_xe build/test_ccitt build/test_textview build/test_inf build/te
 	python3 tests/translate.py
 	python3 tests/ccitt.py
 	python3 tests/jbig2.py build/jbig2
+	python3 tests/jpx.py build/jpx
 	python3 tests/onebit.py build/onebit
 	python3 tests/glyphwise.py
 	python3 tests/crypt.py
@@ -166,6 +171,7 @@ binary/LAUNCH.PRG: XCPU = -m68000 -mstrict-align -fdisable-tree-bswap
 build/m68000/common/ui/%: XOPT = -Os
 # JBIG2 for size, its inner loops at -O2 (jbig2.c's HOT): 20.8 KB -> 12.2 KB on a 68000
 build/m68000/src/jbig2.o build/m68030/src/jbig2.o build/m68030cv/src/jbig2.o build/m68000ec/src/jbig2.o: XOPT = -Os
+build/m68000/src/jpx.o build/m68030/src/jpx.o build/m68030cv/src/jpx.o build/m68000ec/src/jpx.o build/m68030ovl/src/jpx.o: XOPT = -Os
 $(eval $(call ATARI_BUILD,m68000))
 $(eval $(call ATARI_BUILD,m68030))
 $(eval $(call ATARI_BUILD,m68030cv))
@@ -299,7 +305,7 @@ HLJ_OBJS = $(addprefix build/host-lj/,$(addsuffix .o,$(LJ_C)))
 build/host-lj/%.o: $(LJ)/src/%.c
 	@mkdir -p $(dir $@)
 	@$(CC) -O2 -w $(LJ_DEFS) -c -o $@ $<
-CPIC_SRC = src/pdfimg.c src/ccitt.c src/jbig2.c src/mq.c src/rscale.c common/src/pic.c common/src/png.c common/src/pic_lj8.c \
+CPIC_SRC = src/pdfimg.c src/ccitt.c src/jbig2.c src/mq.c src/jpx.c src/rscale.c common/src/pic.c common/src/png.c common/src/pic_lj8.c \
            common/third_party/nsgif/src/gif.c common/third_party/nsgif/src/lzw.c
 build/econvert: tools/econvert.c $(CONV_SRC) src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(CPIC_SRC) $(HFT_OBJS) $(HLJ_OBJS) $(HDRS) src/conv/*.h | build
 	$(CC) $(HCFLAGS) -DPDF_DRAW -Isrc/conv -Isrc/view -I$(FT)/include '-DFT_CONFIG_OPTIONS_H="epdf/ftoption.h"' '-DFT_CONFIG_MODULES_H="epdf/ftmodule.h"' -I$(FT) \
@@ -371,6 +377,21 @@ binary/JB2B30.PRG: $(addprefix build/m68030/,$(JB2B_OBJ)) build/m68030/crt0.o bu
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68030/jb2bench.elf \
 	  build/m68030/crt0.o build/m68030/nf.o $(addprefix build/m68030/,$(JB2B_OBJ)) -lgcc
 	python3 common/tools/elf2tos.py build/m68030/jb2bench.elf $@
+# JPXBENCH.PRG / JPXB30.PRG (tests/hatari/jpxbench.py): a JPEG 2000 picture's time and memory
+JPXB_SRC   = atari/jpxbench.c src/jpx.c src/mq.c src/pdfio_tos.c $(COMMON_SRC) $(RT_C)
+JPXB_OBJ   = $(patsubst %.c,%.o,$(JPXB_SRC))
+binary/JPXBENCH.PRG: XCPU = -m68000 -mstrict-align -fdisable-tree-bswap
+binary/JPXBENCH.PRG: $(addprefix build/m68000/,$(JPXB_OBJ)) build/m68000/crt0.o build/m68000/nf.o common/atari/link.ld | binary
+	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
+	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68000/jpxbench.elf \
+	  build/m68000/crt0.o build/m68000/nf.o $(addprefix build/m68000/,$(JPXB_OBJ)) -lgcc
+	python3 common/tools/elf2tos.py build/m68000/jpxbench.elf $@
+binary/JPXB30.PRG: XCPU = -m68030 -msoft-float
+binary/JPXB30.PRG: $(addprefix build/m68030/,$(JPXB_OBJ)) build/m68030/crt0.o build/m68030/nf.o common/atari/link.ld | binary
+	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
+	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68030/jpxbench.elf \
+	  build/m68030/crt0.o build/m68030/nf.o $(addprefix build/m68030/,$(JPXB_OBJ)) -lgcc
+	python3 common/tools/elf2tos.py build/m68030/jpxbench.elf $@
 binary/IMGB30.PRG: XCPU = -m68030 -msoft-float
 binary/IMGB30.PRG: $(addprefix build/m68030/,$(IMG_OBJ)) build/m68030/crt0.o build/m68030/nf.o common/atari/link.ld | binary
 	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
@@ -408,7 +429,7 @@ fttest: binary/FTTEST.PRG binary/FTTEST30.PRG
 # (CONVTEST.PRG, tests/hatari/convtest.py; ECONVERT.PRG's core): the reader with
 # its drawing hooks, the renderer, FreeType, libjpeg-turbo, all soft-float
 CV_ATARI_SRC = $(CONV_SRC) src/conv/cvio_tos.c src/pdfio_tos.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) \
-               src/pdfimg.c src/ccitt.c src/jbig2.c src/mq.c src/rscale.c common/src/pic.c common/src/png.c common/src/pic_lj8.c \
+               src/pdfimg.c src/ccitt.c src/jbig2.c src/mq.c src/jpx.c src/rscale.c common/src/pic.c common/src/png.c common/src/pic_lj8.c \
                $(T)/nsgif/src/gif.c $(T)/nsgif/src/lzw.c common/atari/dspjpeg.c $(LJ_SRC) $(RT_C)
 CV_XFLAGS = -DPDF_DRAW -DPIC_LIBJPEG -DNO_GETENV -DNO_PUTENV -DAERA_NO_FLOAT -fwrapv -I$(LJ)/src -I$(LJ)/config \
             -I$(T)/nsgif/include -I$(T)/nsgif/src -Isrc/conv -Isrc/view $(FT_INC) '-DFT_CONFIG_OPTIONS_H="epdf/ftoption.h"' \
@@ -418,7 +439,7 @@ build/m68030cv/$(LJ)/%.o build/m68030cv/$(T)/%.o: XFLAGS += -w
 build/m68030cv/common/src/inflate.o build/m68030cv/src/pdffilt.o: XFLAGS += -DINFLATE_ASM
 build/m68030cv/src/pdffilt.o: XFLAGS += -DSTREAM_PAD=$(STREAM_PAD)
 STREAM_PAD ?= 6
-JB2ASM = $(patsubst %/src/jbig2.o,%/src/jbig2.o %/src/jb2t0.o,$(1))
+JB2ASM = $(foreach o,$(1),$(o) $(patsubst %/src/jbig2.o,%/src/jb2t0.o,$(filter %/src/jbig2.o,$(o))))
 CV_ATARI_OBJ = $(call JB2ASM,$(patsubst %/common/src/charset.o,%/common/src/charset.o build/m68030/cspad.o,$(patsubst %/common/src/pic.o,%/common/src/pic.o build/m68030/picpad.o,$(patsubst %/common/atari/dspjpeg.o,%/common/atari/dspjpeg.o build/m68030/djpad.o,$(patsubst %/jdcoefct.o,%/jdcoefct.o build/m68030/ljpad.o,$(addprefix build/m68030cv/,$(patsubst %.c,%.o,$(CV_ATARI_SRC)))))))) build/m68030/inflate_fast.o \
                $(addprefix build/m68030/,$(FT_CV_OBJS))
 binary/CONVTEST.PRG: XCPU = -m68030 -msoft-float
@@ -509,7 +530,7 @@ FORCE:
 .PHONY: FORCE
 GEM_SRC = src/gem/epdf.c src/gem/doc.c src/gem/rdraw.c common/src/ovl.c src/gem/textwin.c src/gem/badge.c src/gem/find.c src/gem/font.c src/gem/pics.c src/gem/gemui.c src/gem/menu.c src/gem/about.c \
           src/view/textview.c src/view/docview.c src/view/tstore.c src/view/inf.c src/view/search.c common/ui/bgwork.c common/ui/twin.c \
-          src/pdfimg.c src/ccitt.c src/jbig2.c src/mq.c src/rscale.c $(PIC_SRC) \
+          src/pdfimg.c src/ccitt.c src/jbig2.c src/mq.c src/jpx.c src/rscale.c $(PIC_SRC) \
           common/atari/gem.c common/atari/crash.c common/ui/mbar.c common/ui/aboutbox.c common/ui/aboutline.c \
           common/ui/alert.c common/ui/dialog.c common/ui/field.c common/ui/av.c common/ui/text.c common/ui/clip.c common/ui/iconify.c common/ui/help.c common/ui/dd.c common/ui/popup.c common/ui/fontsel.c common/ui/click.c common/ui/progbar.c common/ui/enlarge.c \
           common/src/charset.c common/src/bidi.c common/ui/accmem.c common/atari/bigbuf.c common/atari/dspjpeg.c \
