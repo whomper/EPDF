@@ -174,20 +174,4 @@ void text_fx(short h, short x, short y, const char *s, long n, short fx, short c
    writing mode MD_REPLACE */
 void text_bold_strike(short h, short x, short y, const char *s, long n);
 
-/* A GDOS font's text, a row already in display order (common's bidi): each
-   run in its cells, and the Hebrew letters (TOS's codes 0xC2-0xDC) as the
-   font has them (EMail's way, the hub, 17 Nov 2026). After text_font, the
-   app tells it how the font gets its Hebrew (fontsel_hebrew's FS_HEB_*,
-   the index of each letter for FS_HEB_UNICODE, and the font's points, to
-   set it again after FS_HEB_SYSTEM's letters in the system font) and how
-   its runs fit their cells (text_cells_probe's answer, once a font). The
-   system font: FS_HEB_MAP and TEXT_RUNS, text_cells_n is text_n. */
-#define TEXT_RUNS    0	/* a run drawn in one call */
-#define TEXT_JUSTIFY 1	/* monospaced within a pixel a cell: made to fit them */
-#define TEXT_CELLS   2	/* a character a cell */
-void text_hebrew(short how, const unsigned short *idx, short pt);
-void text_cells(short how);
-short text_cells_probe(short h);
-void text_cells_n(short h, short x, short y, const char *s, long n);
-
 #endif
