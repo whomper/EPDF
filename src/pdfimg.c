@@ -834,6 +834,9 @@ static int rows_jpx(PDOC *d, POBJ *o, const unsigned char *s, long n, ROWS *out,
 		j.m.bpc = 8;
 		j.m.nc = nc;
 		j.m.pal = pal;
+		pdfimg_reduce = red;
+		pdfimg_dw = rw;
+		pdfimg_dh = rh;
 		r = jpx_decode(s, n, red, jpx_row, &j, poll_ok, &jw, &jh, &jc);
 	} while (r == JPX_MEMORY && out->ny == 0 && red++ < lv);
 	free(xs);
@@ -983,6 +986,8 @@ int pdf_image_raw_rows(PDOC *d, long obj, void (*row)(void *u, long y, const uns
 	return ok;
 }
 
+static void note_kind(PDOC *d, long obj);
+
 static int image_rows(PDOC *d, long obj, int w, int h, PIMG_ROW row, void *u, long max_bytes, int *why)
 {
 	POBJ *o = pdf_get(d, obj), *cs, *fl;
@@ -992,6 +997,7 @@ static int image_rows(PDOC *d, long obj, int w, int h, PIMG_ROW row, void *u, lo
 	const char *fn = NULL;
 	ROWS out;
 
+	note_kind(d, obj);	/* (here: a mask decoded before it began its own work, and cleared it) */
 	*why = PIC_DAMAGED;
 	if (!o || o->t != PO_DICT || w <= 0 || h <= 0)
 		return 0;
@@ -1209,6 +1215,11 @@ static void row_through(void *u, long y, const unsigned short *px)
 
 /* the decoders' work before a picture's rows (pdfimg.h) */
 long pdfimg_work_done, pdfimg_work_of;
+/* the picture last begun: its filter (the last of an array), and a JPEG
+   2000 one's reduction and size as decoded (-1: none); for the logs */
+const char *pdfimg_kind = "";
+int pdfimg_reduce = -1;
+long pdfimg_dw, pdfimg_dh;
 
 static void work_hook(long done, long of)
 {
@@ -1216,9 +1227,21 @@ static void work_hook(long done, long of)
 	pdfimg_work_of = of;
 }
 
+/* the filter a picture is decoded by (the last of an array), for the logs */
+static void note_kind(PDOC *d, long obj)
+{
+	POBJ *o = pdf_get(d, obj), *fl = o && o->t == PO_DICT ? pd_get(d, o, "Filter") : NULL;
+
+	if (fl && fl->t == PO_ARR && fl->a)
+		fl = pdf_res(d, pa_at(fl, fl->a - 1));
+	pdfimg_kind = fl && fl->t == PO_NAME ? fl->u.p : "none";
+}
+
 static void work_begin(void)
 {
 	pdfimg_work_done = pdfimg_work_of = 0;
+	pdfimg_reduce = -1;
+	pdfimg_dw = pdfimg_dh = 0;
 	jpx_progress = work_hook;
 	jb2_progress = work_hook;
 }
@@ -1231,6 +1254,7 @@ PIC *pdf_image(PDOC *d, long obj, int w, int h, long max_bytes, int *why)
 	SMASK m;
 
 	work_begin();
+	note_kind(d, obj);
 	p = image_whole(d, obj, w, h, max_bytes, why);
 
 	if (p && !pdfimg_raw_smask && (o = pdf_get(d, obj)) && (mo = smask_of(o)) >= 0 &&

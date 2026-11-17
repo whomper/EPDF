@@ -1746,6 +1746,7 @@ int main(void)
 					t0 = t1;
 				}
 			} else if ((doc_pic_busy() || pics_waiting()) && bg_may_work() &&
+				   !(doc_pending() && doc_pic_ahead_only()) &&
 				   ((pic_turn ^= 1) || !doc_pending() || pics_focus_busy())) {
 				/* (the page in focus's picture: every turn, the reading
 				   and the rest after it: Erez, 8 Nov 2026) */

@@ -21,6 +21,9 @@ int pdf_image_rows(PDOC *d, long obj, int w, int h, PIMG_ROW row, void *u, long 
 /* the work a picture's decoder (JPX, JBIG2) does before its rows come,
    done of of, for a progress line: 0 of 0 when there is none, or none yet */
 extern long pdfimg_work_done, pdfimg_work_of;
+extern const char *pdfimg_kind;
+extern int pdfimg_reduce;
+extern long pdfimg_dw, pdfimg_dh;
 
 /* a picture with a soft mask (/SMask) comes from both as it looks on white
    paper; with this set, as it is (render.c draws it through its mask) */

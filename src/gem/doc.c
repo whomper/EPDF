@@ -573,6 +573,27 @@ static long retried_obj = -1;
 
 /* the reader's hook: the machine back to the event loop when the slice
    is up; 1 (stop) when the document is closing */
+/* (the rigs' picture-what: the picture's longest stretch between two
+   turns and where it was then: its decoder's work and rows made) */
+static unsigned long pic_last, pic_gap;
+static long pic_gap_work, pic_gap_of, pic_gap_made;
+static long pic_gap_at[4];	/* the code's addresses on the stack then (epdf.elf's: less the text's base) */
+
+
+static void __attribute__((noinline)) pic_gap_where(void)
+{
+	volatile long mark = 0;
+	long *volatile sp = (long *)&mark;
+	long tb = *(long *)((char *)_BasePage + 8), tl = *(long *)((char *)_BasePage + 12);
+	int i, k = 0;
+
+	for (i = 0; i < 4; i++)
+		pic_gap_at[i] = -1;
+	for (i = 1; i < 96 && k < 4; i++)
+		if (sp[i] > tb && sp[i] < tb + tl && !(sp[i] & 1))
+			pic_gap_at[k++] = sp[i] - tb;
+}
+
 static int slice_up(void *ctx)
 {
 	(void)ctx;
@@ -580,6 +601,18 @@ static int slice_up(void *ctx)
 		return 1;
 	if (!running)
 		return 0;	/* on the main stack (a document's object read there): nothing to hand back */
+	if (running == &pic_co && rpic) {
+		unsigned long now = tos_ms();
+
+		if (pic_last && now - pic_last > pic_gap) {
+			pic_gap = now - pic_last;
+			pic_gap_work = pdfimg_work_done;
+			pic_gap_of = pdfimg_work_of;
+			pic_gap_made = rpic->made;
+			pic_gap_where();
+		}
+		pic_last = now;
+	}
 	if (tos_ms() >= slice_end) {
 		coro_switch(running, &main_co);
 		if (abandon)
@@ -655,6 +688,32 @@ static void reader(void)
 	}
 }
 
+/* the picture just made, for the rigs: its filter, and a JPEG 2000 one's
+   reduction and size as decoded (the hub, 17 Nov 2026) */
+static unsigned long pic_in_ms;	/* the picture being made: the time in its own slices */
+static long pic_slices;
+
+static void picture_what(void)
+{
+	static char a[96];
+
+	if (pdfimg_reduce >= 0)
+		snprintf(a, sizeof a, "%s page %ld r%d %ldx%ld in %lu ms %ld slices", pdfimg_kind, rpic->page,
+			 pdfimg_reduce, pdfimg_dw, pdfimg_dh, pic_in_ms, pic_slices);
+	else
+		snprintf(a, sizeof a, "%s page %ld in %lu ms %ld slices", *pdfimg_kind ? pdfimg_kind : "-", rpic->page,
+			 pic_in_ms, pic_slices);
+	log_event("picture-what", a, NULL);
+	snprintf(a, sizeof a, "%lu ms at work %ld of %ld, rows %ld of %d", pic_gap, pic_gap_work, pic_gap_of,
+		 pic_gap_made, rpic->h);
+	log_event("picture-gap", a, NULL);
+	snprintf(a, sizeof a, "%lx %lx %lx %lx", pic_gap_at[0], pic_gap_at[1], pic_gap_at[2], pic_gap_at[3]);
+	log_event("picture-gap-at", a, NULL);
+	pic_in_ms = 0;
+	pic_slices = 0;
+	pic_gap = 0;
+}
+
 /* a band of the picture's colour rows waits for pics_band, on the main
    stack: the machine handed back meanwhile */
 static void band_wait(void)
@@ -698,6 +757,7 @@ static void decoder(void)
 					rpic_why = PIC_STOPPED;
 				snprintf(a, sizeof a, "rows %lu", tos_ms() - t0);
 				log_event("picture-ms", a, NULL);
+				picture_what();
 				pdone = 1;
 				coro_switch(&pic_co, &main_co);
 				continue;
@@ -714,6 +774,7 @@ static void decoder(void)
 			pic_free(p);
 			snprintf(a, sizeof a, "decode %lu dither %lu", t1 - t0, tos_ms() - t1);
 			log_event("picture-ms", a, NULL);	/* wall clock: the turns between included */
+			picture_what();
 		}
 		pdone = 1;
 		coro_switch(&pic_co, &main_co);
@@ -1006,9 +1067,16 @@ int doc_pic_slice(unsigned long ms, long *obj)
 	if (!rpic)
 		return 0;
 	slice_end = tos_ms() + ms;
-	running = &pic_co;
-	coro_switch(&main_co, &pic_co);
-	running = NULL;			/* back on the main stack: slice_up hands nothing back */
+	{
+		unsigned long t0 = tos_ms();
+
+		pic_last = t0;
+		running = &pic_co;
+		coro_switch(&main_co, &pic_co);
+		running = NULL;		/* back on the main stack: slice_up hands nothing back */
+		pic_in_ms += tos_ms() - t0;	/* (the rigs' picture-what: its own turns' time) */
+		pic_slices++;
+	}
 	pics_band();			/* a band of colour rows to the screen's format */
 	if (!pdone)
 		return 0;
@@ -1049,6 +1117,15 @@ int doc_pic_rows(long *obj, long *from, long *to)
 int doc_pic_busy(void)
 {
 	return rpic != NULL;
+}
+
+/* 1 when the picture being made, or else every one waiting, is one ahead
+   of the view (none the window shows): it waits for the pages still to be
+   read (the hub, 17 Nov 2026: the text first, pictures in view next, the
+   rest after; a picture ahead took half the turns of a book's reading) */
+int doc_pic_ahead_only(void)
+{
+	return rpic ? rpic->ahead : !pics_shown_waiting();
 }
 
 /* the picture being made stopped within a turn, its slot let go: made
