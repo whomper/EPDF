@@ -1981,6 +1981,12 @@ static void click(short mx, short my)
 	/* a button as GEM's: shown pressed, and taken only when let go on it
 	   (a click that wasn't the user's, or one moved off, does nothing:
 	   common's dlg_win_button) */
+	if (o == B_GO && working) {
+		/* Stop in a job: on the press, not tracked to the release (D33,
+		   Erez 9 Nov 2026: the job stops the moment it is asked to) */
+		command(CMD_GO);
+		return;
+	}
 	if (o >= 0 && (tree[o].ob_flags & EXIT)) {
 		int took = dlg_win_button(tree, o);
 

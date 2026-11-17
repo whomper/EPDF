@@ -24,11 +24,13 @@
 #include "settings.h"
 #include "dlgbuild.h"
 #include "gatedlg.h"
+#include "alert.h"
 
 void log_event(const char *what, const char *a, const char *b);	/* (the program's) */
 
 static char edit[128];			/* the address as typed (the caller's only on OK) */
 static char port_s[6];
+static short port_obj = -1, port_page;	/* the port's field and its page: where a refused port is typed again */
 static short edit_cap;
 static char lang_label[28];		/* " Hebrew              \x02" */
 static short lang_obj;
@@ -99,7 +101,8 @@ static void page_secure(SETTINGS *s, short x, short y, void *user)
 	set_text(s, x, y, "Gateway");
 	set_long(s, x + 8, y, edit, 18, edit_cap, 0);
 	set_text(s, x + 28, y, "Port");
-	set_field(s, x + 33, y, port_s, 5, '9');
+	port_obj = set_field(s, x + 33, y, port_s, 5, '9');
+	port_page = set_page_now(s);
 	if (user) {
 		set_text(s, x, n, "Options > Open on the Gateway sends a");
 		set_text(s, x, (short)(n + 1), "PDF there to be converted for this");
@@ -127,6 +130,24 @@ static void drawn(OBJECT *tree, short band)
 	log_event("dialog", "settings", at);
 }
 
+/* OK: a port outside 1 to 65535 is refused with what to type, the field
+   kept as typed and the text cursor in it (D30, Erez 9 Nov 2026: nothing
+   changed silently) */
+static int check(SETTINGS *s, void *user)
+{
+	long p = atol(port_s);
+
+	(void)user;
+	if (p >= 1 && p <= 65535)
+		return 1;
+	alert(1, "[1][The Gateway's port is a number.|Please type a number|from 1 to 65535.][ OK ]");
+	set_show(s, port_page);
+	if (port_obj >= 0)
+		set_focus(s, port_obj);
+	log_event("settings-refused", "port", port_s);
+	return 0;
+}
+
 static int run(int with_tr, char *host, int hostcap, unsigned short *port)
 {
 	static const SET_PAGE both[] = { { "General", page_general }, { "Secure", page_secure } };
@@ -142,9 +163,19 @@ static int run(int with_tr, char *host, int hostcap, unsigned short *port)
 	snprintf(port_s, sizeof port_s, "%u", (unsigned)*port);
 	placed = 0;
 	settings_drawn = drawn;
-	ok = with_tr == 1 ? settings_run("Settings", both, 2, 0, 17, (void *)1) :
-	     with_tr == 2 ? settings_run("Settings", conv, 2, 0, 16, NULL) :
-			    settings_run("Settings", secure, 1, 0, 16, NULL);
+	{
+		SET_DEF d;
+
+		memset(&d, 0, sizeof d);
+		d.title = "Settings";
+		d.pages = with_tr == 1 ? both : with_tr == 2 ? conv : secure;
+		d.npages = with_tr ? 2 : 1;
+		d.height = with_tr == 1 ? 17 : 16;
+		d.user = with_tr == 1 ? (void *)1 : NULL;
+		d.check = check;
+		port_obj = -1;
+		ok = settings_dialog(&d);
+	}
 	settings_drawn = NULL;
 	log_event("dialog-closed", "settings", ok ? "ok" : "cancel");
 	if (!ok)

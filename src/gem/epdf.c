@@ -73,6 +73,7 @@ static int find_dir;			/* a search runs: 1 forwards, -1 back; 0 none */
 static void menu_states(void);
 static int menus_due;			/* menu_states() in the next idle turn */
 static void command(int c);
+static int job_running(void);	/* a copy, a search or the Gateway's conversion (D19) */
 
 #ifndef BEG_MCTRL
 #define BEG_MCTRL 3			/* wind_update: the mouse is ours while a selection is dragged */
@@ -208,6 +209,7 @@ static void open_doc(const char *p)
 	}
 	gw_forget(p);			/* (the Gateway's copies but the one open: never kept) */
 	find_dir = 0;
+	menus_due = 1;
 	win_status(NULL);
 	win_title();
 	menu_states();
@@ -234,6 +236,7 @@ static void gateway_begin(void)
 		alert(1, "[1][The Gateway is reached through STinG, MiNTnet or MagiC-Net, and none of them is running.][ OK ]");
 	else if (r == GW_NO_MEMORY)
 		alert(1, "[3][Not enough memory to send it to the Gateway.][ OK ]");
+	menus_due = 1;			/* (D19: greyed while it runs) */
 	log_event("gateway", r == GW_STARTED ? "started" : "not-started", NULL);
 }
 
@@ -244,6 +247,7 @@ static void gateway_end(void)
 	int r = gw_result(copy, sizeof copy, why, sizeof why);
 	char q[8];
 
+	menus_due = 1;			/* (D19: the commands back after the conversion) */
 	snprintf(q, sizeof q, "%d", r);
 	log_event("gateway-done", q, NULL);
 	if (r == 0) {
@@ -376,25 +380,31 @@ static long find_left;			/* pages it may still look at */
    every step of a selection dragged) */
 static void menu_states(void)
 {
-	static const short cmd[8] = { CMD_COPY, CMD_SELALL, CMD_FIND, CMD_FINDNEXT, CMD_FINDPREV, CMD_PAGES,
-				      CMD_SAVEOPT, CMD_ZOOMTOGGLE };
-	static signed char was[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
+	static const short cmd[9] = { CMD_COPY, CMD_SELALL, CMD_FIND, CMD_FINDNEXT, CMD_FINDPREV, CMD_PAGES,
+				      CMD_SAVEOPT, CMD_ZOOMTOGGLE, CMD_OPEN };
+	static signed char was[9] = { -1, -1, -1, -1, -1, -1, -1, -1, -1 };
 	static signed char tick = -1, ztick = -1;
 	DOCVIEW *v = doc_view();
-	signed char now[8], z;
+	signed char now[9], z;
+	/* a job the user started (a copy, a search, the Gateway's conversion):
+	   the commands that would start another are greyed till it ends (D19,
+	   Erez 9 Nov 2026) */
+	int job = job_running();
 	int i;
 
 	menus_due = 0;
 	if (!has_menu)
 		return;
-	now[0] = v && v->sel_p0 >= 0;
-	now[1] = now[2] = v != NULL;
-	now[3] = now[4] = v && find_text[0];
+	now[0] = v && v->sel_p0 >= 0 && !job;
+	now[1] = v != NULL;
+	now[2] = v != NULL && !job;
+	now[3] = now[4] = v && find_text[0] && !job;
 	now[5] = doc_has_pages() != 0;		/* (greyed for a file without its pages whole) */
-	now[6] = v && doc_prepared();		/* Save Optimised...: a converted PDF's */
+	now[6] = v && doc_prepared() && !job;	/* Save Optimised...: a converted PDF's */
 	z = (signed char)(v && doc_pages_mode() && win_zoom_can(-1));	/* (a page zoomed) */
 	now[7] = z || (v && doc_pages_mode() && win_zoom_can(1));
-	for (i = 0; i < 8; i++)
+	now[8] = !job;
+	for (i = 0; i < 9; i++)
 		if (now[i] != was[i]) {
 			menu_ienable(menu.tree, mbar_object(&menu, cmd[i]), now[i]);
 			was[i] = now[i];
@@ -448,6 +458,7 @@ static void find_start(int dir)
 	}
 	find_dir = dir;
 	find_left = doc_pages() + 1;
+	menus_due = 1;			/* (D19: greyed while it runs) */
 	win_status("finding...");
 	log_event("find", find_text, dir > 0 ? "next" : "previous");
 }
@@ -464,6 +475,7 @@ static int find_step(void)
 		return 0;
 	if (find_left-- <= 0) {
 		find_dir = 0;
+		menus_due = 1;
 		snprintf(msg, sizeof msg, "\"%.30s\" isn't in the document", find_text);
 		win_status(msg);
 		log_event("find-none", find_text, NULL);
@@ -491,6 +503,7 @@ static int find_step(void)
 		}
 
 		find_dir = 0;
+		menus_due = 1;
 		select_span(find_page, at, find_page, at + n);
 		win_show(find_page, at);
 		snprintf(p, sizeof p, "%ld", find_page + 1);
@@ -531,8 +544,15 @@ static struct {
 					   taken while a copy goes on (not resident: 1 Nov 2026) */
 } cp;
 
+/* a job the user started runs: a copy, a search, the Gateway's conversion */
+static int job_running(void)
+{
+	return cp.on || find_dir || gw_busy();
+}
+
 static void copy_end(const char *say)
 {
+	menus_due = 1;			/* (D19: the commands back after the copy) */
 	if (cp.on)
 		clip_put_end(0);	/* given up: the old clipboard kept, or this one removed */
 	free(cp.piece);
@@ -558,6 +578,7 @@ static void copy(void)
 		return;
 	}
 	cp.on = 1;
+	menus_due = 1;			/* (D19: greyed while it runs) */
 	cp.p0 = v->sel_p0;
 	cp.o0 = v->sel_o0;
 	cp.p1 = v->sel_p1;
@@ -936,6 +957,11 @@ static void command(int c)
 {
 	char n[8];
 
+	/* a job running: its keys do what the greyed menu says, nothing (D19) */
+	if (job_running() &&
+	    (c == CMD_COPY || c == CMD_FIND || c == CMD_FINDNEXT || c == CMD_FINDPREV || c == CMD_OPEN ||
+	     c == CMD_SAVEOPT))
+		return;
 	if (c != CMD_ABOUT && c != CMD_ZOOMIN && c != CMD_ZOOMOUT && c != CMD_ZOOMACTUAL && c != CMD_ZOOMTOGGLE)
 		win_zoom_end();		/* (a picture shown whole: the text back first) */
 	switch (c) {
