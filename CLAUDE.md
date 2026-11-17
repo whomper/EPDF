@@ -475,6 +475,22 @@ at first. This section is kept up to date: the build, the tests, what a release 
   row at a time only change when its first refusal comes (51fad0b0a: 130). With no keys both read
   119, on a 4 MB ST 14 and 13: no slower reading. A picture that can't fit failing fast is with the
   hub's #98 (the family's heap).
+  2.38 (Erez's Hebrew report, 17 Nov 2026: FreeMono drew TOS's Hebrew codes as other letters, its
+  runs off their cells): with a GDOS font the text view's rows go through common's textcells.c
+  (text_hebrew, text_cells_probe, text_cells_n: EMail's runs and cells, AERA-Atari ae79b2a), its
+  Hebrew by the font's own glyphs (fontsel_hebrew: FS_HEB_UNICODE) or, where it has none, the system
+  font's in its cells; the system font keeps one text_plain a row as 2.37 (font_gdos(): a6f596b65
+  had sent it through the cells too, Erez's configuration's page scroll 75 -> 115); the cell holds
+  vqt_width('M'). Rig tests/hatari/hebfont.py (`make hebfont-test`, under NVDI: FreeMono "font",
+  Courier 10 Pitch "system", the system font; the right-to-left rows end on one edge). Section 8's
+  last rows: D19 (Copy, Find..., Find next/previous, Open..., Save Optimised... greyed while a job
+  runs: job_running), D30 (the Gateway's port out of range refused with an alert, the cursor in
+  it), D33 (EConvert's Stop on the press). common 7b8ced9 (net_tos's connect that gives up,
+  textcells, dialog.c's dlg_touch_up before Settings draws, the hub's dbfc8e2). common's text_font
+  does its setup every call now: font.c's font_text tells it only a change (Falcon-4:16's start
+  250 -> 245, 2.37 240). The sync moved all of EPDF.PRG off 2.37's cache places: every pad
+  refitted, new pads N-T and EP_PAD_A_DATA (the Makefile's note); still off, the files that
+  changed inside.
   Next, after 2.36 (Erez, 17 Nov 2026: "go with Faster display as default and lets see that the UI is
   real enough"): the converter prepares pictures and whole pages in the screen's own colours, so EPDF
   only unpacks and copies (the rigs' logs: on Falcon-4:256 a photo 1.2 s decoding, 6.7 s fitting to
