@@ -14,6 +14,7 @@ static int clipping;
 static int fast;			/* the system font, TOS's own VDI */
 static int bold_unclipped;		/* TOS bolds before it clips */
 static short cw = 8, ch = 16;
+static short font_id = 1;		/* text_font's: restored after Hebrew in the system font */
 
 static unsigned short os_version;
 static unsigned long os_magic;
@@ -110,17 +111,12 @@ static int sf_setup(short height)
 
 void text_font(short h, short id, short w, short hgt)
 {
-	static short last_id = -1, last_w, last_h;
-
+	/* the whole setup every call, as before 24e2257: keeping it for the
+	   same font cost EContact's card 5-10 ms on Falcon-4:16 (17 Nov 2026;
+	   neither keying it on Logbase nor retrying a compare brought it
+	   back, while doing it every call did). An app that sets one font
+	   each redraw calls it once instead (ClaudeST 2.8's way) */
 	(void)h;
-	/* the same font again (an app that sets it each redraw): keep what
-	   was found, the CPU path's first-draw check (sf) too; asked again it
-	   cost each redraw's first fills the CPU path (ClaudeST, 13 Nov 2026) */
-	if (id == last_id && w == last_w && hgt == last_h)
-		return;
-	last_id = id;
-	last_w = w;
-	last_h = hgt;
 	fast = id == 1 && !get_cookie(0x4E564449L);	/* 'NVDI' */
 	/* TOS 4.04's VDI bolds a line and then clips it, so a column left
 	   of the clip, not drawn, smears into the clip's first; TOS 1.04's
@@ -130,6 +126,7 @@ void text_font(short h, short id, short w, short hgt)
 	bold_unclipped = os_version >= 0x0300 && os_magic != 0x45544F53L;	/* 'ETOS' */
 	cw = w > 0 ? w : 8;
 	ch = hgt > 0 ? hgt : 16;
+	font_id = id;
 	sf = fast && cw == 8 ? sf_setup(ch) : -1;
 }
 
@@ -1737,5 +1734,106 @@ void text_fx(short h, short x, short y, const char *s, long n, short fx, short c
 		vsl_color(h, colour);
 		vsl_type(h, 1);
 		v_pline(h, 2, p);
+	}
+}
+
+/* ---- a GDOS font's runs in their cells, and its Hebrew (EMail's draw.c,
+   the hub, 17 Nov 2026: Erez's FreeMono in EPDF drew TOS's Hebrew codes,
+   which a vector font has other glyphs at) */
+
+static short heb_how;			/* fontsel.h's FS_HEB_*: 0 MAP, 1 UNICODE, 2 SYSTEM */
+static unsigned short heb_ix[27];	/* FS_HEB_UNICODE: the font's index of each letter, 0xC2-0xDC */
+static short heb_pt;			/* the font's points, to set it again after the system font's letters */
+static short cells_how;			/* TEXT_RUNS, TEXT_JUSTIFY, TEXT_CELLS */
+
+void text_hebrew(short how, const unsigned short *idx, short pt)
+{
+	short k;
+
+	heb_how = how;
+	heb_pt = pt;
+	for (k = 0; k < 27; k++)
+		heb_ix[k] = how == 1 && idx ? idx[k] : 0;
+}
+
+void text_cells(short how)
+{
+	cells_how = how;
+}
+
+short text_cells_probe(short h)
+{
+	static const char probe[] = "MiWl.0_|@#mwIj1;:,'AZaz09([{x})]";
+	short n = (short)(sizeof(probe) - 1), run, k, wm;
+
+	if (font_id == 1)
+		return TEXT_RUNS;
+	run = vqt_extent_n(h, probe, n);
+	wm = vqt_width(h, 'M');
+	for (k = 0; k < n && vqt_width(h, (unsigned char)probe[k]) == wm; k++)
+		;
+	if (run == n * cw)
+		return TEXT_RUNS;
+	/* monospaced, within a pixel of a cell a character (a vector font's
+	   fractional advance): made to fit */
+	if (k == n && run > n * (cw - 1) && run <= n * (cw + 1))
+		return TEXT_JUSTIFY;
+	return TEXT_CELLS;
+}
+
+static int is_heb(unsigned char c)
+{
+	return c >= 0xC2 && c <= 0xDC;
+}
+
+/* a run with no Hebrew in it, in its cells */
+static void cells_at(short h, short x, short y, const char *s, short n)
+{
+	short k;
+
+	if (cells_how == TEXT_RUNS || n == 1) {
+		text_n(h, x, y, s, n);
+		return;
+	}
+	if (cells_how == TEXT_JUSTIFY) {
+		v_justified_n(h, x, y, s, n, (short)(n * cw), 0, 1);
+		return;
+	}
+	for (k = 0; k < n; k++)
+		if (s[k] != ' ')
+			v_gtext_n(h, (short)(x + k * cw), y, s + k, 1);
+}
+
+void text_cells_n(short h, short x, short y, const char *s, long n)
+{
+	short i = 0, m = (short)(n > 32000 ? 32000 : n);
+
+	while (i < m) {
+		short j = i, heb = is_heb((unsigned char)s[i]);
+
+		while (j < m && is_heb((unsigned char)s[j]) == heb && j - i < 120)
+			j++;
+		if (!heb || heb_how == 0) {
+			cells_at(h, (short)(x + i * cw), y, s + i, (short)(j - i));
+		} else if (heb_how == 1) {
+			/* the font's own letters, by its index (NVDI's map mode 0) */
+			short k;
+
+			vst_map_mode(h, 0);
+			for (k = i; k < j; k++)
+				v_gtext_w(h, (short)(x + k * cw), y, &heb_ix[(unsigned char)s[k] - 0xC2], 1);
+			vst_map_mode(h, 1);
+		} else {
+			/* the system font's, each letter centred in its cell */
+			short dw, dh, w2, h2, k;
+
+			vst_font(h, 1);
+			vst_height(h, ch >= 16 ? 13 : 6, &dw, &dh);
+			for (k = i; k < j; k++)
+				v_gtext_n(h, (short)(x + k * cw + (cw - dw) / 2), (short)(y + (ch - dh) / 2), s + k, 1);
+			vst_font(h, font_id);
+			vst_point(h, heb_pt, &w2, &h2);
+		}
+		i = j;
 	}
 }
