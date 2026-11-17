@@ -415,7 +415,10 @@ at first. This section is kept up to date: the build, the tests, what a release 
   jpx.o (and their _RO, with EP_PAD_A_RO), PIC_PAD (CONVTEST) / EC_PIC_PAD / RV_PIC_PAD after pic.o
   (164 / 170 / 128 at 2.36), render.c's RPAD_A and RPAD_E (image_hook's soft mask, render_progress);
   after common's crash.o and progbar.o (AERA-Atari 1c01cfd: crash.c's interrupt-time faults, the
-  256-colour bar without violets) EP_PAD_K / EP_PAD_L and EConvert's EC_CR_PAD / EC_PB_PAD.
+  256-colour bar without violets) EP_PAD_K / EP_PAD_L and EConvert's EC_CR_PAD / EC_PB_PAD; EPDF.PRG's
+  variables (#48 moved most 44 bytes mod 256, the glyph cache 12) put back by EP_PAD_L_DATA 244:
+  Falcon-4:16's speed rows summed 1,277.5 ms against 2.35's 1,257.5, with it 1,255.0 (two runs each,
+  alone; with the host loaded the rig loses its keys: run nothing beside a speed or timing rig).
   Next, after 2.36 (Erez, 17 Nov 2026: "go with Faster display as default and lets see that the UI is
   real enough"): the converter prepares pictures and whole pages in the screen's own colours, so EPDF
   only unpacks and copies (the rigs' logs: on Falcon-4:256 a photo 1.2 s decoding, 6.7 s fitting to
