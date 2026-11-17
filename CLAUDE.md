@@ -457,7 +457,24 @@ at first. This section is kept up to date: the build, the tests, what a release 
   bytes in EPDF.PRG, not taken. Copy on Erez's configuration: its turn's work is the same as 2.35's
   under gemprof (6.9 ms EPDF, 3.1 ms TOS); the rig's Copy 45 35 45 45 (2.36 45 45, 2.35 35 <20),
   its turns 40 x 4 (2.36 45 45). Known: on ST-1 big.py's novel-boymechanic has pictures refused for
-  memory and stretches to 2.4 s, as 2.35 (7.4 s) and 2.36.
+  memory and stretches to 2.4 s, as 2.35 (7.4 s) and 2.36. No pace (the evnt_multi timer 0) while the
+  picture on the page in view is made (3140db6cd: scan-gfabasic's picture in view 50.6 -> 35.5 s on
+  Falcon-4:16; on ST-1 it changes nothing, 86 pages against 83). The rigs' profiling builds
+  (build/aprof EPDF.PRG and ECONVERT.PRG) laid out as the shipped ones: tools/aprofpad.py pads after
+  the profiling gem.o (code, a merged string, nfon.o's variable) and fails the build if anything else
+  sits elsewhere mod 256 (3261e8c64; the hub, 17 Nov 2026: linked at the end it had moved 197 KB of
+  code; common's tools/profpad.py does the same for the family, to be taken after 2.37). sink_row
+  ends in a jump over 222 bytes of NOPs, 256 bytes longer than 2.36's (its 22-byte growth had moved
+  the rest of pics.o, 10.9 KB, off its cache places: View > The page's lines on Erez's configuration
+  165 against 155, now 155/165/155 against 155/165/155), EP_PAD_M 0. The regression gate (Erez,
+  17 Nov 2026) ran for 2.37 first: every row (TT low and ST low refused by design, 320 wide;
+  tests/hatari/mint.py and nfoff.py new, gui.py's EPDF_NVDI and quit check), pairs within a tick on
+  Erez's configuration, Falcon-4:16 and ST:mono (Copy 35 against 45 on both Falcons). ST-1 with
+  big.py's key every 20 s reads novel-boymechanic's 83-86 pages against 2.36's 105-128: the page-6
+  scan (1460x2224, one bit) is made for 11 s and refused memory, twice, in both; 6af0ea53c's rows a
+  row at a time only change when its first refusal comes (51fad0b0a: 130). With no keys both read
+  119, on a 4 MB ST 14 and 13: no slower reading. A picture that can't fit failing fast is with the
+  hub's #98 (the family's heap).
   Next, after 2.36 (Erez, 17 Nov 2026: "go with Faster display as default and lets see that the UI is
   real enough"): the converter prepares pictures and whole pages in the screen's own colours, so EPDF
   only unpacks and copies (the rigs' logs: on Falcon-4:256 a photo 1.2 s decoding, 6.7 s fitting to
