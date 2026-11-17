@@ -23,17 +23,33 @@ void (*pf_idle)(void);
 static long turns;
 
 static long gap_ms, last_turn;		/* the longest stretch between turns (the 50 ms of a turn) */
+/* where the longest began and ended: the turns' callers in render.ovl, as
+   offsets from its ROVL table (render.elf's address 0: rovl.py names them);
+   -1 the page call's own start or end */
+static const char *ovl_at;
+static long gap_from = -1, gap_at = -1, last_from = -1;
+
+static void turn_gap_at(long now, long at)
+{
+	if (now - last_turn > gap_ms) {
+		gap_ms = now - last_turn;
+		gap_from = last_from;
+		gap_at = at;
+	}
+	last_turn = now;
+	last_from = at;
+}
 
 static void turn_gap(long now)
 {
-	if (now - last_turn > gap_ms)
-		gap_ms = now - last_turn;
-	last_turn = now;
+	turn_gap_at(now, -1);
 }
 
-static int turn(void)
+static int __attribute__((noinline)) turn(void)
 {
-	turn_gap(pdf_ms());
+	const char *ra = __builtin_return_address(0);
+
+	turn_gap_at(pdf_ms(), ovl_at ? (long)(ra - ovl_at) : -1);
 	turns++;
 	return 0;
 }
@@ -62,6 +78,7 @@ int main(void)
 		return 1;
 	}
 	o = rdraw_ovl();
+	ovl_at = (const char *)o;
 	snprintf(b, sizeof b, "{\"loaded\":\"%s\",\"kb\":%ld,\"ms\":%ld,\"free_kb\":%ld}\n", o->version,
 		 (rdraw_taken() + 1023) / 1024, pdf_ms() - t, (long)Malloc(-1L) / 1024);
 	nf_debug(b);
@@ -82,6 +99,7 @@ int main(void)
 		t = pdf_ms();
 		turns = 0;
 		gap_ms = 0;
+		gap_from = gap_at = last_from = -1;
 		if (strstr(cfg, "dump")) {
 			snprintf(name, sizeof name, "C:\\PAGE%ld.565", pg + 1);
 			fh = Fcreate(name, 0);
@@ -90,6 +108,7 @@ int main(void)
 			/* (the stretches inside render.ovl's call: from it to the
 			   first turn, between turns, from the last to its end) */
 			last_turn = pdf_ms();
+			last_from = -1;
 			rc = o->page(doc, pg, 600, y0, &p);
 			turn_gap(pdf_ms());
 			if (rc)
@@ -117,9 +136,9 @@ int main(void)
 		if (fh >= 0)
 			Fclose((short)fh);
 		snprintf(b, sizeof b, "{\"page\":%ld,\"ms\":%ld,\"rc\":%d,\"w\":%d,\"h\":%d,\"bands\":%d,\"image_ms\":%ld,"
-			 "\"glyphs\":%ld,\"images\":%ld,\"turns\":%ld,\"gap_ms\":%ld,\"dsp\":\"%s\",\"free_kb\":%ld,\"pens_ms\":%ld}\n",
+			 "\"glyphs\":%ld,\"images\":%ld,\"turns\":%ld,\"gap_ms\":%ld,\"dsp\":\"%s\",\"free_kb\":%ld,\"pens_ms\":%ld,\"gap_from\":%ld,\"gap_at\":%ld}\n",
 			 pg + 1, pdf_ms() - t, rc, p.w, p.h, bands, p.image_ms,
-			 p.glyphs, p.images, turns, gap_ms, o->dsp_state(), (long)Malloc(-1L) / 1024, pens_ms);
+			 p.glyphs, p.images, turns, gap_ms, o->dsp_state(), (long)Malloc(-1L) / 1024, pens_ms, gap_from, gap_at);
 		nf_debug(b);
 	}
 	o->close(doc);

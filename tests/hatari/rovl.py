@@ -93,6 +93,37 @@ def close_to(raw, w, h, ppm):
     return n, most
 
 
+_syms = None
+
+
+def where(off):
+    """a render.ovl offset (render.elf's address: its ROVL table at 0) as
+    function+offset; -1 the page call's own start or end"""
+    global _syms
+    if off is None or off < 0:
+        return "the page call"
+    if _syms is None:
+        out = subprocess.run(["m68k-linux-gnu-nm", "-n", os.path.join(TOP, "build", "m68030ovl", "render.elf")],
+                             capture_output=True, text=True).stdout
+        _syms = [(int(a, 16), n) for a, t, n in (l.split() for l in out.splitlines() if len(l.split()) == 3)
+                 if t in "tT"]
+    best = None
+    for a, n in _syms:
+        if a <= off:
+            best = (a, n)
+        else:
+            break
+    return "%s+%d" % (best[1], off - best[0]) if best else hex(off)
+
+
+def stretch(p):
+    """where a page's longest stretch began and ended (ROVLTEST's gap_from
+    and gap_at), when it says"""
+    if "gap_at" not in p:
+        return ""
+    return ": %s .. %s" % (where(p.get("gap_from")), where(p.get("gap_at")))
+
+
 def fallback(spec, p):
     """page 3's progressive JPEG on a stock Falcon-4, the page drawn whole:
     pic.c can't have libjpeg's coefficients beside the canvas and refuses
@@ -135,7 +166,12 @@ def main(argv):
                     raw = open(os.path.join(hd, "PAGE%d.565" % p["page"]), "rb").read()
                     lj = fallback(spec, p) and "band" not in cfg
                     want = os.path.join(work, "host-%d%s.ppm" % (p["page"], "-cvjpeg" if lj else ""))
-                    if not os.path.exists(want):
+                    # (made again when build/econvert or the showcase is newer:
+                    # a page kept from an older build compared 2.36's soft
+                    # mask with a renderer that had none)
+                    exe = os.path.join(TOP, "build", "econvert")
+                    if not os.path.exists(want) or os.path.getmtime(want) < max(os.path.getmtime(exe),
+                                                                                 os.path.getmtime(pdf)):
                         subprocess.run([os.path.join(TOP, "build", "econvert"), "--fonts", FONTS, "--width", "600"] +
                                        ([] if lj else ["--jpeg-pic"]) + ["--render", str(p["page"]), want, pdf],
                                        check=True, stdout=subprocess.DEVNULL)
@@ -162,8 +198,9 @@ def main(argv):
                 print("  render.ovl %s KB, loaded in %d ms, %d KB free after" % (lines[0]["kb"], lines[0]["ms"],
                                                                                  lines[0]["free_kb"]))
             for p in pages:
-                print("  page %d: %6d ms (pictures %5d) %d band(s) turns %d (longest %d ms) dsp %s free %d KB" % (
-                    p["page"], p["ms"], p["image_ms"], p["bands"], p["turns"], p["gap_ms"], p["dsp"], p["free_kb"]))
+                print("  page %d: %6d ms (pictures %5d) %d band(s) turns %d (longest %d ms%s) dsp %s free %d KB" % (
+                    p["page"], p["ms"], p["image_ms"], p["bands"], p["turns"], p["gap_ms"],
+                    stretch(p) if p["gap_ms"] > 50 else "", p["dsp"], p["free_kb"]))
             if gone is not None:
                 print("  closed: %d KB free (%+d KB against before loading)" % (lines[-1]["free_kb"], -gone))
             bad += bool(why)
