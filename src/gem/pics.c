@@ -380,6 +380,10 @@ static void sink_row(void *u, long y, const unsigned short *px)
 	put_pens(k, y);
 	if (pic_poll)
 		pic_poll();	/* (a turn a row: the dither's nearest pens are found as a picture's colours first come, 40 ms a row of 488 at first on Falcon-4) */
+	/* (jumped over: sink_row 256 bytes longer than 2.36's, not the 22 its
+	   change made it, so the functions after it are at 2.36's places for
+	   the 68030's caches) */
+	__asm__ __volatile__("bra.w 1f\n\t.fill 111,2,0x4e71\n1:");
 }
 
 /* a page drawn: its row's planes as render.ovl dithered them (the

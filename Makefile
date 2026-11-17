@@ -629,7 +629,7 @@ EP_PAD_J ?= 298
 EP_PAD_K ?= 176
 EP_PAD_L ?= 246
 EP_PAD_L_DATA ?= 412
-EP_PAD_M ?= 234
+EP_PAD_M ?= 0
 build/m68000/eppad_a.o build/m68000/eppad_b.o build/m68000/eppad_c.o build/m68000/eppad_d.o \
 build/m68000/eppad_e.o build/m68000/eppad_f.o build/m68000/eppad_g.o build/m68000/eppad_h.o \
 build/m68000/eppad_i.o build/m68000/eppad_j.o build/m68000/eppad_k.o build/m68000/eppad_l.o \
