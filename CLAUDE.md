@@ -419,6 +419,15 @@ at first. This section is kept up to date: the build, the tests, what a release 
   variables (#48 moved most 44 bytes mod 256, the glyph cache 12) put back by EP_PAD_L_DATA 244:
   Falcon-4:16's speed rows summed 1,277.5 ms against 2.35's 1,257.5, with it 1,255.0 (two runs each,
   alone; with the host loaded the rig loses its keys: run nothing beside a speed or timing rig).
+  2.36 went out on 17 Nov 2026 (v2.36 on d50e76186, Release c056da755): #48 with render.ovl's soft
+  mask drawn in turns (page 6 of the showcase 115 -> 45 ms on Falcon-4:256 NVDI; ROVLTEST names a
+  stretch's ends, rovl.py remakes stale host pages), the data pad, common 1c01cfd. The Release
+  workflow installs make test's oracles (poppler-utils, libopenjp2-tools, qpdf). Known: a document is
+  read more slowly while a JPX or JBIG2 picture decodes; Copy on a Falcon 5-10 ms over 2.35's (within
+  50). The Pi's aerapdf decodes JPX/JBIG2 once AERA-Gateway rebuilds it from 2.36. 2.37 (the hub):
+  a picture out of view yields to the text reading; JPX reduced by its box (manual-stinternals-text
+  page 2: 47 -> 15 s on Falcon-4:16) and the 68030's lifting; Copy; a log line naming each picture's
+  decoder and reduction.
   Next, after 2.36 (Erez, 17 Nov 2026: "go with Faster display as default and lets see that the UI is
   real enough"): the converter prepares pictures and whole pages in the screen's own colours, so EPDF
   only unpacks and copies (the rigs' logs: on Falcon-4:256 a photo 1.2 s decoding, 6.7 s fitting to
