@@ -32,6 +32,21 @@ static void sys_size(short pt, short *w, short *h)
 }
 
 /* the font set on vdi_h, and the text drawing told its cell */
+/* text.c's text_font, asked again only when the font or its cell changed
+   (as 2.37's text.c did itself: common ae79b2a does the whole setup each
+   call, for an app that sets one font a redraw) */
+static short tf_id = -1, tf_w, tf_h;
+
+void font_text(short id, short w, short h)
+{
+	if (id == tf_id && w == tf_w && h == tf_h)
+		return;
+	tf_id = id;
+	tf_w = w;
+	tf_h = h;
+	text_font(vdi_h, id, w, h);
+}
+
 static void set(short id, short pt)
 {
 	short w, h;
@@ -49,7 +64,7 @@ static void set(short id, short pt)
 	}
 	cw = w;
 	ch = h;
-	text_font(vdi_h, id, cw, ch);
+	font_text(id, cw, ch);
 	/* a GDOS font: its runs in their cells, its Hebrew letters as it has
 	   them (Erez, 17 Nov 2026: FreeMono drew TOS's Hebrew codes as other
 	   letters; EMail's way, common's text_cells_n) */
@@ -160,7 +175,7 @@ void font_sys_push(void)
 	sys_size(gl_hchar >= 16 ? 16 : 8, &w, &h);
 	cw = gl_wchar;
 	ch = gl_hchar;
-	text_font(vdi_h, 1, cw, ch);
+	font_text(1, cw, ch);
 }
 
 void font_sys_pop(void)
@@ -176,7 +191,7 @@ void font_small(short *w, short *h)
 {
 	vst_font(vdi_h, 1);
 	vst_height(vdi_h, 4, w, h);
-	text_font(vdi_h, 1, *w, *h);
+	font_text(1, *w, *h);
 }
 
 /* a GDOS font is the view's: its rows through text_cells_n (textwin.c);
