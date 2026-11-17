@@ -707,6 +707,11 @@ dist: binary/EPDF.PRG binary/render.ovl binary/ECONVERT.PRG help
 gui-test: binary/EPDF.PRG binary/LAUNCH.PRG
 	python3 tests/hatari/gui.py ST:mono build/gui
 	python3 tests/hatari/fontdlg.py build/fontdlg ST:mono
+# Hebrew in a GDOS font (Erez, 17 Nov 2026: FreeMono's Hebrew wrong): FreeMono,
+# Courier 10 Pitch and the system font under NVDI on Erez's configuration
+hebfont-test: binary/EPDF.PRG binary/LAUNCH.PRG
+	python3 tests/hatari/hebfont.py build/hebfont
+.PHONY: hebfont-test
 # the page strip (View > Page strip): ST:mono and Falcon:16, a converted PDF's previews
 strip-test: binary/EPDF.PRG binary/LAUNCH.PRG build/econvert
 	python3 tests/hatari/strip.py build/strip

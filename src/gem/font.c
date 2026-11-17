@@ -38,12 +38,32 @@ static void set(short id, short pt)
 	if (id == 1) {
 		sys_size(pt, &w, &h);
 	} else {
+		short adv;
+
 		vst_font(vdi_h, id);
 		vst_point(vdi_h, pt, &w, &h);
+		adv = vqt_width(vdi_h, 'M');
+		if (adv > w)
+			w = adv;	/* the cell holds a whole character (EMail's) */
 	}
 	cw = w;
 	ch = h;
 	text_font(vdi_h, id, cw, ch);
+	/* a GDOS font: its runs in their cells, its Hebrew letters as it has
+	   them (Erez, 17 Nov 2026: FreeMono drew TOS's Hebrew codes as other
+	   letters; EMail's way, common's text_cells_n) */
+	if (id == 1) {
+		text_hebrew(FS_HEB_MAP, NULL, pt);
+		text_cells(TEXT_RUNS);
+	} else {
+		unsigned short idx[27];
+		short why = 0, how = fontsel_hebrew(id, 0, idx, &why);
+
+		text_hebrew(how, idx, pt);
+		text_cells(text_cells_probe(vdi_h));
+		/* (the rigs: how the font's Hebrew is drawn, hebfont.py) */
+		log_event("font-hebrew", how == FS_HEB_UNICODE ? "font" : how == FS_HEB_SYSTEM ? "system" : "as-is", NULL);
+	}
 }
 
 static void load_gdos(void)
