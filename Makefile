@@ -647,10 +647,10 @@ EP_PAD_L ?= 246
 EP_PAD_L_DATA ?= 404
 EP_PAD_M ?= 0
 EP_PAD_N ?= 210
-EP_PAD_O ?= 186
+EP_PAD_O ?= 228
 EP_PAD_P ?= 72
 EP_PAD_Q ?= 62
-EP_PAD_R ?= 98
+EP_PAD_R ?= 196
 EP_PAD_S ?= 52
 EP_PAD_T ?= 14
 build/m68000/eppad_a.o build/m68000/eppad_b.o build/m68000/eppad_c.o build/m68000/eppad_d.o \
