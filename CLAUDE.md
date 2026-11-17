@@ -41,15 +41,31 @@ These come from AERA-Atari's repo template and are the same in every app's CLAUD
   `main`, nothing else: no test builds, no CI artifacts, no builds from a branch.
   Work lands on `main`; to try a fix on real hardware, release it. If a release doesn't work, fix
   forward: a new release with the next number, before any other work; never a rollback (Erez, 7 Nov 2026).
-- **Releases go out without asking Erez** (his decision, 23 Oct 2026; guidelines 1.2). Release when
-  work on `main` is ready:
-  - this repo's checks pass;
-  - the rigs this file asks for pass (on EmuTOS where the session has nothing else).
+- **Releases go out without asking Erez** (his decision, 23 Oct 2026; guidelines 1.2), through **the
+  regression gate** (Erez, 17 Nov 2026: "we need to be extra careful with regression issues as there are
+  users of our software. This means testing across all configurations" and "make sure we don't loose
+  performance"; AERA-Atari a22574e, guidelines 1.2 and standards/TEST-MATRIX.md's gate table). Every code
+  candidate, in this order:
+  1. this repo's checks;
+  2. the rigs on every row of the gate table EPDF runs on, on Erez's TOS images and NVDI (EmuTOS is no
+     evidence for a release), each row named in the report with `describe()`, a row not run said why:
+     Erez's configuration; Falcon-4:16; Falcon:65536; TT (ttmed, ttlow; TOS's VDI and NVDI); MiNT +
+     XaAES, plain, ct60 and ext2 (`tests/hatari/mint.py`); the FireBee stand-in; ST mono, med, low and
+     ST-1 (TOS's VDI and NVDI: `EPDF_NVDI=1` for gui.py); STE; the network paths (gateway.py,
+     translate_view.py, `make pi-test`); one boot with NatFeats off (`tests/hatari/nfoff.py`). EPDF
+     has no accessory edition (row 10);
+  3. the paired speed run against the last release on Erez's configuration, Falcon-4:16 and ST:mono,
+     the builds at the shipped layout (tools/aprofpad.py; common's tools/profpad.py after 2.37): no row
+     slower beyond a tick on any (a second and third pair for a row the first flags); fix it first, and
+     only Erez accepts one;
+  4. the candidate commit with the results to the hub, which runs the family check and answers go or
+     the faults it found;
+  5. only then the release. Give Erez the link in one line, with anything he has to do, and send the
+     hub the link.
 
-  Then give Erez the link in one line, with anything he has to do, and send the hub the link. The
-  hub's checks (Erez's TOS and NVDI, the configurations of AERA-Atari's standards/TEST-MATRIX.md) follow
-  the release; a fault they find is fixed forward by a new release that comes before any other work.
-  Decisions that are his still go to him first.
+  A fault a user reports becomes a case in the rigs, in the release that fixes it. A fault found after
+  a release is fixed forward by a new release that comes before any other work. Decisions that are his
+  still go to him first.
 - **Who decides what** (Erez, 31 Oct 2026; the guidelines' "Who decides what"). Erez's part, put
   to him before the work as a decision with a short context:
   - new programs and ideas, their core capabilities, and how they work with the other programs;
@@ -503,9 +519,8 @@ at first. This section is kept up to date: the build, the tests, what a release 
   The extractor marks a picture as a line "\x7F<object> <w>x<h>" in the page's text.
 - **Governance:** the hub owns AERA-Atari and `common/`. Never change `common/` here: pull it with
   `tools/sync-common.sh`; a needed change goes to the hub as a patch (`git format-patch`, plain text)
-  with its reason and tests. A release goes out when this repo's checks and rigs pass (Erez, 7 Nov
-  2026: the hub's checks no longer hold it); then send the hub the commit and the link. Its checks on
-  Erez's TOS and NVDI follow, and a fault they find is fixed forward first. Gateway code (pdfgate,
+  with its reason and tests. A release goes out through the regression gate above (Erez, 17 Nov 2026:
+  the hub's family check before the release again, in place of 7 Nov's "the hub's checks follow"). Gateway code (pdfgate,
   aerapdf) is EPDF's protocol and EPDF tests every change to it (Erez, 8 Nov 2026, guidelines 1.2):
   `make pi-test` and `tests/hatari/gateway.py` run pdfgate.py itself from `gateway/`, a read-only
   copy of AERA-Gateway's gateway branch (`tools/sync-gateway.sh`; change it in AERA-Gateway with its

@@ -47,6 +47,10 @@ def main(argv):
     with open(os.path.join(hd, "LAUNCH.TXT"), "w", newline="") as f:
         f.write("C:\\EPDF.PRG\r\nC:\\TWO.PDF\r\n")
     m = machines.Machine(spec, hd)
+    if os.environ.get("EPDF_NVDI") and not m.nvdi():
+        # (Erez's NVDI on any machine, the TT's and the ST's too: the
+        # regression gate's rows, guidelines 1.2, 17 Nov 2026)
+        sys.exit("gui.py: EPDF_NVDI, but no NVDI here")
     natfeats.on(hd)
     fifo = os.path.join(out, "hatari.fifo")
     if os.path.exists(fifo):
@@ -178,6 +182,15 @@ def main(argv):
         shot("context")
         key(ESC)
         time.sleep(2)
+        # ^Q: each step of the way out, and no CRASH.LOG (the gate's rows)
+        key(Q, [CTRL])
+        if wait("EPDF quit out of the AES", 60):
+            time.sleep(3)
+        if not any("EPDF quit crash catcher off" in e for e in events()):
+            bad.append("quit: the crash catcher not taken off")
+        for root, _, files in os.walk(hd):
+            if any(f.lower() == "crash.log" for f in files):
+                bad.append("quit: a CRASH.LOG in %s" % root)
     finally:
         h.kill()
         h.wait()
