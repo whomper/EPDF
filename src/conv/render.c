@@ -1156,7 +1156,7 @@ static void glyph_hook(void *u, long prog, int kind, const char *base, int comp,
    pages on Falcon-4:256 2-4 % slower from the shift alone); see
    tools/rpad.py */
 #ifndef RPAD_A
-#define RPAD_A 152
+#define RPAD_A 102
 #define RPAD_B 14
 #define RPAD_C 178
 #define RPAD_D 42
@@ -1286,13 +1286,23 @@ static void image_hook(void *u, long obj, const fx *ctm)
 			a = cv_image(r->d, sm->a, p->w, p->h, &swhy);
 			r->p_inimg = 0;
 			poll_page = NULL;
+			if (cv_turn)
+				cv_turn();
 			if (a && (p->alpha = malloc((size_t)p->w * p->h))) {
-				long i;
+				long i = 0;
+				int y, x;
 
-				for (i = 0; i < (long)p->w * p->h; i++) {
-					uint16_t c = a->px[i];
+				/* (16 rows at a time, a turn between: the whole of a
+				   page-wide mask took page 6 of the showcase 115 ms
+				   without one on Falcon-4, rovl.py) */
+				for (y = 0; y < p->h; y++) {
+					for (x = 0; x < p->w; x++, i++) {
+						uint16_t c = a->px[i];
 
-					p->alpha[i] = (unsigned char)(((c >> 11) * 8 + ((c >> 5) & 63) * 4 * 2 + (c & 31) * 8) / 4);
+						p->alpha[i] = (unsigned char)(((c >> 11) * 8 + ((c >> 5) & 63) * 4 * 2 + (c & 31) * 8) / 4);
+					}
+					if ((y & 15) == 15 && cv_turn)
+						cv_turn();
 				}
 			}
 			pic_free(a);

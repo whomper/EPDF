@@ -45,11 +45,27 @@ static void turn_gap(long now)
 	turn_gap_at(now, -1);
 }
 
+static long ovl_len;
+
 static int __attribute__((noinline)) turn(void)
 {
-	const char *ra = __builtin_return_address(0);
+	const char *ra = __builtin_return_address(0), *at = ra;
+	volatile long mark = 0;
+	long *volatile sp = (long *)&mark;
+	int i;
 
-	turn_gap_at(pdf_ms(), ovl_at ? (long)(ra - ovl_at) : -1);
+	/* (render.ovl's turns come through its own leaf, turn(): the caller
+	   that counts is the return address on the stack just above that
+	   leaf's own) */
+	for (i = 0; ovl_at && i < 48; i++)
+		if ((const char *)sp[i] == ra) {
+			const char *up = (const char *)sp[i + 1];
+
+			if (up >= ovl_at && up < ovl_at + ovl_len)
+				at = up;
+			break;
+		}
+	turn_gap_at(pdf_ms() + mark, ovl_at ? (long)(at - ovl_at) : -1);
 	turns++;
 	return 0;
 }
@@ -79,6 +95,7 @@ int main(void)
 	}
 	o = rdraw_ovl();
 	ovl_at = (const char *)o;
+	ovl_len = rdraw_taken();
 	snprintf(b, sizeof b, "{\"loaded\":\"%s\",\"kb\":%ld,\"ms\":%ld,\"free_kb\":%ld}\n", o->version,
 		 (rdraw_taken() + 1023) / 1024, pdf_ms() - t, (long)Malloc(-1L) / 1024);
 	nf_debug(b);
