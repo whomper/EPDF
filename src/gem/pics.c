@@ -212,6 +212,9 @@ static void spread(SINK *k, long y);
 static void band_row(SINK *k, long y);
 
 /* the bitmap at the first row (a JPEG made whole gives none); 0 none */
+unsigned long pics_first_alloc_ms, pics_first_clear_ms;	/* (the rigs' picture-what: the bitmap's first row) */
+long pics_first_bytes;
+
 static int bm_first(SINK *k)
 {
 	PICE *e = k->e;
@@ -219,12 +222,17 @@ static int bm_first(SINK *k)
 	if (!e->bm.fd_addr && !k->nomem) {
 		/* the bitmap at the first row (a JPEG made whole gives none) */
 		long bytes = k->row * e->h;
+		unsigned long t0 = tos_ms(), t1;
 		void *bm = bm_alloc(bytes, &e->heap);
 
+		t1 = tos_ms();
+		pics_first_alloc_ms = t1 - t0;
 		if (!bm)
 			k->nomem = 1;
 		else {
 			memset(bm, 0, (size_t)bytes);
+			pics_first_clear_ms = tos_ms() - t1;
+			pics_first_bytes = bytes;
 			memset(&e->bm, 0, sizeof e->bm);
 			e->bm.fd_addr = bm;
 			e->bm.fd_w = (short)(k->wd * 16);
