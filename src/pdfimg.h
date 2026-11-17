@@ -21,6 +21,7 @@ int pdf_image_rows(PDOC *d, long obj, int w, int h, PIMG_ROW row, void *u, long 
 /* the work a picture's decoder (JPX, JBIG2) does before its rows come,
    done of of, for a progress line: 0 of 0 when there is none, or none yet */
 extern long pdfimg_work_done, pdfimg_work_of;
+/* (EPDF's build, -DPDFIMG_WHAT: the picture last begun, for its log line) */
 extern const char *pdfimg_kind;
 extern int pdfimg_reduce;
 extern long pdfimg_dw, pdfimg_dh;

@@ -834,9 +834,11 @@ static int rows_jpx(PDOC *d, POBJ *o, const unsigned char *s, long n, ROWS *out,
 		j.m.bpc = 8;
 		j.m.nc = nc;
 		j.m.pal = pal;
+#ifdef PDFIMG_WHAT
 		pdfimg_reduce = red;
 		pdfimg_dw = rw;
 		pdfimg_dh = rh;
+#endif
 		r = jpx_decode(s, n, red, jpx_row, &j, poll_ok, &jw, &jh, &jc);
 	} while (r == JPX_MEMORY && out->ny == 0 && red++ < lv);
 	free(xs);
@@ -986,7 +988,11 @@ int pdf_image_raw_rows(PDOC *d, long obj, void (*row)(void *u, long y, const uns
 	return ok;
 }
 
+#ifdef PDFIMG_WHAT
 static void note_kind(PDOC *d, long obj);
+#else
+#define note_kind(d, obj) ((void)0)
+#endif
 
 static int image_rows(PDOC *d, long obj, int w, int h, PIMG_ROW row, void *u, long max_bytes, int *why)
 {
@@ -1215,11 +1221,15 @@ static void row_through(void *u, long y, const unsigned short *px)
 
 /* the decoders' work before a picture's rows (pdfimg.h) */
 long pdfimg_work_done, pdfimg_work_of;
+#ifdef PDFIMG_WHAT
 /* the picture last begun: its filter (the last of an array), and a JPEG
-   2000 one's reduction and size as decoded (-1: none); for the logs */
+   2000 one's reduction and size as decoded (-1: none); for EPDF's log
+   line (its build only: render.ovl's and EConvert's code where 2.36 had
+   it) */
 const char *pdfimg_kind = "";
 int pdfimg_reduce = -1;
 long pdfimg_dw, pdfimg_dh;
+#endif
 
 static void work_hook(long done, long of)
 {
@@ -1227,24 +1237,27 @@ static void work_hook(long done, long of)
 	pdfimg_work_of = of;
 }
 
+#ifdef PDFIMG_WHAT
 /* the filter a picture is decoded by (the last of an array), for the logs */
 static void note_kind(PDOC *d, long obj)
 {
+	static char kind[24];	/* (copied: the object may be gone when the log line is written) */
 	POBJ *o = pdf_get(d, obj), *fl = o && o->t == PO_DICT ? pd_get(d, o, "Filter") : NULL;
 
 	if (fl && fl->t == PO_ARR && fl->a)
 		fl = pdf_res(d, pa_at(fl, fl->a - 1));
-	static char kind[24];	/* (copied: the object may be gone when the log line is written) */
-
 	strncpy(kind, fl && fl->t == PO_NAME ? fl->u.p : "none", sizeof kind - 1);
 	pdfimg_kind = kind;
 }
+#endif
 
 static void work_begin(void)
 {
 	pdfimg_work_done = pdfimg_work_of = 0;
+#ifdef PDFIMG_WHAT
 	pdfimg_reduce = -1;
 	pdfimg_dw = pdfimg_dh = 0;
+#endif
 	jpx_progress = work_hook;
 	jb2_progress = work_hook;
 }

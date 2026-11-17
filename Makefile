@@ -569,6 +569,8 @@ $(patsubst %.c,build/m68000/%.o,$(GEM_SRC)): XFLAGS += -DDLG_CLICK -Isrc/gem -Is
 # pictures are JPEG or its own streams: 20 KB of the resident size, the
 # room NVDI's menus want under four accessories, 2 Nov 2026)
 build/m68000/common/src/pic.o: XFLAGS += -DPIC_TJPGD_DSP -DPIC_NO_GIF -DPIC_NO_PNG
+# (EPDF's log line naming each picture's decoder and reduction: its build only)
+build/m68000/src/pdfimg.o: XFLAGS += -DPDFIMG_WHAT
 # dialogs drawn partly by the CPU on a 68000 (EPDF.PRG runs on an ST; the
 # profiled build links the same object)
 build/m68000/common/ui/dialog.o: XFLAGS += -DDLG_CPU
@@ -609,30 +611,33 @@ build/m68000/eppad_i.o: FT_PAD = -DFT_PAD_NAME=ep_pad_i -DFT_PAD_TEXT=$(EP_PAD_I
 build/m68000/eppad_j.o: FT_PAD = -DFT_PAD_NAME=ep_pad_j -DFT_PAD_TEXT=$(EP_PAD_J) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 build/m68000/eppad_k.o: FT_PAD = -DFT_PAD_NAME=ep_pad_k -DFT_PAD_TEXT=$(EP_PAD_K) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 build/m68000/eppad_l.o: FT_PAD = -DFT_PAD_NAME=ep_pad_l -DFT_PAD_TEXT=$(EP_PAD_L) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=$(EP_PAD_L_DATA)
+build/m68000/eppad_m.o: FT_PAD = -DFT_PAD_NAME=ep_pad_m -DFT_PAD_TEXT=$(EP_PAD_M) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 EP_PAD_A ?= 172
-EP_PAD_A_RO ?= 218
+EP_PAD_A_RO ?= 362
 EP_PAD_B ?= 208
 EP_PAD_C ?= 372
 EP_PAD_D ?= 388
 EP_PAD_E ?= 130
 EP_PAD_F ?= 214
 EP_PAD_G ?= 212
-EP_PAD_H ?= 168
+EP_PAD_H ?= 372
 EP_PAD_H_RO ?= 240
 EP_PAD_I ?= 198
 EP_PAD_I_RO ?= 248
-EP_PAD_J ?= 208
+EP_PAD_J ?= 298
 EP_PAD_K ?= 176
 EP_PAD_L ?= 246
-EP_PAD_L_DATA ?= 244
+EP_PAD_L_DATA ?= 412
+EP_PAD_M ?= 234
 build/m68000/eppad_a.o build/m68000/eppad_b.o build/m68000/eppad_c.o build/m68000/eppad_d.o \
 build/m68000/eppad_e.o build/m68000/eppad_f.o build/m68000/eppad_g.o build/m68000/eppad_h.o \
-build/m68000/eppad_i.o build/m68000/eppad_j.o build/m68000/eppad_k.o build/m68000/eppad_l.o: src/conv/ftpad.S Makefile | build/m68000
+build/m68000/eppad_i.o build/m68000/eppad_j.o build/m68000/eppad_k.o build/m68000/eppad_l.o \
+build/m68000/eppad_m.o: src/conv/ftpad.S Makefile | build/m68000
 	@mkdir -p $(dir $@)
 	$(XCC) -m68000 $(FT_PAD) -c -o $@ $<
-EP_KEEP = -Wl,-u,ep_pad_a -Wl,-u,ep_pad_a_ro -Wl,-u,ep_pad_b -Wl,-u,ep_pad_c -Wl,-u,ep_pad_d -Wl,-u,ep_pad_e -Wl,-u,ep_pad_f -Wl,-u,ep_pad_g -Wl,-u,ep_pad_h -Wl,-u,ep_pad_h_ro -Wl,-u,ep_pad_i -Wl,-u,ep_pad_i_ro -Wl,-u,ep_pad_j -Wl,-u,ep_pad_k -Wl,-u,ep_pad_l -Wl,-u,ep_pad_l_data
+EP_KEEP = -Wl,-u,ep_pad_a -Wl,-u,ep_pad_a_ro -Wl,-u,ep_pad_b -Wl,-u,ep_pad_c -Wl,-u,ep_pad_d -Wl,-u,ep_pad_e -Wl,-u,ep_pad_f -Wl,-u,ep_pad_g -Wl,-u,ep_pad_h -Wl,-u,ep_pad_h_ro -Wl,-u,ep_pad_i -Wl,-u,ep_pad_i_ro -Wl,-u,ep_pad_j -Wl,-u,ep_pad_k -Wl,-u,ep_pad_l -Wl,-u,ep_pad_l_data -Wl,-u,ep_pad_m
 EPDF_ORDER0 = $(patsubst %/src/gem/epdf.o,%/src/gem/epdf.o build/m68000/eppad_b.o,$(patsubst %/common/src/conn.o,%/common/src/conn.o build/m68000/eppad_c.o,$(patsubst %/common/src/ovl.o,%/common/src/ovl.o build/m68000/eppad_d.o,$(EPDF_HOT) $(filter-out $(EPDF_HOT),$(EPDF_OBJS)))))
-EPDF_ORDER1 = $(patsubst %/src/gem/doc.o,%/src/gem/doc.o build/m68000/eppad_j.o,$(patsubst %/src/pdfimg.o,%/src/pdfimg.o build/m68000/eppad_h.o,$(patsubst %/src/jpx.o,%/src/jpx.o build/m68000/eppad_i.o,$(EPDF_ORDER0))))
+EPDF_ORDER1 = $(patsubst %/src/gem/pics.o,%/src/gem/pics.o build/m68000/eppad_m.o,$(patsubst %/src/gem/doc.o,%/src/gem/doc.o build/m68000/eppad_j.o,$(patsubst %/src/pdfimg.o,%/src/pdfimg.o build/m68000/eppad_h.o,$(patsubst %/src/jpx.o,%/src/jpx.o build/m68000/eppad_i.o,$(EPDF_ORDER0)))))
 EPDF_ORDER = $(patsubst %/common/atari/crash.o,%/common/atari/crash.o build/m68000/eppad_k.o,$(patsubst %/common/ui/progbar.o,%/common/ui/progbar.o build/m68000/eppad_l.o,$(patsubst %/common/src/pic.o,%/common/src/pic.o build/m68000/eppad_g.o,$(patsubst %/common/ui/aboutbox.o,%/common/ui/aboutbox.o build/m68000/eppad_e.o,$(patsubst %/common/atari/dspjpeg.o,%/common/atari/dspjpeg.o build/m68000/eppad_f.o,$(EPDF_ORDER1))))))
 binary/EPDF.PRG: $(EPDF_ORDER) build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/eppad_a.o build/m68000/crash_s.o build/m68000/coro.o common/atari/link.ld | binary
 	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections $(EP_KEEP) \
