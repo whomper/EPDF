@@ -16,6 +16,7 @@
 #include "tos.h"
 #include "gemui.h"
 #include "text.h"
+#include "textcells.h"
 #include "iconify.h"
 #include "docview.h"
 #include "bidi.h"

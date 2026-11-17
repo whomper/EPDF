@@ -15,6 +15,7 @@
 #include "gemui.h"
 #include "text.h"
 #include "fontsel.h"
+#include "textcells.h"
 #include "epdf.h"
 
 static short font_id = 1, font_pt;	/* in use: VDI id, points (system font: 8 or 16) */
@@ -53,14 +54,14 @@ static void set(short id, short pt)
 	   them (Erez, 17 Nov 2026: FreeMono drew TOS's Hebrew codes as other
 	   letters; EMail's way, common's text_cells_n) */
 	if (id == 1) {
-		text_hebrew(FS_HEB_MAP, NULL, pt);
-		text_cells(TEXT_RUNS);
+		text_hebrew(FS_HEB_MAP, NULL, 1, pt);
+		text_cells(TEXT_RUNS, cw, ch);
 	} else {
 		unsigned short idx[27];
 		short why = 0, how = fontsel_hebrew(id, 0, idx, &why);
 
-		text_hebrew(how, idx, pt);
-		text_cells(text_cells_probe(vdi_h));
+		text_hebrew(how, idx, id, pt);
+		text_cells(text_cells_probe(vdi_h, id, cw), cw, ch);
 		/* (the rigs: how the font's Hebrew is drawn, hebfont.py) */
 		log_event("font-hebrew", how == FS_HEB_UNICODE ? "font" : how == FS_HEB_SYSTEM ? "system" : "as-is", NULL);
 	}
