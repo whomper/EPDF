@@ -185,6 +185,7 @@ void font_exit(void);
    the text drawing told its cell (*w, *h), then the view's font back */
 void font_small(short *w, short *h);
 void font_back(void);
+int font_gdos(void);			/* the view's font is a GDOS one */
 
 /* find.c */
 int find_dialog(char *text);		/* text: 65 bytes; 1 when Find was chosen */

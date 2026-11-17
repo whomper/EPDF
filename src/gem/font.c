@@ -179,6 +179,13 @@ void font_small(short *w, short *h)
 	text_font(vdi_h, 1, *w, *h);
 }
 
+/* a GDOS font is the view's: its rows through text_cells_n (textwin.c);
+   the system font's as before, one text_plain a row */
+int font_gdos(void)
+{
+	return font_id != 1;
+}
+
 void font_back(void)
 {
 	set(font_id, font_pt);
