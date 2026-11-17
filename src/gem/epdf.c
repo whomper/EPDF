@@ -1760,8 +1760,11 @@ int main(void)
 				   on an ST) */
 				bg_begin();
 				if (doc_pic_busy() || doc_pic_start())
-					while (!doc_pic_slice(40, &obj) && bg_more())
-						;
+					/* one slice, the turn's whole (80 ms on a 68000, 40
+					   on the rest): it ends early when its next step
+					   wouldn't fit, and a second one started after that
+					   ran the turn past its end */
+					doc_pic_slice(bg_room(BG_SLICE_030 + 10) ? BG_SLICE_000 : BG_SLICE_030, &obj);
 				if (!doc_pic_busy() && obj >= 0)
 					arrived_pic = obj;
 				else {

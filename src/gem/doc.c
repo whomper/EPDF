@@ -571,28 +571,12 @@ static long retried_page = -1;
 static long retried_obj = -1;
 #define STORE_KEEP (16L * 1024)
 
+/* the picture's last turn and its longest stretch between two (the
+   rigs' picture-what line) */
+static unsigned long pic_last, pic_gap;
+
 /* the reader's hook: the machine back to the event loop when the slice
    is up; 1 (stop) when the document is closing */
-/* (the rigs' picture-what: the picture's longest stretch between two
-   turns and where it was then: its decoder's work and rows made) */
-static unsigned long pic_last, pic_gap;
-static long pic_gap_work, pic_gap_of, pic_gap_made;
-static long pic_gap_at[4], pic_gap_from[4], pic_prev_at[4];	/* the code's addresses on the stack (epdf.elf's: less the text's base) */
-
-static void __attribute__((noinline)) pic_where(long *at)
-{
-	volatile long mark = 0;
-	long *volatile sp = (long *)&mark;
-	long tb = *(long *)((char *)_BasePage + 8), tl = *(long *)((char *)_BasePage + 12);
-	int i, k = 0;
-
-	for (i = 0; i < 4; i++)
-		at[i] = -1;
-	for (i = 1; i < 96 && k < 4; i++)
-		if (sp[i] > tb && sp[i] < tb + tl && !(sp[i] & 1))
-			at[k++] = sp[i] - tb;
-}
-
 static int slice_up(void *ctx)
 {
 	(void)ctx;
@@ -602,18 +586,19 @@ static int slice_up(void *ctx)
 		return 0;	/* on the main stack (a document's object read there): nothing to hand back */
 	if (running == &pic_co && rpic) {
 		unsigned long now = tos_ms();
-		long here[4];
 
-		pic_where(here);
-		if (pic_last && now - pic_last > pic_gap) {
+		if (now - pic_last > pic_gap)
 			pic_gap = now - pic_last;
-			pic_gap_work = pdfimg_work_done;
-			pic_gap_of = pdfimg_work_of;
-			pic_gap_made = rpic->made;
-			memcpy(pic_gap_at, here, sizeof here);
-			memcpy(pic_gap_from, pic_prev_at, sizeof here);
+		/* the slice ends now if the step since the last turn wouldn't
+		   fit again in what's left: a picture's rows take up to 45 ms
+		   each on Falcon-4 (the dither's nearest pens found as a
+		   picture's colours first come), and a slice that ran a row
+		   past its end was 55-85 ms */
+		if (now + (now - pic_last) >= slice_end) {
+			pic_last = now;
+			coro_switch(running, &main_co);
+			return abandon;
 		}
-		memcpy(pic_prev_at, here, sizeof here);
 		pic_last = now;
 	}
 	if (tos_ms() >= slice_end) {
@@ -698,30 +683,17 @@ static long pic_slices;
 
 static void picture_what(void)
 {
-	static char a[96];
+	char a[96];
 
+	/* its decoder, its reduction and size decoded (JPX), its own time,
+	   its slices and its longest stretch between two turns */
 	if (pdfimg_reduce >= 0)
-		snprintf(a, sizeof a, "%s page %ld r%d %ldx%ld in %lu ms %ld slices", pdfimg_kind, rpic->page,
-			 pdfimg_reduce, pdfimg_dw, pdfimg_dh, pic_in_ms, pic_slices);
+		snprintf(a, sizeof a, "%s page %ld r%d %ldx%ld in %lu ms %ld slices, most %lu", pdfimg_kind, rpic->page,
+			 pdfimg_reduce, pdfimg_dw, pdfimg_dh, pic_in_ms, pic_slices, pic_gap);
 	else
-		snprintf(a, sizeof a, "%s page %ld in %lu ms %ld slices", *pdfimg_kind ? pdfimg_kind : "-", rpic->page,
-			 pic_in_ms, pic_slices);
+		snprintf(a, sizeof a, "%s page %ld in %lu ms %ld slices, most %lu", *pdfimg_kind ? pdfimg_kind : "-",
+			 rpic->page, pic_in_ms, pic_slices, pic_gap);
 	log_event("picture-what", a, NULL);
-	snprintf(a, sizeof a, "%lu ms at work %ld of %ld, rows %ld of %d", pic_gap, pic_gap_work, pic_gap_of,
-		 pic_gap_made, rpic->h);
-	log_event("picture-gap", a, NULL);
-	snprintf(a, sizeof a, "%lx %lx %lx %lx", pic_gap_from[0], pic_gap_from[1], pic_gap_from[2], pic_gap_from[3]);
-	log_event("picture-gap-from", a, NULL);
-	snprintf(a, sizeof a, "%lx %lx %lx %lx", pic_gap_at[0], pic_gap_at[1], pic_gap_at[2], pic_gap_at[3]);
-	log_event("picture-gap-at", a, NULL);
-	{
-		extern unsigned long pics_first_alloc_ms, pics_first_clear_ms;
-		extern long pics_first_bytes;
-
-		snprintf(a, sizeof a, "%ld bytes: alloc %lu ms, clear %lu ms", pics_first_bytes, pics_first_alloc_ms,
-			 pics_first_clear_ms);
-		log_event("picture-bitmap", a, NULL);
-	}
 	pic_in_ms = 0;
 	pic_slices = 0;
 	pic_gap = 0;
@@ -1084,7 +1056,6 @@ int doc_pic_slice(unsigned long ms, long *obj)
 		unsigned long t0 = tos_ms();
 
 		pic_last = t0;
-		pic_prev_at[0] = -2;	/* (a slice's start: the main loop's, not a turn's) */
 		running = &pic_co;
 		coro_switch(&main_co, &pic_co);
 		running = NULL;		/* back on the main stack: slice_up hands nothing back */

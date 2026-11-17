@@ -1234,7 +1234,10 @@ static void note_kind(PDOC *d, long obj)
 
 	if (fl && fl->t == PO_ARR && fl->a)
 		fl = pdf_res(d, pa_at(fl, fl->a - 1));
-	pdfimg_kind = fl && fl->t == PO_NAME ? fl->u.p : "none";
+	static char kind[24];	/* (copied: the object may be gone when the log line is written) */
+
+	strncpy(kind, fl && fl->t == PO_NAME ? fl->u.p : "none", sizeof kind - 1);
+	pdfimg_kind = kind;
 }
 
 static void work_begin(void)
