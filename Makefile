@@ -614,7 +614,7 @@ build/m68000/eppad_l.o: FT_PAD = -DFT_PAD_NAME=ep_pad_l -DFT_PAD_TEXT=$(EP_PAD_L
 build/m68000/eppad_m.o: FT_PAD = -DFT_PAD_NAME=ep_pad_m -DFT_PAD_TEXT=$(EP_PAD_M) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 EP_PAD_A ?= 172
 EP_PAD_A_RO ?= 362
-EP_PAD_B ?= 208
+EP_PAD_B ?= 164
 EP_PAD_C ?= 372
 EP_PAD_D ?= 388
 EP_PAD_E ?= 130

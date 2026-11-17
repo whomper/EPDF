@@ -1685,8 +1685,13 @@ int main(void)
 		if (win_sliders_due() || menus_due || pending || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0 ||
 		    win_progress_due() || win_ahead_due() || strip_now)
 			flags |= MU_TIMER;
+		/* no pace while the picture on the page in view is made: the
+		   user waits for it, as for its rows (a scan's row is 30 ms on
+		   Falcon-4, a turn holds one, and the 50 ms pace between turns
+		   left it a third of the machine: 35.5 -> 50.6 s) */
 		t = win_sliders_due() || menus_due || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0 ||
-		    win_progress_due() || strip_now ? 0 : bg_timer(pending || win_ahead_due(), 1000);
+		    win_progress_due() || strip_now || (doc_pic_busy() && pics_focus_busy() && bg_may_work())
+			? 0 : bg_timer(pending || win_ahead_due(), 1000);
 		{
 			long pw = win_progress_wait();	/* the row to go once nothing has run for a while */
 
