@@ -608,7 +608,7 @@ build/m68000/eppad_h.o: FT_PAD = -DFT_PAD_NAME=ep_pad_h -DFT_PAD_TEXT=$(EP_PAD_H
 build/m68000/eppad_i.o: FT_PAD = -DFT_PAD_NAME=ep_pad_i -DFT_PAD_TEXT=$(EP_PAD_I) -DFT_PAD_RO=$(EP_PAD_I_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 build/m68000/eppad_j.o: FT_PAD = -DFT_PAD_NAME=ep_pad_j -DFT_PAD_TEXT=$(EP_PAD_J) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 build/m68000/eppad_k.o: FT_PAD = -DFT_PAD_NAME=ep_pad_k -DFT_PAD_TEXT=$(EP_PAD_K) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
-build/m68000/eppad_l.o: FT_PAD = -DFT_PAD_NAME=ep_pad_l -DFT_PAD_TEXT=$(EP_PAD_L) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
+build/m68000/eppad_l.o: FT_PAD = -DFT_PAD_NAME=ep_pad_l -DFT_PAD_TEXT=$(EP_PAD_L) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=$(EP_PAD_L_DATA)
 EP_PAD_A ?= 172
 EP_PAD_A_RO ?= 218
 EP_PAD_B ?= 208
@@ -624,6 +624,7 @@ EP_PAD_I_RO ?= 248
 EP_PAD_J ?= 208
 EP_PAD_K ?= 176
 EP_PAD_L ?= 246
+EP_PAD_L_DATA ?= 0
 build/m68000/eppad_a.o build/m68000/eppad_b.o build/m68000/eppad_c.o build/m68000/eppad_d.o \
 build/m68000/eppad_e.o build/m68000/eppad_f.o build/m68000/eppad_g.o build/m68000/eppad_h.o \
 build/m68000/eppad_i.o build/m68000/eppad_j.o build/m68000/eppad_k.o build/m68000/eppad_l.o: src/conv/ftpad.S Makefile | build/m68000
