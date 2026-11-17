@@ -424,10 +424,24 @@ at first. This section is kept up to date: the build, the tests, what a release 
   stretch's ends, rovl.py remakes stale host pages), the data pad, common 1c01cfd. The Release
   workflow installs make test's oracles (poppler-utils, libopenjp2-tools, qpdf). Known: a document is
   read more slowly while a JPX or JBIG2 picture decodes; Copy on a Falcon 5-10 ms over 2.35's (within
-  50). The Pi's aerapdf decodes JPX/JBIG2 once AERA-Gateway rebuilds it from 2.36. 2.37 (the hub):
-  a picture out of view yields to the text reading; JPX reduced by its box (manual-stinternals-text
-  page 2: 47 -> 15 s on Falcon-4:16) and the 68030's lifting; Copy; a log line naming each picture's
-  decoder and reduction.
+  50). The Pi's aerapdf decodes JPX/JBIG2 once AERA-Gateway rebuilds it from 2.36 (AERA-Gateway 1.49
+  does). 2.37 (the hub's list, closing #48): pictures only ahead of the view wait while pages are
+  still to be read (doc_pic_ahead_only; the one in view takes turns as before: the hub's "text first,
+  pictures in view next, the rest after", over Erez's 4 Nov pictures ahead); a picture's rows hand
+  back a row at a time (pics.c's sink_row: common's dither finds its nearest pens as a picture's
+  colours first come, 40 ms a row of 488 on Falcon-4; the JPX decoder's emit polls every 4 rows), its
+  slice ends when the step since its last turn wouldn't fit again (slice_up) and the main loop runs
+  one picture slice a turn, the turn's whole (80 ms on a 68000, 40 else): manual-stinternals-text's
+  JPX on Falcon-4:16 185 -> 40 ms, the run's stretches over 50 346 -> 60 (2.35 49); the log line
+  "picture-what FILTER page N rR WxH in MS ms N slices, most MS" (-DPDFIMG_WHAT, EPDF's pdfimg.o only:
+  render.ovl, ECONVERT.PRG and CONVTEST.PRG byte for byte 2.36's); EP_PAD_M after pics.o and the pads
+  reset against 2.35. JPX's reduction by the box was already in (r2, 488 x 711, for that picture: its
+  own time 40 s, 15 of them the decoder's, the rest the rows' dither). The 68030's lifting measured:
+  GCC already makes muls.w #k there; a side-by-side loop was 14,992 -> 14,706 ms (-1.9 %) for +1,142
+  bytes in EPDF.PRG, not taken. Copy on Erez's configuration: its turn's work is the same as 2.35's
+  under gemprof (6.9 ms EPDF, 3.1 ms TOS); the rig's Copy 45 35 45 45 (2.36 45 45, 2.35 35 <20),
+  its turns 40 x 4 (2.36 45 45). Known: on ST-1 big.py's novel-boymechanic has pictures refused for
+  memory and stretches to 2.4 s, as 2.35 (7.4 s) and 2.36.
   Next, after 2.36 (Erez, 17 Nov 2026: "go with Faster display as default and lets see that the UI is
   real enough"): the converter prepares pictures and whole pages in the screen's own colours, so EPDF
   only unpacks and copies (the rigs' logs: on Falcon-4:256 a photo 1.2 s decoding, 6.7 s fitting to
