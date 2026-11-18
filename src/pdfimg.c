@@ -1319,7 +1319,7 @@ long pdf_image_rows_need(PDOC *d, long obj, int w, int h)
 	if (fn && (!strcmp(fn, "DCTDecode") || !strcmp(fn, "DCT")))
 		n = 12288L + sw * 22;
 	else if (fn && (!strcmp(fn, "CCITTFaxDecode") || !strcmp(fn, "CCF")))
-		n = NEED_PIECE + sw * 10 + (long)w * 2;
+		n = NEED_PIECE + 10240 + sw * 5 + (long)w * 2;	/* (ccitt.c: its 32 KB of tables and 4 per column; a 6,600-wide scan 74.6 KB on the host, 2.39) */
 	else if (!fn || !strcmp(fn, "FlateDecode") || !strcmp(fn, "Fl"))
 		n = NEED_INFLATE + (long)w * 15 + sw * 5 / 2;
 	else
