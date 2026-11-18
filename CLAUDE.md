@@ -496,6 +496,14 @@ at first. This section is kept up to date: the build, the tests, what a release 
   EP_PAD_V after dialog.o. The pairs against 2.37 within a tick on Erez's configuration, Falcon-4:16,
   ST:mono and ST:med. EPAD's pads are NOPs, not zeros (the same bytes' count: no code moved), so
   oddaccess.py's objdump reads doc_view_moved in step (zeros it skips four bytes at a time).
+  The regression gate ran on a46bb0b17 (5b2b5b279's rows stand: only the pads' bytes differ):
+  every row ok but TT low and ST low (refused, 320 wide); big.py --erz --rovl 25 of 25 clean. Three
+  pairs against 2.37: within a tick but ST:mono's Select all (45/55/55 against 45/45/45) and next
+  page (205 against 195 median), cleared by the hub on gemprof (the same work to 0.1 ms: Select all
+  EPDF 35.7 + TOS 15.3 ms, over its 50 in 2.37 too; next page 170.0 + 36.1). 2.38 went out on
+  18 Nov 2026 (v2.38 on 406f07b64, the hub's go on a46bb0b17 after its acc_all with four
+  accessories under NVDI, two boots). Next (2.39): common's 796e05e/2fa3aa7 (Settings in turns),
+  profpad.py, pic.c's grey nearest pens, ST-1's fail-fast with the hub's #98.
   Next, after 2.36 (Erez, 17 Nov 2026: "go with Faster display as default and lets see that the UI is
   real enough"): the converter prepares pictures and whole pages in the screen's own colours, so EPDF
   only unpacks and copies (the rigs' logs: on Falcon-4:256 a photo 1.2 s decoding, 6.7 s fitting to
