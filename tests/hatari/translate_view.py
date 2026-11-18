@@ -123,10 +123,10 @@ def settings_while_translating(r):
         time.sleep(2)
 
     def languages(x, y):
-        """General's Languages... (two rows under Translate into), the Gateway's list
+        """General's Languages... (under Translate into: x + 192, y + 140 on ST:mono), the Gateway's list
         asked, then Esc: "languages-dialog cancel" (2.39: its 4 KB taken while it is up)"""
         n = r.console().count("EPDF languages-dialog ")
-        r.click(x + 9 * 8 + 20, y + 7 * rh + rh)
+        r.click(x + 24 * 8, y + 8 * rh + 3 * rh // 4)
         time.sleep(8)
         r.key("Escape")
         e = time.time() + 30
