@@ -620,6 +620,7 @@ static int pdf_stream_in(PDOC *d, POBJ *o, long onum, SBUF *out, const char **te
 		*out = (SBUF){0};
 		sb_init(out);
 		if (!sb_reserve(out, b.len)) {	/* (exactly: no doubling as the pieces come) */
+			d->st.oom++;		/* (a refusal: memory, not damage, to the caller) */
 			pdf_free(d, raw, len + 1);
 			return -1;
 		}
@@ -627,6 +628,8 @@ static int pdf_stream_in(PDOC *d, POBJ *o, long onum, SBUF *out, const char **te
 			long n = b.len - at < RAW_PIECE ? b.len - at : RAW_PIECE;
 
 			if ((at && src_pause(d)) || (n && !sb_add(out, b.s + at, n))) {
+				if (!d->stopping)
+					d->st.oom++;	/* (sb_add refused, not the stop hook) */
 				sb_free(out);
 				pdf_free(d, raw, len + 1);
 				return -1;
@@ -1057,7 +1060,13 @@ int pdf_stream_head(PDOC *d, POBJ *o, long onum, long want, SBUF *out, int *whol
 
 		if (room > want - out->len)
 			room = want - out->len;
-		if ((out->len + n + 1 > out->cap && !sb_reserve(out, room)) || src_pause(d)) {
+		if (out->len + n + 1 > out->cap && !sb_reserve(out, room)) {
+			d->st.oom++;		/* (a refusal: memory, not damage, to the caller) */
+			pdf_stream_close(s);
+			sb_free(out);
+			return -1;
+		}
+		if (src_pause(d)) {
 			pdf_stream_close(s);
 			sb_free(out);
 			return -1;
@@ -1079,8 +1088,10 @@ int pdf_stream_head(PDOC *d, POBJ *o, long onum, long want, SBUF *out, int *whol
 		*whole = pdf_stream_read(s, &c, 1) == 0;
 	}
 	pdf_stream_close(s);
-	if (!out->s && !sb_reserve(out, 0))
+	if (!out->s && !sb_reserve(out, 0)) {
+		d->st.oom++;
 		return -1;
+	}
 	out->s[out->len] = 0;
 	return 0;
 }
