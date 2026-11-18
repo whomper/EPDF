@@ -532,7 +532,24 @@ at first. This section is kept up to date: the build, the tests, what a release 
   common's main, in inflate_fast.S's place with the same entry, exit, window and tables; tests/inflate on
   the host and m68k, byte for byte over the corpus's streams and the fuzz seeds, coldfire's make test and
   make same, cycles per output byte on 68000 and 68030 before and after, build's tables and inflate's
-  memory on a 1 MB ST). (5) Faster display not begun. Pads to refit once the code is done.
+  memory on a 1 MB ST). (5) and (6) move to 2.40 (the hub, 18 Nov 2026): 2.39 is the fix-forward
+  of a crash in 2.38 and before, found by the #98 evidence (big.py, ST-1, TOS 1.04): pdffilt.c's f_lzw
+  and f_rl wrote a code's string after an unchecked sb_room, so a 1 MB ST refused the output's growth
+  and the decoder wrote over the heap (tech-rfc2616, LZW; 2.38 crashed in it and in
+  manual-stinternals-text). Found by a scratch build with libc's heap_check on every allocation and an
+  allocation ring (never committed). Both decoders now stop on a refusal (3dc4cc3f9); tests/filtmem.py in
+  make test (build/pdftext_oom: ASan, tests/oomwrap.c's realloc refusing past REALLOC_MAX). The notes
+  say: "a 1 MB ST could crash reading an LZW-compressed PDF". missed_pics only for a Do whose own
+  lookup was refused (do_xobject notes it; a book's shared resources had given every image a line).
+  CCITT's estimate by its decoder's cost, NEED_PIECE + 10240 + sw * 5 + w * 2 (a 6,600-wide scan
+  refused where 2.38 made it; 9c662ec88). Under the estimate's own block, fits_in_pieces takes it in
+  at most four blocks and gives them back, then the main heap ("picture-zone-main ... pieces":
+  heap_room() is the largest block, a Flate picture's biggest is inflate's 65,797; db6266fb8). The
+  evidence against 2.38 (two emulators a side on a 4-CPU host: big.py counts pages over wall time):
+  ST-1 no document reads fewer pages beyond one in a run, and several read far more; the 4 MB ST is
+  within a page, and MEASURE.PRG on ST times the reader the same (manual-compendium 60 pages 69.91 s
+  both). Known: manual-stinternals-text on ST-1 has 3-4 pages refused memory at the reader's 510 KB
+  peak (2.38 crashes in it). Pads to refit once the code is done.
   Next, after 2.36 (Erez, 17 Nov 2026: "go with Faster display as default and lets see that the UI is
   real enough"): the converter prepares pictures and whole pages in the screen's own colours, so EPDF
   only unpacks and copies (the rigs' logs: on Falcon-4:256 a photo 1.2 s decoding, 6.7 s fitting to
