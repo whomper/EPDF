@@ -124,6 +124,7 @@ test: build/test_xe build/test_ccitt build/test_textview build/test_inf build/te
 	python3 tests/jpx.py build/jpx
 	python3 tests/onebit.py build/onebit
 	python3 tests/glyphwise.py
+	python3 tests/missedpic.py build/missedpic
 	python3 tests/crypt.py
 	build/test_textview
 	build/test_inf

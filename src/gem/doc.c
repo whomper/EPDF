@@ -556,6 +556,7 @@ const char *doc_tr_file_to(void)
 	return doc && doc->prepared ? doc->tr_to : "";
 }
 static long rpage_oom;			/* the reader's refused allocations before it */
+static long rpage_missed;		/* its pictures given their line after a refusal, before it */
 static PICE *rpic;			/* the picture being decoded, NULL none */
 static void pz_in(void);		/* its heap zone (a 68000's): its slices with it */
 static void pz_out(void);
@@ -654,6 +655,7 @@ static void reader(void)
 		pdf_page_reset(doc);
 		doc->st.mem_peak = doc->st.mem;	/* this page's own peak, for the log */
 		rpage_oom = doc->st.oom;
+		rpage_missed = doc->st.img_missed;
 		ptext_init(rt);
 		rt->soft = 1;
 		rt->pics = 1;
@@ -1041,11 +1043,12 @@ static void pz_end(void)
 	log_event("picture-zone", a, NULL);
 }
 
-/* e's zone, if it gets one: 1 to go on, 0 refused (it fails now) */
+/* e's memory at its start: 1 to go on (in a zone, or on the main heap),
+   0 refused (it fails now) */
 static int pz_begin(PICE *e)
 {
 	static int warm;
-	long need;
+	long need, room;
 	char a[64];
 
 	if (rdraw_machine() || e->obj >= PICS_PAGE)
@@ -1072,12 +1075,23 @@ static int pz_begin(PICE *e)
 	need += need / 16 + 2048;	/* (a margin: the peaks logged say how much) */
 	pzone_size = need;
 	pzone_obj = e->obj;
-	if ((pzone = heap_zone(need)) != NULL || (give_back("picture") && (pzone = heap_zone(need)) != NULL)) {
-		snprintf(a, sizeof a, "%ld %ld room %ld", e->obj, need, heap_room());
+	/* the hub's bands (18 Nov 2026): under the estimate, refused now (after
+	   what the store can give back); up to twice it, a zone of its own, so
+	   the reading isn't refused while it decodes; more room than that, the
+	   main heap as in 2.38 (a zone there would only cut the reading's room:
+	   scan-gfabasic on ST-1 read 19 pages with zones against 55) */
+	room = heap_room();
+	if (room < need && give_back("picture"))
+		room = heap_room();
+	snprintf(a, sizeof a, "%ld %ld room %ld", e->obj, need, room);
+	if (room >= 2 * need) {
+		log_event("picture-zone-main", a, NULL);
+		return 1;
+	}
+	if (room >= need && (pzone = heap_zone(need)) != NULL) {
 		log_event("picture-zone-begin", a, NULL);
 		return 1;
 	}
-	snprintf(a, sizeof a, "%ld %ld room %ld", e->obj, need, heap_room());
 	log_event("picture-zone-refused", a, NULL);
 	return 0;
 }
@@ -1686,8 +1700,9 @@ long doc_slice(unsigned long ms)
 		char p[16], l[96];
 
 		snprintf(p, sizeof p, "%ld", n + 1);
-		snprintf(l, sizeof l, "%ld peak %ld heap %ld oom %ld%s", len, doc->st.mem_peak / 1024,
-			 (heap_st + heap_tt) / 1024, doc->st.oom - rpage_oom, rt_failed ? " failed" : "");
+		snprintf(l, sizeof l, "%ld peak %ld heap %ld oom %ld%s missed %ld", len, doc->st.mem_peak / 1024,
+			 (heap_st + heap_tt) / 1024, doc->st.oom - rpage_oom, rt_failed ? " failed" : "",
+			 doc->st.img_missed - rpage_missed);
 		log_event("page", p, l);
 	}
 	return n;

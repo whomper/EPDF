@@ -853,6 +853,15 @@ static void cache_put(PDOC *d, long num, POBJ *o)
 	c->o = o;
 }
 
+/* an object marked unloadable for the page tried again at its next use:
+   one refused memory, where the caller has room now (pdftext.c's
+   missed_pics) */
+void pdf_retry_obj(PDOC *d, long num)
+{
+	if (num >= 0 && cache_find(d, num) == &unloadable)
+		d->cache[num & (PCACHE - 1)].o = NULL;
+}
+
 /* Parse an object whose text starts at buf. For a stream the dict gets an
    extra entry "$soff" (where the data starts). Returns NULL if the text is
    cut off (*trunc) or is not an object. */
