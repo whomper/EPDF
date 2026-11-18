@@ -254,7 +254,7 @@ comma := ,
 FT_CV_KEEP = $(addprefix -Wl$(comma)-u$(comma),FT_Matrix_Invert FT_Get_Next_Char FT_Vector_Transform \
                FT_Outline_Get_Orientation FT_Outline_EmboldenXY FT_Get_Advances FT_Get_Advance \
                ft_cv_pad ft_cv_pad_ro ft_cv_pad_str ft_cv_pad_data ft_cv_pad_init_ro lj_cv_pad pic_cv_pad cs_cv_pad ec_cv_pad ec_cv_pad_ro head_cv_pad ct_cv_pad \
-               dj_cv_pad ec_ab_pad ec_od_pad ec_cr_pad ec_pb_pad ec_pic_pad ec_if_pad rv_pic_pad rv_gif_pad rv_gif_pad_ro rv_gif_pad_str)
+               dj_cv_pad ec_ab_pad ec_od_pad ec_cr_pad ec_pb_pad ec_pic_pad ec_if_pad ec_dl_pad ec_st_pad rv_pic_pad rv_gif_pad rv_gif_pad_ro rv_gif_pad_str)
 FT_CV_OBJS = $(patsubst ft/autofit/autofit.o,ft/ftpad_af.o,$(patsubst ft/base/ftinit.o,ft/base/ftinit_noaf.o ft/ftpad_init.o,$(FT_OBJS)))
 build/m68030/ft/ftpad_af.o: FT_PAD = -DFT_PAD_NAME=ft_cv_pad -DFT_PAD_TEXT=68 -DFT_PAD_RO=36 -DFT_PAD_STR=18 -DFT_PAD_DATA=8
 build/m68030/ft/ftpad_init.o: FT_PAD = -DFT_PAD_NAME=ft_cv_pad_init -DFT_PAD_TEXT=0 -DFT_PAD_RO=4 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
@@ -275,6 +275,12 @@ build/m68030/eccrpad.o: FT_PAD = -DFT_PAD_NAME=ec_cr_pad -DFT_PAD_TEXT=$(EC_CR_P
 EC_CR_PAD ?= 176
 build/m68030/ecpbpad.o: FT_PAD = -DFT_PAD_NAME=ec_pb_pad -DFT_PAD_TEXT=$(EC_PB_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 EC_PB_PAD ?= 222
+# and after its dialog.o and settings.o (AERA-Atari 2fa3aa7, 18 Nov 2026:
+# Settings in turns), against 2.38
+build/m68030/ecdlpad.o: FT_PAD = -DFT_PAD_NAME=ec_dl_pad -DFT_PAD_TEXT=$(EC_DL_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
+EC_DL_PAD ?= 40
+build/m68030/ecstpad.o: FT_PAD = -DFT_PAD_NAME=ec_st_pad -DFT_PAD_TEXT=$(EC_ST_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
+EC_ST_PAD ?= 40
 # EConvert's own after pic.o and before inflate_fast.o (it has no dspjpeg.o
 # there: CONVTEST's PIC_PAD and DJ_PAD don't fit it)
 build/m68030/ecpicpad.o: FT_PAD = -DFT_PAD_NAME=ec_pic_pad -DFT_PAD_TEXT=$(EC_PIC_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
@@ -300,7 +306,7 @@ CT_PAD ?= 106
 build/m68030/headpad.o: FT_PAD = -DFT_PAD_NAME=head_cv_pad -DFT_PAD_TEXT=$(HEAD_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 HEAD_PAD ?= 220
 build/m68030/ctpad.o build/m68030/headpad.o build/m68030/ecpad.o build/m68030/cspad.o build/m68030/picpad.o build/m68030/ljpad.o build/m68030/ft/ftpad_af.o build/m68030/ft/ftpad_init.o \
-build/m68030/djpad.o build/m68030/ecabpad.o build/m68030/ecodpad.o build/m68030/eccrpad.o build/m68030/ecpbpad.o build/m68030/ecpicpad.o build/m68030/ecifpad.o \
+build/m68030/djpad.o build/m68030/ecabpad.o build/m68030/ecodpad.o build/m68030/eccrpad.o build/m68030/ecpbpad.o build/m68030/ecpicpad.o build/m68030/ecifpad.o build/m68030/ecdlpad.o build/m68030/ecstpad.o \
 build/m68030/rvpicpad.o build/m68030/rvgifpad.o: src/conv/ftpad.S Makefile | build/m68030
 	@mkdir -p $(dir $@)
 	$(XCC) -m68030 $(FT_PAD) -c -o $@ $<
@@ -535,7 +541,7 @@ build/m68000ec/sting_s.o: common/atari/sting.S | build/m68000ec
 	$(XCC) -m68000 -c -o $@ $<
 build/m68000ec/crt0_ec.o: common/atari/crt0.S | build/m68000ec
 	$(XCC) -m68000 -DSTACK_SIZE=16384 -c -o $@ $<
-EC_OBJS = $(patsubst %/common/atari/crash.o,%/common/atari/crash.o build/m68030/eccrpad.o,$(patsubst %/common/ui/progbar.o,%/common/ui/progbar.o build/m68030/ecpbpad.o,$(patsubst %/common/ui/offdraw.o,%/common/ui/offdraw.o build/m68030/ecodpad.o,$(patsubst %/common/ui/aboutbox.o,%/common/ui/aboutbox.o build/m68030/ecabpad.o,$(patsubst %.c,build/m68000ec/%.o,$(EC_GEM_SRC)))))) build/m68000ec/version.o build/m68000ec/sting_s.o build/m68030/ecpad.o \
+EC_OBJS = $(patsubst %/common/ui/dialog.o,%/common/ui/dialog.o build/m68030/ecdlpad.o,$(patsubst %/common/ui/settings.o,%/common/ui/settings.o build/m68030/ecstpad.o,$(patsubst %/common/atari/crash.o,%/common/atari/crash.o build/m68030/eccrpad.o,$(patsubst %/common/ui/progbar.o,%/common/ui/progbar.o build/m68030/ecpbpad.o,$(patsubst %/common/ui/offdraw.o,%/common/ui/offdraw.o build/m68030/ecodpad.o,$(patsubst %/common/ui/aboutbox.o,%/common/ui/aboutbox.o build/m68030/ecabpad.o,$(patsubst %.c,build/m68000ec/%.o,$(EC_GEM_SRC)))))))) build/m68000ec/version.o build/m68000ec/sting_s.o build/m68030/ecpad.o \
           $(call JB2ASM,$(patsubst %/common/src/charset.o,%/common/src/charset.o build/m68030/cspad.o,$(patsubst %/common/src/pic.o,%/common/src/pic.o build/m68030/ecpicpad.o,$(patsubst %/jdcoefct.o,%/jdcoefct.o build/m68030/ljpad.o,$(addprefix build/m68030cv/,$(patsubst %.c,%.o,$(EC_CV_SRC))))))) build/m68030/ecifpad.o build/m68030/inflate_fast.o \
           $(addprefix build/m68030/,$(FT_CV_OBJS))
 binary/ECONVERT.PRG: XCPU = -m68000
@@ -608,6 +614,9 @@ EPDF_HOT = build/m68000/inflate_fast.o $(addprefix build/m68000/,$(HOT_OBJS))
 # variables by A's data at their start and L's; still off: inside the files
 # that changed (epdf.c, textwin.c, font.c, gem.c, av.c, text.c, net_tos.c)
 # and tos.c's __mulsi3 to __modsi3, 52 bytes from udivmod
+# 2.39, against 2.38: common 2fa3aa7 (Settings in turns) grew dialog.c and
+# settings.c; V and R refitted (98 -> 72, 196 -> 110); still off, the code
+# after the change inside dialog.o (6 KB) and settings.o (3 KB)
 build/m68000/eppad_a.o: FT_PAD = -DFT_PAD_NAME=ep_pad_a -DFT_PAD_TEXT=$(EP_PAD_A) -DFT_PAD_RO=$(EP_PAD_A_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=$(EP_PAD_A_DATA)
 build/m68000/eppad_b.o: FT_PAD = -DFT_PAD_NAME=ep_pad_b -DFT_PAD_TEXT=$(EP_PAD_B) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 build/m68000/eppad_c.o: FT_PAD = -DFT_PAD_NAME=ep_pad_c -DFT_PAD_TEXT=$(EP_PAD_C) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
@@ -651,10 +660,10 @@ EP_PAD_N ?= 210
 EP_PAD_O ?= 130
 EP_PAD_P ?= 72
 EP_PAD_Q ?= 62
-EP_PAD_R ?= 196
+EP_PAD_R ?= 110
 EP_PAD_S ?= 52
 EP_PAD_T ?= 14
-EP_PAD_V ?= 98
+EP_PAD_V ?= 72
 build/m68000/eppad_a.o build/m68000/eppad_b.o build/m68000/eppad_c.o build/m68000/eppad_d.o \
 build/m68000/eppad_e.o build/m68000/eppad_f.o build/m68000/eppad_g.o build/m68000/eppad_h.o \
 build/m68000/eppad_i.o build/m68000/eppad_j.o build/m68000/eppad_k.o build/m68000/eppad_l.o \
