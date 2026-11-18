@@ -50,6 +50,7 @@ def main(argv):
     if prof:
         subprocess.run([sys.executable, os.path.join(TOP, "tools", "prgsyms.py"), elf, prg,
                         os.path.join(hd, "DITHBENCH.PRG")], check=True, stdout=subprocess.DEVNULL)
+        open(os.path.join(hd, "PROFILE.FLG"), "w").write("1")
         start = os.path.join(hd, "start.txt")
         open(start, "w").write("profile on\n")
         cmd = ["hatari"] + m.args() + ["--natfeats", "yes", "--fast-forward", "yes", "--statusbar", "no", "--log-level", "warn",

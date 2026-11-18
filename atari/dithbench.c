@@ -6,7 +6,8 @@
  * shows manual-stinternals-text's JPEG 2000 picture, made a row at a time as rgb565(v, v, v), the way
  * src/pdfimg.c's grey rows reach it, and dithered to the pens of a mono ST, ST medium, 16 and 256
  * colours. One JSON line each, to C:\DITHBENCH.OUT and NatFeats: the milliseconds, and a hash of
- * the pens (h * 31 + pen over every row), which two builds of pic.c must give alike.
+ * the pens (h * 31 + pen over every row), which two builds of pic.c must give alike. With
+ * C:\PROFILE.FLG it ends on an illegal instruction (dithbench.py --profile).
  */
 #include <stdlib.h>
 #include <string.h>
@@ -144,5 +145,9 @@ int main(void)
 	emit("{\"done\": 1}");
 	if (out_h >= 0)
 		Fclose((short)out_h);
+	/* a profiling run (dithbench.py --profile writes C:\PROFILE.FLG): ends on
+	   an illegal instruction, where Hatari's debugger reads the profile */
+	if (Fopen("C:\\PROFILE.FLG", 0) >= 0)
+		__asm__ volatile("illegal");
 	return 0;
 }
