@@ -365,6 +365,11 @@ static inline fx fxmul(fx a, fx b)
 }
 
 /* allocation, counted */
+/* (EPDF's pictures on a 68000 take their memory from a heap zone of their
+   own, common's heap_zone: the reader's blocks, which outlive a picture,
+   come from the main heap all the same. pdf_main_heap(1) before each of
+   them, (0) after; NULL elsewhere) */
+extern void (*pdf_main_heap)(int on);
 void *pdf_malloc(PDOC *d, long n);
 void *pdf_realloc(PDOC *d, void *p, long oldn, long n);
 void pdf_free(PDOC *d, void *p, long n);

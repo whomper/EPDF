@@ -1284,6 +1284,51 @@ PIC *pdf_image(PDOC *d, long obj, int w, int h, long max_bytes, int *why)
 	return p;
 }
 
+/* what pdf_image_rows will take for obj shown w x h on a monochrome screen,
+   about, beyond what the reader keeps: for a heap zone sized to it (EPDF
+   on a 68000: a picture too big refused at its start, not after 11 s of
+   work; the hub's heap_zone, 18 Nov 2026). 0: not known (JBIG2, JPX: their
+   decoders' own state), no zone. Fitted to the zones' peaks on a 4 MB ST
+   (big.py, 18 Nov 2026), each a little over what was measured:
+     Flate (and none): inflate's state (pdffilt.c's PCSRC_INFLATE), 15
+       bytes a shown pixel's column, 2.5 a source's (novel-boymechanic's
+       scans: 1460 wide 82,028, 773 wide 80,292, both 350 shown);
+     CCITT: the coded bytes' piece, 10 a source column, 2 a shown one
+       (scan-stinternals' pages, 1950 wide, 468 shown: 51,924 to 53,720);
+     DCT: TJpgDec's work and 22 a source column (scan-gfabasic's 1354
+       wide 41,108; scan-stinternals' 2022 wide 55,600);
+   with a soft mask's alpha whole and its own stream on top */
+#define NEED_INFLATE 73000L	/* pdffilt.c's PCSRC_INFLATE */
+#define NEED_PIECE 32768L	/* its RAW_PIECE, the coded bytes read at a time */
+long pdf_image_rows_need(PDOC *d, long obj, int w, int h)
+{
+	POBJ *o = pdf_get(d, obj), *fl;
+	const char *fn = NULL;
+	long sw, n;
+
+	if (!o || o->t != PO_DICT || w <= 0 || h <= 0)
+		return 0;
+	fl = pd_get(d, o, "Filter");
+	if (fl && fl->t == PO_ARR && fl->a)
+		fl = pdf_res(d, pa_at(fl, fl->a - 1));
+	if (fl && fl->t == PO_NAME)
+		fn = fl->u.p;
+	sw = pd_int(d, o, "Width", 0);
+	if (sw <= 0 || pd_int(d, o, "Height", 0) <= 0)
+		return 0;
+	if (fn && (!strcmp(fn, "DCTDecode") || !strcmp(fn, "DCT")))
+		n = 12288L + sw * 22;
+	else if (fn && (!strcmp(fn, "CCITTFaxDecode") || !strcmp(fn, "CCF")))
+		n = NEED_PIECE + sw * 10 + (long)w * 2;
+	else if (!fn || !strcmp(fn, "FlateDecode") || !strcmp(fn, "Fl"))
+		n = NEED_INFLATE + (long)w * 15 + sw * 5 / 2;
+	else
+		return 0;
+	if (smask_of(o) >= 0)
+		n += (long)w * h + NEED_INFLATE + (long)w * 2;	/* the mask's alpha whole, its stream, a row */
+	return n;
+}
+
 int pdf_image_rows(PDOC *d, long obj, int w, int h, PIMG_ROW row, void *u, long max_bytes, int *why)
 {
 	POBJ *o;

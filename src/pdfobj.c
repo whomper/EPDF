@@ -42,9 +42,17 @@ static int over_cap(PDOC *d, long n)
 #define over_cap(d, n) 0
 #endif
 
+void (*pdf_main_heap)(int on);
+
 void *pdf_malloc(PDOC *d, long n)
 {
-	void *p = over_cap(d, n) ? NULL : malloc((size_t)n);
+	void *p;
+
+	if (pdf_main_heap)
+		pdf_main_heap(1);
+	p = over_cap(d, n) ? NULL : malloc((size_t)n);
+	if (pdf_main_heap)
+		pdf_main_heap(0);
 
 	if (p) {
 		d->st.mem += n;
@@ -57,7 +65,13 @@ void *pdf_malloc(PDOC *d, long n)
 
 void *pdf_realloc(PDOC *d, void *p, long oldn, long n)
 {
-	void *q = over_cap(d, n - oldn) ? NULL : realloc(p, (size_t)n);
+	void *q;
+
+	if (pdf_main_heap)
+		pdf_main_heap(1);
+	q = over_cap(d, n - oldn) ? NULL : realloc(p, (size_t)n);
+	if (pdf_main_heap)
+		pdf_main_heap(0);
 
 	if (q) {
 		d->st.mem += n - oldn;

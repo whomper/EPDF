@@ -27,6 +27,7 @@
 #include "coro.h"
 #include "pdfimg.h"
 #include "pics.h"
+#include "inflate.h"
 
 static void note_start(const PICE *e);
 #include "rdraw.h"
@@ -556,6 +557,9 @@ const char *doc_tr_file_to(void)
 }
 static long rpage_oom;			/* the reader's refused allocations before it */
 static PICE *rpic;			/* the picture being decoded, NULL none */
+static void pz_in(void);		/* its heap zone (a 68000's): its slices with it */
+static void pz_out(void);
+static void pz_end(void);
 static int pdone;			/* the decoder has finished rpic */
 static int rpic_planes;
 static PIC_PAL *rpic_pal;
@@ -748,6 +752,7 @@ static void decoder(void)
 				continue;
 			}
 		}
+		pz_end();		/* (made whole: on the main heap, as before) */
 		p = pdf_image(doc, rpic->obj, rpic->w, rpic->h, 2L << 20, &rpic_why);
 		t1 = tos_ms();
 		if (p) {
@@ -905,13 +910,16 @@ static void page_pic_stop(void)
 	abandon = 1;
 	while (!pdone) {
 		running = &pic_co;
+		pz_in();
 		coro_switch(&main_co, &pic_co);
+		pz_out();
 		running = NULL;
 		pics_band();
 	}
 	free(rpic_std);
 	rpic_std = NULL;
 	pics_release(rpic);
+	pz_end();
 	rpic = NULL;
 	abandon = 0;
 	log_event("picture", "page-stopped", NULL);
@@ -950,7 +958,9 @@ static void stop_reading(void)
 	if (rpic) {
 		while (!pdone) {
 			running = &pic_co;
+			pz_in();
 			coro_switch(&main_co, &pic_co);
+			pz_out();
 			running = NULL;
 			pics_band();		/* (a band waiting is let go on) */
 		}
@@ -961,9 +971,115 @@ static void stop_reading(void)
 			rpic->state = PICS_FAILED;
 			rpic->why = PIC_STOPPED;
 		}
-		rpic = NULL;
+		pz_end();
+	rpic = NULL;
 	}
 	abandon = 0;
+}
+
+/* A picture's memory on a 68000 (no render.ovl, no DSP): a heap zone of
+   its own (common's heap_zone, the hub's for EPDF, 18 Nov 2026), sized at
+   its start from pdf_image_rows_need with a margin, or refused then: a
+   picture too big for what is left fails at once, where it was worked on
+   for 11 s and then refused (big.py, ST-1, novel-boymechanic's scan), and
+   the text reading, on the main heap, isn't refused meanwhile. The
+   picture's slices run with it (pz_in, pz_out); what outlives the
+   picture, the reader's blocks (pdf_main_heap) and the bitmap shown
+   (pics.c's bm_alloc), comes from the main heap all the same. Its peak is
+   logged at its end ("picture-zone OBJ SIZE peak PEAK"), for the estimate */
+static HEAP_ZONE *pzone;
+static long pzone_size, pzone_obj;
+static int pzone_on, pzone_main;
+
+/* the main heap for a block that outlives the picture, (1) before, (0) after */
+void doc_heap_main(int on)
+{
+	if (!pzone_on)
+		return;
+	if (on) {
+		if (pzone_main++ == 0)
+			heap_zone_use(NULL);
+	} else if (pzone_main > 0 && --pzone_main == 0)
+		heap_zone_use(pzone);
+}
+
+static void pz_in(void)
+{
+	if (pzone && !pzone_on) {
+		heap_zone_use(pzone);
+		pzone_on = 1;
+		pzone_main = 0;
+	}
+}
+
+static void pz_out(void)
+{
+	if (pzone_on) {
+		if (!pzone_main)
+			heap_zone_use(NULL);
+		pzone_on = 0;
+		pzone_main = 0;
+	}
+}
+
+/* the zone given back (everything in it freed by then: the picture's
+   work is over), its peak logged */
+static void pz_end(void)
+{
+	long peak;
+	char a[64];
+
+	if (!pzone)
+		return;
+	pz_out();
+	heap_zone_use(pzone);
+	peak = heap_peak;
+	heap_zone_use(NULL);
+	heap_zone_end(pzone);
+	pzone = NULL;
+	snprintf(a, sizeof a, "%ld %ld peak %ld", pzone_obj, pzone_size, peak);
+	log_event("picture-zone", a, NULL);
+}
+
+/* e's zone, if it gets one: 1 to go on, 0 refused (it fails now) */
+static int pz_begin(PICE *e)
+{
+	static int warm;
+	long need;
+	char a[64];
+
+	if (rdraw_machine() || e->obj >= PICS_PAGE)
+		return 1;
+	need = pdf_image_rows_need(doc, e->obj, e->w, e->h);
+	if (need <= 0)
+		return 1;		/* (JBIG2, JPX: no estimate, the main heap as before) */
+	if (!warm) {
+		/* inflate's fixed tables, kept for good once made: made now, on
+		   the main heap, not in the first picture's zone (a fixed block,
+		   empty, the last) */
+		static const unsigned char fixed[2] = { 0x03, 0x00 };
+		SBUF b;
+
+		sb_init(&b);
+		inflate_raw(fixed, 2, &b, 16);
+		sb_free(&b);
+		warm = 1;
+	}
+	if (planes > 1)
+		/* (a colour screen's: the dither's three rows of errors, the band
+		   of planes, 3 or 4 pens' own table: pic.c, pics.c) */
+		need += (long)(e->w + 2) * 12 + (long)e->w * 2 * planes + (planes == 2 ? 12288L : 0);
+	need += need / 16 + 2048;	/* (a margin: the peaks logged say how much) */
+	pzone_size = need;
+	pzone_obj = e->obj;
+	if ((pzone = heap_zone(need)) != NULL || (give_back("picture") && (pzone = heap_zone(need)) != NULL)) {
+		snprintf(a, sizeof a, "%ld %ld room %ld", e->obj, need, heap_room());
+		log_event("picture-zone-begin", a, NULL);
+		return 1;
+	}
+	snprintf(a, sizeof a, "%ld %ld room %ld", e->obj, need, heap_room());
+	log_event("picture-zone-refused", a, NULL);
+	return 0;
 }
 
 /* a picture the window wants: its decoding begun */
@@ -1005,6 +1121,10 @@ int doc_pic_start(void)
 	if (!rpic_pal && planes <= 8) {
 		e->state = PICS_FAILED;		/* no memory for the palette's table */
 		e->why = PIC_MEMORY;
+		return 0;
+	}
+	if (!pz_begin(e)) {
+		pics_made(e, 0, PIC_MEMORY);	/* (at once: logged as refused, or let go if ahead) */
 		return 0;
 	}
 	rpic = e;
@@ -1057,7 +1177,9 @@ int doc_pic_slice(unsigned long ms, long *obj)
 
 		pic_last = t0;
 		running = &pic_co;
+		pz_in();
 		coro_switch(&main_co, &pic_co);
+		pz_out();
 		running = NULL;		/* back on the main stack: slice_up hands nothing back */
 		pic_in_ms += tos_ms() - t0;	/* (the rigs' picture-what: its own turns' time) */
 		pic_slices++;
@@ -1073,8 +1195,25 @@ int doc_pic_slice(unsigned long ms, long *obj)
 		rpic->state = PICS_DECODING;
 		rpic_shown = 0;
 		pdone = 0;		/* the decoder starts it again in the next slice */
+		if (pzone) {
+			/* its zone was too small: a new one, half as big again, or
+			   it fails now (the estimate's miss is in the log) */
+			long size = pzone_size;
+
+			pz_end();
+			pzone_size = size + size / 2;
+			if ((pzone = heap_zone(pzone_size)) == NULL) {
+				rpic->state = PICS_FAILED;
+				pdone = 1;
+				rpic_ok = 0;
+				rpic_std = NULL;
+				rpic_why = PIC_MEMORY;
+				goto done;
+			}
+		}
 		return 0;
 	}
+done:
 	*obj = rpic->obj;
 	if (rdraw_machine())
 		stacks_note();
@@ -1082,6 +1221,7 @@ int doc_pic_slice(unsigned long ms, long *obj)
 		pics_made(rpic, rpic_ok, rpic_why);
 	else
 		pics_done(rpic, rpic_std, rpic_bytes, rpic_why);
+	pz_end();
 	rpic = NULL;
 	return 1;
 }
@@ -1120,13 +1260,16 @@ static void pic_give_way(const char *ev)
 	abandon = 1;
 	while (!pdone) {
 		running = &pic_co;
+		pz_in();
 		coro_switch(&main_co, &pic_co);
+		pz_out();
 		running = NULL;
 		pics_band();		/* (a band waiting is let go on) */
 	}
 	free(rpic_std);
 	rpic_std = NULL;
 	pics_release(rpic);
+	pz_end();
 	rpic = NULL;
 	abandon = 0;
 	log_event("picture", ev, NULL);
@@ -1334,6 +1477,7 @@ int doc_open(const char *path, int cols, int lines_mode, const char *cache)
 	const char *base;
 
 	doc_close();
+	pdf_main_heap = doc_heap_main;	/* (the reader's blocks never in a picture's zone) */
 	if (rdraw_reserve()) {		/* render.ovl's room before the heap's blocks (rdraw.c) */
 		char a[24];
 

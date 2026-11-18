@@ -923,6 +923,7 @@ static void *bm_alloc(long bytes, int *heap)
 {
 	void *m = NULL;
 
+	doc_heap_main(1);	/* (shown after the picture's work: not in its zone) */
 	*heap = 1;
 	if (st_only())
 		m = malloc((size_t)bytes);
@@ -941,6 +942,7 @@ static void *bm_alloc(long bytes, int *heap)
 		}
 		*heap = 1;
 	}
+	doc_heap_main(0);
 	return m;
 }
 

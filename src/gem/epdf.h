@@ -110,6 +110,7 @@ void doc_pic_stop_page_unless(long obj, int w, int h);	/* a zoom: another page's
 #else
 #define EPAD(n) ((void)0)
 #endif
+void doc_heap_main(int on);		/* a picture's block that outlives it: from the main heap, (1) before, (0) after */
 void doc_view_moved(void);		/* the window scrolled: pictures wait till it rests */
 int doc_view_resting(void);		/* ... and it has */
 extern char doc_font_dir[200];
