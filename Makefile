@@ -557,7 +557,7 @@ EC_OBJS = $(patsubst %/common/ui/dialog.o,%/common/ui/dialog.o build/m68030/ecdl
 binary/ECONVERT.PRG: XCPU = -m68000
 binary/ECONVERT.PRG: $(EC_OBJS) build/m68000ec/crt0_ec.o build/m68000/nf.o build/m68000ec/crash_s.o build/m68000ec/coro.o common/atari/link.ld | binary
 	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections $(FT_CV_KEEP) \
-	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68030/econvert.elf \
+	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -Wl,-Map,build/m68030/econvert.elf.map -o build/m68030/econvert.elf \
 	  build/m68000ec/crt0_ec.o build/m68000/nf.o build/m68000ec/crash_s.o build/m68000ec/coro.o $(EC_OBJS) -lgcc
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/m68030/econvert.elf $@
 
@@ -690,7 +690,7 @@ EPDF_ORDER3 = $(patsubst %/common/ui/dlgbuild.o,%/common/ui/dlgbuild.o build/m68
 EPDF_ORDER = $(patsubst %/common/atari/crash.o,%/common/atari/crash.o build/m68000/eppad_k.o,$(patsubst %/common/ui/progbar.o,%/common/ui/progbar.o build/m68000/eppad_l.o,$(patsubst %/common/src/pic.o,%/common/src/pic.o build/m68000/eppad_g.o,$(patsubst %/common/ui/aboutbox.o,%/common/ui/aboutbox.o build/m68000/eppad_e.o,$(patsubst %/common/atari/dspjpeg.o,%/common/atari/dspjpeg.o build/m68000/eppad_f.o,$(EPDF_ORDER2))))))
 binary/EPDF.PRG: $(EPDF_ORDER) build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/eppad_a.o build/m68000/crash_s.o build/m68000/coro.o common/atari/link.ld | binary
 	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections $(EP_KEEP) \
-	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68000/epdf.elf \
+	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -Wl,-Map,build/m68000/epdf.elf.map -o build/m68000/epdf.elf \
 	  build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/eppad_a.o build/m68000/crash_s.o build/m68000/coro.o $(filter-out %/crt0_epdf.o %/nf.o %/eppad_a.o %/crash_s.o %/coro.o %/link.ld,$(filter build/%,$^)) -lgcc
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/m68000/epdf.elf $@
 
@@ -802,27 +802,20 @@ build/aprof/gem.o: common/atari/gem.c $(HDRS) | build
 build/aprof/nfon.o: atari/nfon.c | build
 	mkdir -p build/aprof
 	$(XCC) $(XFLAGS) -m68000 -c -o $@ $<
-# The profiling gem.o is linked in the shipped one's place, with pads after
-# it (its code, its strings, nfon.o's variable: tools/aprofpad.py), so that
-# the rigs time the code at the places it ships at mod 256 (the hub, 17 Nov
-# 2026: linked at the end, it moved 197 KB of code, the tables and every
-# variable); linked once to measure, again with the pads, then checked: the
-# build fails if anything but the profiling gem.o's own code sits elsewhere
-APROF_EP_LINK = $(AES_LINK) -Wl,-u,aprof_pad -Wl,-u,aprof_str -Wl,-u,aprof_pad_d -o $(1) \
-	  build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/eppad_a.o build/m68000/crash_s.o build/m68000/coro.o \
-	  $(patsubst build/m68000/common/atari/gem.o,build/aprof/gem.o build/aprof/pad.o,$(filter build/%.o,$(EPDF_ORDER))) \
-	  build/aprof/nfon.o build/aprof/padd.o -lgcc
-build/aprof/EPDF.PRG: binary/EPDF.PRG build/aprof/gem.o build/aprof/nfon.o tools/aprofpad.py
-	python3 tools/aprofpad.py pads build/m68000/common/atari/gem.o build/aprof/gem.o 0 0 build/aprof/pad.S build/aprof/padd.S
-	$(XCC) -m68000 -c -o build/aprof/pad.o build/aprof/pad.S
-	$(XCC) -m68000 -c -o build/aprof/padd.o build/aprof/padd.S
-	$(call APROF_EP_LINK,build/aprof/epdf0.elf)
-	python3 tools/aprofpad.py pads build/m68000/common/atari/gem.o build/aprof/gem.o \
-	  $$(python3 tools/aprofpad.py fit build/m68000/epdf.elf build/aprof/epdf0.elf build/aprof/gem.o) build/aprof/pad.S build/aprof/padd.S
-	$(XCC) -m68000 -c -o build/aprof/pad.o build/aprof/pad.S
-	$(XCC) -m68000 -c -o build/aprof/padd.o build/aprof/padd.S
-	$(call APROF_EP_LINK,build/aprof/epdf.elf)
-	python3 tools/aprofpad.py check build/m68000/epdf.elf build/aprof/epdf.elf build/aprof/gem.o
+# The profiling build is linked at the shipped one's places mod 256 by
+# common's tools/profpad.py (the hub, 17 Nov 2026: linked at the end, the
+# profiling gem.o had moved 197 KB of code, the tables and every variable;
+# EPDF's own tools/aprofpad.py did this till 2.38): it puts pads where the
+# profiling gem.o and nfon.o move anything, keeps them in build/aprof/pads,
+# and fails the build if anything but those objects' own symbols sits
+# elsewhere
+build/aprof/epdf.elf: binary/EPDF.PRG build/aprof/gem.o build/aprof/nfon.o common/tools/profpad.py common/atari/codepad.S
+	python3 common/tools/profpad.py --ship build/m68000/epdf.elf --out $@ --cpu=-m68000 --dir build/aprof/pads \
+	  --exclude build/m68000/common/atari/gem.o --exclude build/aprof/gem.o --exclude build/aprof/nfon.o -- \
+	  $(AES_LINK) build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/eppad_a.o build/m68000/crash_s.o build/m68000/coro.o \
+	  $(patsubst build/m68000/common/atari/gem.o,build/aprof/gem.o,$(filter build/%.o,$(EPDF_ORDER))) \
+	  build/aprof/nfon.o -lgcc
+build/aprof/EPDF.PRG: build/aprof/epdf.elf
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/aprof/epdf.elf $@
 # the same with textwin.c's marks ("EPDF t copy 35", "t rows 15"...), for a breakdown
 build/times/textwin.o: src/gem/textwin.c $(HDRS) | build
@@ -841,23 +834,15 @@ speed-test: build/aprof/EPDF.PRG binary/LAUNCH.PRG
 build/aprof/gem00ec.o: common/atari/gem.c $(HDRS) | build
 	mkdir -p build/aprof
 	$(XCC) $(XFLAGS) -m68000 -DDLG_CLICK -DAERA_NO_FLOAT -DAES_PROFILE=20 -c -o $@ $<
-APROF_EC_LINK = $(XCC) -m68000 -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections $(FT_CV_KEEP) \
-	  -Wl,-u,aprof_pad -Wl,-u,aprof_str -Wl,-u,aprof_pad_d \
-	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o $(1) \
+build/aprof/econvert.elf: binary/ECONVERT.PRG build/aprof/gem00ec.o build/aprof/nfon.o common/tools/profpad.py common/atari/codepad.S
+	python3 common/tools/profpad.py --ship build/m68030/econvert.elf --out $@ --cpu=-m68000 --dir build/aprof/padsec \
+	  --exclude build/m68000ec/common/atari/gem.o --exclude build/aprof/gem00ec.o --exclude build/aprof/nfon.o -- \
+	  $(XCC) -m68000 -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections $(FT_CV_KEEP) \
+	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments \
 	  build/m68000ec/crt0_ec.o build/m68000/nf.o build/m68000ec/crash_s.o build/m68000ec/coro.o \
-	  $(patsubst build/m68000ec/common/atari/gem.o,build/aprof/gem00ec.o build/aprof/padec.o,$(EC_OBJS)) \
-	  build/aprof/nfon.o build/aprof/paddec.o -lgcc
-build/aprof/ECONVERT.PRG: binary/ECONVERT.PRG build/aprof/gem00ec.o build/aprof/nfon.o tools/aprofpad.py
-	python3 tools/aprofpad.py pads build/m68000ec/common/atari/gem.o build/aprof/gem00ec.o 0 0 build/aprof/padec.S build/aprof/paddec.S
-	$(XCC) -m68000 -c -o build/aprof/padec.o build/aprof/padec.S
-	$(XCC) -m68000 -c -o build/aprof/paddec.o build/aprof/paddec.S
-	$(call APROF_EC_LINK,build/aprof/econvert0.elf)
-	python3 tools/aprofpad.py pads build/m68000ec/common/atari/gem.o build/aprof/gem00ec.o \
-	  $$(python3 tools/aprofpad.py fit build/m68030/econvert.elf build/aprof/econvert0.elf build/aprof/gem00ec.o) build/aprof/padec.S build/aprof/paddec.S
-	$(XCC) -m68000 -c -o build/aprof/padec.o build/aprof/padec.S
-	$(XCC) -m68000 -c -o build/aprof/paddec.o build/aprof/paddec.S
-	$(call APROF_EC_LINK,build/aprof/econvert.elf)
-	python3 tools/aprofpad.py check build/m68030/econvert.elf build/aprof/econvert.elf build/aprof/gem00ec.o
+	  $(patsubst build/m68000ec/common/atari/gem.o,build/aprof/gem00ec.o,$(EC_OBJS)) \
+	  build/aprof/nfon.o -lgcc
+build/aprof/ECONVERT.PRG: build/aprof/econvert.elf
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/aprof/econvert.elf $@
 econv-speed-test: build/aprof/ECONVERT.PRG binary/LAUNCH.PRG
 	python3 tests/hatari/econv_speed.py build/econv-speed
