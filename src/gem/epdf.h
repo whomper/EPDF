@@ -87,7 +87,10 @@ int doc_drawn(void);			/* its pages drawn as printed by render.ovl (stage 2) */
 int doc_pic_drawing(void);		/* the picture being made is a page drawn */
 void doc_pic_stop_page_unless(long obj, int w, int h);	/* a zoom: another page's drawing stopped */
 /* padding run past once (bra.w over it): the code after it at 2.32's
-   places in a 68030's instruction cache, mod 256 (EPDF.PRG's pads) */
+   places in a 68030's instruction cache, mod 256 (EPDF.PRG's pads); NOPs,
+   not zeros, so objdump reads the code after it in step (oddaccess.py:
+   zeros it skips four bytes at a time, and an odd count of words left it
+   reading doc_view_moved from the middle of an instruction) */
 #ifndef EPAD_DS
 #define EPAD_DS 104
 #endif
@@ -103,7 +106,7 @@ void doc_pic_stop_page_unless(long obj, int w, int h);	/* a zoom: another page's
 #define EPAD_S2(n) #n
 #define EPAD_S(n) EPAD_S2(n)
 #if defined(__m68k__) || defined(__mc68000__)
-#define EPAD(n) __asm__ volatile("bra.w 1f\n\t.skip " EPAD_S(n) "\n1:")
+#define EPAD(n) __asm__ volatile("bra.w 1f\n\t.fill " EPAD_S(n) "/2,2,0x4e71\n1:")
 #else
 #define EPAD(n) ((void)0)
 #endif

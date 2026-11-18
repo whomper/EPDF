@@ -490,7 +490,12 @@ at first. This section is kept up to date: the build, the tests, what a release 
   does its setup every call now: font.c's font_text tells it only a change (Falcon-4:16's start
   250 -> 245, 2.37 240). The sync moved all of EPDF.PRG off 2.37's cache places: every pad
   refitted, new pads N-T and EP_PAD_A_DATA (the Makefile's note); still off, the files that
-  changed inside.
+  changed inside. Then common 5f0b8e7 (the hub's 1c8f1cd, 32b3341, 90b1bbd, cc1ae54, b4b4597:
+  dlg_find's own walk in a 3D AES, a press kept between a Settings page's turns, key_state_init and
+  popup_m last in their files, NVDI on the TT); dialog.c's growth moved text.c's drawing, put back by
+  EP_PAD_V after dialog.o. The pairs against 2.37 within a tick on Erez's configuration, Falcon-4:16,
+  ST:mono and ST:med. EPAD's pads are NOPs, not zeros (the same bytes' count: no code moved), so
+  oddaccess.py's objdump reads doc_view_moved in step (zeros it skips four bytes at a time).
   Next, after 2.36 (Erez, 17 Nov 2026: "go with Faster display as default and lets see that the UI is
   real enough"): the converter prepares pictures and whole pages in the screen's own colours, so EPDF
   only unpacks and copies (the rigs' logs: on Falcon-4:256 a photo 1.2 s decoding, 6.7 s fitting to
