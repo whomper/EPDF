@@ -1043,6 +1043,29 @@ static void pz_end(void)
 	log_event("picture-zone", a, NULL);
 }
 
+/* need bytes in at most four of the heap's blocks, the largest first:
+   taken and given back at once (a picture's start) */
+static int fits_in_pieces(long need)
+{
+	void *p[4];
+	int n = 0, ok;
+
+	while (need > 0 && n < 4) {
+		long k = heap_room();
+
+		if (k > need)
+			k = need;
+		if (k < 4096 || !(p[n] = malloc((size_t)k)))
+			break;
+		n++;
+		need -= k;
+	}
+	ok = need <= 0;
+	while (n > 0)
+		free(p[--n]);
+	return ok;
+}
+
 /* e's memory at its start: 1 to go on (in a zone, or on the main heap),
    0 refused (it fails now) */
 static int pz_begin(PICE *e)
@@ -1090,6 +1113,15 @@ static int pz_begin(PICE *e)
 	}
 	if (room >= need && (pzone = heap_zone(need)) != NULL) {
 		log_event("picture-zone-begin", a, NULL);
+		return 1;
+	}
+	if (fits_in_pieces(need)) {
+		/* heap_room() is the largest block, and a picture's memory is
+		   several (a Flate picture's biggest is inflate's 64 KB): it fits
+		   in the free ones as they are, on the main heap as in 2.38
+		   (novel-boymechanic's page 10 on ST-1, its largest block 65,804
+		   for 84,611) */
+		log_event("picture-zone-main", a, "pieces");
 		return 1;
 	}
 	log_event("picture-zone-refused", a, NULL);
