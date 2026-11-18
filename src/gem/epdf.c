@@ -1247,7 +1247,9 @@ static int ljob_on;
 
 static void languages_dialog(void)
 {
-	static langs l;
+	/* (4 KB: taken while the dialog is up, not kept in the program's
+	   memory, which a 1 MB ST needs for its pages; 2.39) */
+	langs *l;
 	int r;
 
 	const char *gh = gate_dialog_host();
@@ -1263,15 +1265,19 @@ static void languages_dialog(void)
 	}
 	if (!net_up())
 		return;
-	memset(&l, 0, sizeof l);
-	l.host = gh;
-	l.port = tr_port;
-	r = langs_run(&l);
+	if (!(l = calloc(1, sizeof *l))) {
+		alert(1, "[1][Not enough memory for|the settings.][ OK ]");
+		return;
+	}
+	l->host = gh;
+	l->port = tr_port;
+	r = langs_run(l);
 	log_event("languages-dialog", r == 1 ? "ok" : r == 0 ? "cancel" : "failed", NULL);
-	if (r == 1 && l.job) {
-		langs_job_begin(&ljob, gh, tr_port, l.job, l.add_mb, tos_ms());
+	if (r == 1 && l->job) {
+		langs_job_begin(&ljob, gh, tr_port, l->job, l->add_mb, tos_ms());
 		ljob_on = 1;
 	}
+	free(l);
 }
 
 static int settings_dialog(void)

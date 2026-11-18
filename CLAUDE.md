@@ -507,20 +507,32 @@ at first. This section is kept up to date: the build, the tests, what a release 
   2.39 (Erez, 18 Nov 2026: "Make 1-4 and the two deferred items to be 2.39 and start working"): (1) common
   2fa3aa7 (Settings in turns), EP_PAD_V/R refitted, EConvert's new EC_DL_PAD/EC_ST_PAD (10083092b; the
   reference is a clean v2.38 build, byte for byte the release: a working tree's stale objects misled once);
-  (2) profpad.py: three gaps found (a section's start, an archive's member, the merged strings), the patch
-  sent to the hub as base64 (AERA-Atari 3a60428 in the scratch copy; this session may not push to
-  AERA-Atari); EPDF's Makefile switch (maps on the shipped links, PROFPAD) waits for it in common;
-  (3) pic.c's dither: row_near/row_few (ROW_PENS) in 16 bits and a 12 KB table for 3-4 pens, the pens
-  byte for byte (tests/pic, pens, test68k, aerapens old against new 1400 requests), DITHBENCH.PRG
-  (tests/hatari/dithbench.py) on Falcon-4 ST medium 56.1 -> 16.9 s, 16 colours 21.6 -> 14.1, on ST
-  194.0 -> 57.6, 71.0 -> 51.0; sent to the hub as base64 (7bdcc8b); (4) the hub's heap zones (common
-  235203a: heap_zone, heap_zone_use, heap_zone_end, heap_room) for a picture on a 68000 (cde709164):
-  sized from pdfimg.c's pdf_image_rows_need, fitted to big.py's peaks; refused at its start or had;
-  pdf_main_heap and bm_alloc keep what outlives a picture on the main heap; "picture-zone" and
-  "picture-zone-refused" log lines. Open with the hub: zones always or only when memory is short
-  (scan-gfabasic on ST-1 reads 19 pages against 55); ST-1 sits at an edge where 2.39's 3 KB of code
-  makes novel-boymechanic's page 5 lose its picture while read. (6) map-europe on ST (profile.py):
-  inflate_fast 45 %, run_content_in 27 %. (5) Faster display not begun. Pads to refit once the code is done.
+  (2) profpad.py: three gaps found (a section's start, an archive's member, the merged strings), sent to
+  the hub as base64 (this session may not push to AERA-Atari), in common at 02fb09d; the timed builds
+  (build/aprof) are linked by common/tools/profpad.py from the shipped links' maps, tools/aprofpad.py
+  gone (0c163ac8d, b4e861d78); (3) pic.c's dither: row_near/row_few (ROW_PENS) in 16 bits and a 12 KB
+  table for 3-4 pens, the pens byte for byte (tests/pic, pens, test68k, aerapens old against new 1400
+  requests), DITHBENCH.PRG (tests/hatari/dithbench.py) on Falcon-4 ST medium 56.1 -> 16.9 s, 16 colours
+  21.6 -> 14.1, on ST 194.0 -> 57.6, 71.0 -> 51.0; in common; (4) the hub's heap zones (common 235203a:
+  heap_zone, heap_zone_use, heap_zone_end, heap_room) for a picture on a 68000, by the hub's bands
+  (18 Nov 2026; doc.c's pz_begin, b1d966376): heap_room() under pdfimg.c's pdf_image_rows_need (with a
+  margin, fitted to big.py's peaks) refuses it at once ("picture-zone-refused"), up to twice it takes a
+  zone ("picture-zone-begin", its peak logged at its end as "picture-zone"), more than that the main heap
+  as in 2.38 ("picture-zone-main": zones always cut scan-gfabasic on ST-1 from 55 pages to 19);
+  pdf_main_heap and bm_alloc keep what outlives a picture on the main heap. A page whose reading was
+  refused memory lost a picture's Do without a word (its XObject's load refused, then cached unloadable
+  for the page): pdftext.c's missed_pics gives each of the page's image XObjects not met its line after
+  the page's text, pdfobj.c's pdf_retry_obj lets it load again; "missed N" on the page's log line,
+  big.py's notes (with each picture's start and the zones' peaks); tests/missedpic.py in make test (2.38
+  fails at 51-53 and 75-77 KB). The 3 KB: 2.39's growth against 2.38 was 7.2 KB (the dither 3.1, the
+  zones 2.7, the estimate 0.5, missed_pics 0.7 and a 64-bit divide, taken out); epdf.c's Languages...
+  state (4 KB of BSS) is taken while that dialog is up, so 2.39 is 2.9 KB over 2.38 in all; translate_view.py
+  opens Languages... over Settings and leaves it with Esc. (6) map-europe on ST (profile.py): inflate_fast
+  45 %, run_content_in 27 %; inflate_fast is EPDF's to study (the hub, 18 Nov 2026: a patch against
+  common's main, in inflate_fast.S's place with the same entry, exit, window and tables; tests/inflate on
+  the host and m68k, byte for byte over the corpus's streams and the fuzz seeds, coldfire's make test and
+  make same, cycles per output byte on 68000 and 68030 before and after, build's tables and inflate's
+  memory on a 1 MB ST). (5) Faster display not begun. Pads to refit once the code is done.
   Next, after 2.36 (Erez, 17 Nov 2026: "go with Faster display as default and lets see that the UI is
   real enough"): the converter prepares pictures and whole pages in the screen's own colours, so EPDF
   only unpacks and copies (the rigs' logs: on Falcon-4:256 a photo 1.2 s decoding, 6.7 s fitting to

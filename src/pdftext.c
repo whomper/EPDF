@@ -3844,7 +3844,7 @@ static void missed_pics(IX *x, PTEXT *t)
 		im->w = w;
 		im->h = h;
 		im->dw = dw;
-		im->dh = (fx)((int64_t)dw * h / w);
+		im->dh = dw / w * h;	/* (dw / w at most 1.0, h under 32768: within a long, no 64-bit divide) */
 		im->top = -(0x7FFF << 16);	/* after the page's text */
 		fl = pd_get(d, o, "Filter");
 		if (fl && fl->t == PO_ARR && fl->a)

@@ -86,7 +86,8 @@ def settings_while_translating(r):
     "Translate into" asked (the hub's review, 9 Nov 2026: an Address Error
     on TOS 4.04, the job's connection and the dialog's at once), then Esc in
     the Gateway's address and Cancel, and "Translate into" again: the
-    address as it was (6.1: nothing kept until OK)"""
+    address as it was (6.1: nothing kept until OK). Languages... is opened
+    and left with Esc between them"""
     bad = []
     end = time.time() + 120
     while time.time() < end and "EPDF translate-piece" not in r.console():
@@ -121,10 +122,27 @@ def settings_while_translating(r):
         r.click(x + 33 * 8 + 40, y + 15 * rh + rh // 2)
         time.sleep(2)
 
+    def languages(x, y):
+        """General's Languages... (two rows under Translate into), the Gateway's list
+        asked, then Esc: "languages-dialog cancel" (2.39: its 4 KB taken while it is up)"""
+        n = r.console().count("EPDF languages-dialog ")
+        r.click(x + 9 * 8 + 20, y + 7 * rh + rh)
+        time.sleep(8)
+        r.key("Escape")
+        e = time.time() + 30
+        while time.time() < e and r.console().count("EPDF languages-dialog ") <= n:
+            time.sleep(0.5)
+        time.sleep(1.5)
+        c = r.console()
+        return c.split("EPDF languages-dialog ")[-1].split()[0] if c.count("EPDF languages-dialog ") > n else "none"
+
     x, y = settings()
     got = into(x, y)
     if got != "ok":
         bad.append("Translate into while translating: %s" % got)
+    got = languages(x, y)
+    if got != "cancel":
+        bad.append("Languages... over Settings: %s (cancel wanted)" % got)
     r.click(x + 4 * 8, y + 4 * rh + rh)     # Secure
     time.sleep(2)
     r.key("Escape")                          # the address emptied (3.5)
