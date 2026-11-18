@@ -11,7 +11,9 @@ A page of text with a picture drawn last is read by build/pdftext under
 every memory cap (PDF_MEMCAP) from too little to enough. Under a cap
 where the page's text comes out but the picture's Do was lost to memory
 (its XObject not found), the picture's line must be there all the same
-(pdftext.c's missed_pics). Exit 1 if a cap gives text without it, or if
+(pdftext.c's missed_pics), and a second picture the page's resources name
+but its content never draws must get no line (a book's resources are
+often shared by every page). Exit 1 if a cap gives text without it, or if
 no cap refused anything on the way to the Do (the test would prove
 nothing).
 """
@@ -38,9 +40,12 @@ def make_pdf(path, lines=400):
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R"
-        b" /Resources << /Font << /F1 5 0 R >> /XObject << /Im1 6 0 R >> >> >>",
+        b" /Resources << /Font << /F1 5 0 R >> /XObject << /Im1 6 0 R /Im2 7 0 R >> >> >>",
         b"<< /Length %d /Filter /FlateDecode >>\nstream\n" % len(content) + content + b"\nendstream",
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceGray"
+        b" /BitsPerComponent 8 /Filter /FlateDecode /Length %d >>\nstream\n" % (w, h, len(pix)) + pix + b"\nendstream",
+        # (named in the page's resources, never drawn: a book's shared resources)
         b"<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceGray"
         b" /BitsPerComponent 8 /Filter /FlateDecode /Length %d >>\nstream\n" % (w, h, len(pix)) + pix + b"\nendstream",
     ]
@@ -63,7 +68,7 @@ def main(argv):
     tool = os.path.join(TOP, "build", "pdftext")
     pdf = os.path.join(work, "missed.pdf")
     make_pdf(pdf)
-    bad, lost_do, text_caps = [], 0, 0
+    bad, extra, lost_do, text_caps = [], [], 0, 0
     for cap in range(8, 400):
         env = dict(os.environ, PDF_MEMCAP=str(cap))
         p = subprocess.run([tool, pdf, "1"], env=env, capture_output=True, text=True)
@@ -74,6 +79,8 @@ def main(argv):
         pic = "[picture 6 " in text
         if not pic:
             bad.append(cap)
+        if "[picture 7 " in text:
+            extra.append(cap)
         # (a refusal after the text began: the Do met with too little memory)
         if "refused" in err:
             lost_do += 1
@@ -86,6 +93,9 @@ def main(argv):
         return 1
     if bad:
         print("FAIL the page's text without its picture's line")
+        return 1
+    if extra:
+        print("FAIL a picture the page names but never draws given a line at %s KB" % extra[:10])
         return 1
     print("passed")
     return 0

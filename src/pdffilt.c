@@ -305,7 +305,6 @@ static int f_rl(PDOC *d, SBUF *in)
 	const unsigned char *s = (const unsigned char *)in->s;
 	long i = 0;
 
-	(void)d;
 	sb_init(&out);
 	while (i < in->len) {
 		int c = s[i++];
@@ -317,19 +316,28 @@ static int f_rl(PDOC *d, SBUF *in)
 
 			if (n > in->len - i)
 				n = in->len - i;
-			sb_add(&out, (const char *)s + i, n);
+			if (!sb_add(&out, (const char *)s + i, n))
+				goto refused;
 			i += n;
 		} else if (i < in->len) {
 			long n = 257 - c;
 
-			sb_room(&out, n);
+			/* (the room is checked: written past a refused one, a 1 MB ST's
+			   heap was overwritten, 2.39) */
+			if (!sb_room(&out, n))
+				goto refused;
 			memset(out.s + out.len, s[i++], (size_t)n);
 			out.len += n;
+			out.s[out.len] = 0;
 		}
 	}
 	sb_free(in);
 	*in = out;
 	return 0;
+refused:
+	d->st.oom++;
+	sb_free(&out);
+	return -1;
 }
 
 static int f_lzw(PDOC *d, SBUF *in, int early)
@@ -378,14 +386,18 @@ static int f_lzw(PDOC *d, SBUF *in, int early)
 		if (prev < 0) {
 			if (code > 255)
 				break;
-			sb_addc(&out, (char)code);
+			if (!sb_addc(&out, (char)code))
+				goto refused;
 			prev = code;
 			continue;
 		}
 		if (code < next) {
 			/* emit code's string */
 			n = code < 256 ? 1 : len[code];
-			sb_room(&out, n);
+			/* (the room is checked: RFC 2616's LZW written past a refused
+			   one overwrote a 1 MB ST's heap, 2.38 and before) */
+			if (!sb_room(&out, n))
+				goto refused;
 			c = code;
 			{
 				long k = n;
@@ -403,7 +415,8 @@ static int f_lzw(PDOC *d, SBUF *in, int early)
 			int fc;
 
 			n = pl + 1;
-			sb_room(&out, n);
+			if (!sb_room(&out, n))
+				goto refused;
 			c = prev;
 			{
 				long k = pl;
@@ -440,9 +453,18 @@ static int f_lzw(PDOC *d, SBUF *in, int early)
 	pdf_free(d, prefix, 4096 * 2);
 	pdf_free(d, len, 4096 * 2);
 	pdf_free(d, suffix, 4096);
+	if (out.s)
+		out.s[out.len] = 0;
 	sb_free(in);
 	*in = out;
 	return 0;
+refused:
+	d->st.oom++;
+	pdf_free(d, prefix, 4096 * 2);
+	pdf_free(d, len, 4096 * 2);
+	pdf_free(d, suffix, 4096);
+	sb_free(&out);
+	return -1;
 }
 
 static int f_flate(PDOC *d, SBUF *in, long max)

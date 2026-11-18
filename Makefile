@@ -45,6 +45,12 @@ build/textgold: tools/textgold.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSS
 build/pdftext: tools/pdftext.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HDRS) | build
 	$(CC) $(HCFLAGS) -o $@ tools/pdftext.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC)
 
+# pdftext under ASan with a realloc that refuses past REALLOC_MAX (tests/filtmem.py: a decoder that
+# writes past a refused growth, RFC 2616's LZW on a 1 MB ST, 2.38)
+build/pdftext_oom: tools/pdftext.c tests/oomwrap.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HDRS) | build
+	$(CC) $(HCFLAGS) -fsanitize=address,undefined -Wl,--wrap=realloc -o $@ tools/pdftext.c tests/oomwrap.c src/pdfio_host.c \
+	  $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC)
+
 HPIC_SRC = src/pdfimg.c src/ccitt.c src/jbig2.c src/mq.c src/jpx.c src/rscale.c common/src/pic.c common/src/png.c common/src/jpegdc.c \
            common/third_party/tjpgd/tjpgd.c common/third_party/nsgif/src/gif.c common/third_party/nsgif/src/lzw.c
 build/imgshow: tools/imgshow.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_SRC) $(HPIC_SRC) $(HDRS) | build
@@ -113,7 +119,7 @@ fuzz: build/fuzz_jpx build/fuzz_jbig2
 build/jb2dec: tools/jb2dec.c src/jbig2.c src/mq.c src/ccitt.c src/jbig2.h src/mq.h src/ccitt.h | build
 	$(CC) $(HCFLAGS) -fsanitize=address,undefined -o $@ tools/jb2dec.c src/jbig2.c src/mq.c src/ccitt.c
 
-test: build/test_xe build/test_ccitt build/test_textview build/test_inf build/test_tstore build/test_docview build/test_search build/pdftext build/econvert build/test_pens build/test_trpara build/jb2dec build/jpxdec build/imgshow
+test: build/pdftext_oom build/test_xe build/test_ccitt build/test_textview build/test_inf build/test_tstore build/test_docview build/test_search build/pdftext build/econvert build/test_pens build/test_trpara build/jb2dec build/jpxdec build/imgshow
 	build/test_xe
 	build/test_pens
 	build/test_trpara
@@ -125,6 +131,7 @@ test: build/test_xe build/test_ccitt build/test_textview build/test_inf build/te
 	python3 tests/onebit.py build/onebit
 	python3 tests/glyphwise.py
 	python3 tests/missedpic.py build/missedpic
+	python3 tests/filtmem.py build/filtmem
 	python3 tests/crypt.py
 	build/test_textview
 	build/test_inf

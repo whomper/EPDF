@@ -1362,6 +1362,11 @@ typedef struct {
 	fx run0;			/* the advance before the string being shown (a TJ's earlier items) */
 	fx page_area;			/* the page's width x height / 65536 (points squared, 16.16) */
 	fx page_w;			/* its width, points (16.16) */
+	/* XObjects whose Do was lost to memory (their lookup refused): the
+	   resources they were named in and the name, for missed_pics */
+	int nlost;
+	POBJ *lost_res[4];
+	char lost_name[4][24];
 	int glyphwise;			/* the page set a glyph at a time with its spaces as characters (emit_line) */
 	/* show_simple's advances: a code's advance in text space for the font
 	   and the state they were made for, each made the first time the code
@@ -1823,13 +1828,20 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 static void do_xobject(IX *x, const char *name)
 {
 	PDOC *d = x->d;
+	long oom0 = d->st.oom;
 	POBJ *xo = pd_get(d, x->res, "XObject"), *o;
 	const char *sub;
 
 	xo = xo && xo->t == PO_DICT ? pd_get(d, xo, name) : NULL;
 	o = xo;
-	if (!o || o->t != PO_DICT)
+	if (!o || o->t != PO_DICT) {
+		if (d->st.oom != oom0 && x->nlost < 4 && strlen(name) < sizeof x->lost_name[0]) {
+			/* not found for want of memory: missed_pics looks again */
+			x->lost_res[x->nlost] = x->res;
+			strcpy(x->lost_name[x->nlost++], name);
+		}
 		return;
+	}
 	{
 		POBJ *r = pd_getraw(pd_get(d, x->res, "XObject"), name);
 		long onum = r && r->t == PO_REF ? r->a : -1;
@@ -3796,38 +3808,39 @@ static void assemble(IX *x, PTEXT *t)
 	pdf_free(x->d, ln, nln * (long)sizeof(LN));
 }
 
-/* A page whose reading was refused memory may have lost a picture's Do
-   on the way (its XObject not found for want of memory, without a word:
-   ST-1, novel-boymechanic's page 5, 2.39): each image among the page's
-   own XObjects that wasn't met gets its line all the same, after the
-   page's text, at its pixels' size in points within the page's width.
-   It is then made or refused as any picture (the hub, 18 Nov 2026: "That
-   page should show the picture's line as not available, as a refused
-   picture does") */
+/* A page whose reading was refused memory may lose a picture's Do: its
+   XObject not found for want of memory, without a word (ST-1,
+   novel-boymechanic's page 5, 2.39). Each Do that do_xobject saw lost so
+   is looked up again now the page's content is read and its window given
+   back (pdf_retry_obj: the object was marked unloadable for the page);
+   an image gets its line after the page's text, at its pixels' size in
+   points within the page's width. It is then made or refused as any
+   picture (the hub, 18 Nov 2026: "That page should show the picture's
+   line as not available, as a refused picture does") */
 static void missed_pics(IX *x, PTEXT *t)
 {
 	PDOC *d = x->d;
-	POBJ *xo = pd_get(d, x->res, "XObject");
-	long i;
-	int k;
+	int i, k;
 
-	if (!xo || xo->t != PO_DICT)
-		return;
-	for (i = 0; i < xo->a && t->nimg < 64; i++) {
-		POBJ *r = &xo->u.e[i].v, *o, *fl;
+	for (i = 0; i < x->nlost && t->nimg < 64; i++) {
+		POBJ *xr = pd_getraw(x->lost_res[i], "XObject"), *xo, *r, *o, *fl;
 		const char *sub;
 		long w, h;
 		fx dw;
 		PIMG *im;
 
-		if (r->t != PO_REF)
+		if (xr && xr->t == PO_REF)
+			pdf_retry_obj(d, xr->a);
+		xo = pdf_res(d, xr);
+		r = xo && xo->t == PO_DICT ? pd_getraw(xo, x->lost_name[i]) : NULL;
+		if (!r || r->t != PO_REF)
 			continue;
 		for (k = 0; k < t->nimg; k++)
 			if (t->img[k].obj == r->a)
 				break;
 		if (k < t->nimg)
-			continue;	/* met: its line is there */
-		pdf_retry_obj(d, r->a);	/* (refused at its Do, it is marked unloadable) */
+			continue;	/* (its line is there: drawn twice, met once) */
+		pdf_retry_obj(d, r->a);
 		o = pdf_res(d, r);
 		if (!o || o->t != PO_DICT || !(sub = pd_name(d, o, "Subtype")) || strcmp(sub, "Image"))
 			continue;
@@ -3859,7 +3872,7 @@ int pdf_page_text(PDOC *d, long n, PTEXT *t)
 {
 	IX x;
 	POBJ *pg, *res, *box, *cont;
-	long rot, oom0 = d->st.oom;
+	long rot;
 
 	memset(&x, 0, sizeof x);
 #ifdef PDF_DRAW
@@ -3909,7 +3922,7 @@ int pdf_page_text(PDOC *d, long n, PTEXT *t)
 	} else {
 		long t0 = d->clock ? d->clock() : 0;
 
-		if (d->st.oom != oom0 && (t->rec || t->pics))
+		if (x.nlost && (t->rec || t->pics))
 			missed_pics(&x, t);
 		assemble(&x, t);
 		if (d->clock)
