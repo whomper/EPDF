@@ -388,6 +388,16 @@ binary/IMGBENCH.PRG: $(addprefix build/m68000/,$(IMG_OBJ)) build/m68000/crt0.o b
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68000/imgbench.elf \
 	  build/m68000/crt0.o build/m68000/nf.o $(addprefix build/m68000/,$(IMG_OBJ)) -lgcc
 	python3 common/tools/elf2tos.py build/m68000/imgbench.elf $@
+# DITHBENCH.PRG (tests/hatari/dithbench.py): common's row dither on a grey page, to a mono
+# ST's pens, ST medium's, 16 and 256 colours: its milliseconds and a hash of the pens
+DITH_SRC   = atari/dithbench.c $(PIC_SRC) $(COMMON_SRC) $(RT_C)
+DITH_OBJ   = $(patsubst %.c,%.o,$(DITH_SRC))
+binary/DITHBENCH.PRG: XCPU = -m68000 -mstrict-align -fdisable-tree-bswap
+binary/DITHBENCH.PRG: $(addprefix build/m68000/,$(DITH_OBJ)) build/m68000/crt0.o build/m68000/nf.o common/atari/link.ld | binary
+	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
+	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68000/dithbench.elf \
+	  build/m68000/crt0.o build/m68000/nf.o $(addprefix build/m68000/,$(DITH_OBJ)) -lgcc
+	python3 common/tools/elf2tos.py build/m68000/dithbench.elf $@
 # JB2BENCH.PRG / JB2B30.PRG (tests/hatari/jb2bench.py): a JBIG2 page's time and memory
 JB2B_SRC   = atari/jb2bench.c src/mq.c src/ccitt.c src/pdfio_tos.c $(COMMON_SRC) $(RT_C)
 JB2B_OBJ   = $(patsubst %.c,%.o,$(JB2B_SRC)) atari/jbig2_times.o src/jb2t0.o
