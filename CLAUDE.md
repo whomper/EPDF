@@ -549,7 +549,14 @@ at first. This section is kept up to date: the build, the tests, what a release 
   ST-1 no document reads fewer pages beyond one in a run, and several read far more; the 4 MB ST is
   within a page, and MEASURE.PRG on ST times the reader the same (manual-compendium 60 pages 69.91 s
   both). Known: manual-stinternals-text on ST-1 has 3-4 pages refused memory at the reader's 510 KB
-  peak (2.38 crashes in it). Pads to refit once the code is done.
+  peak (2.38 crashes in it). The gate on db6266fb8, its rows the counting touches again on 13992c199
+  (a stream refused its buffer's growth counted as memory, not damage): every row ok but TT low and ST
+  low (refused, 320 wide), big.py --erz --rovl 25 of 25; three pairs against 2.38 within a tick on
+  Erez's configuration, Falcon-4:16 and ST:mono, so the pads stay (93 % of the code off 2.38's cache
+  places, no row moved). The hub's family check (ECal, EContact, EHypView, EMail check under NVDI,
+  two boots) and go on 13992c199; 2.39 went out on 19 Nov 2026 (v2.39 on 8acef7368; the Release
+  workflow's first attempt hung in Tools, cancelled before anything was published, the re-run went
+  through). Next (2.40): Faster display, inflate_fast.
   Next, after 2.36 (Erez, 17 Nov 2026: "go with Faster display as default and lets see that the UI is
   real enough"): the converter prepares pictures and whole pages in the screen's own colours, so EPDF
   only unpacks and copies (the rigs' logs: on Falcon-4:256 a photo 1.2 s decoding, 6.7 s fitting to
