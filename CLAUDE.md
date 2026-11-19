@@ -556,7 +556,20 @@ at first. This section is kept up to date: the build, the tests, what a release 
   places, no row moved). The hub's family check (ECal, EContact, EHypView, EMail check under NVDI,
   two boots) and go on 13992c199; 2.39 went out on 19 Nov 2026 (v2.39 on 8acef7368; the Release
   workflow's first attempt hung in Tools, cancelled before anything was published, the re-run went
-  through). Next (2.40): Faster display, inflate_fast.
+  through). 2.40 (the hub, 19 Nov 2026, Erez's "Release all now"): the FireBee fault fix alone, common
+  synced at exactly f553f9336 (a 68000 program's Line-A 0xa000 is the ColdFire's EMAC macw: text.c,
+  offdraw.c, aboutbox.c and badge.c take the VDI's way where _CF_ is set; Hatari's FireBee has no EMAC,
+  so unconfirmed on a real one). Pads refitted against a clean v2.39 build by the link maps
+  (each object's start mod 256 in .text, .rodata, .data and .bss): EP_PAD_E 66 (+_DATA 254), a new EP_PAD_W
+  after text.o (120, _RO 116, _DATA 254; its _ro and _data need their own -u), EC_AB_PAD 48 (+_DATA),
+  EC_OD_PAD 152 (+_DATA), a new EC_TX_PAD after text.o (84, _RO 128, _DATA 254): all at 2.39's places
+  but inside the changed files; render.ovl byte for byte 2.39's. The gate as 2.39's (TT low and ST
+  low refused; big.py ST-1 23 of 25, the two of 2.39), three pairs within a tick, the hub's family
+  check (four accessories under NVDI, two boots) and go on 76ca15681; 2.40 went out on 19 Nov 2026
+  (v2.40 on a509c1fe3). Faster display (branch v240: EConvert's Optimise for, /AERAShown, pens= on
+  the Gateway with a fallback, the pdfgate patch held for the AERA-Gateway session) and inflate_fast
+  go to 2.41, with common 74d6095 or later (scrpens in common as ui/scrpens.c, 70aff63; past c6ef2f0
+  EPDF.PRG's libc.c needs -DLIBC_ZONES: only doc.c calls the zones).
   Next, after 2.36 (Erez, 17 Nov 2026: "go with Faster display as default and lets see that the UI is
   real enough"): the converter prepares pictures and whole pages in the screen's own colours, so EPDF
   only unpacks and copies (the rigs' logs: on Falcon-4:256 a photo 1.2 s decoding, 6.7 s fitting to
