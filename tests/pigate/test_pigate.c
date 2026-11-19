@@ -123,8 +123,10 @@ static int progress(void *u, int phase, long done, long total)
 
 int main(int argc, char **argv)
 {
-	PGOPT o = { "mono", NULL, "screen", 640, 640, 1, NULL, 0 };
-	char err[200], q[256];
+	PGOPT o = { "mono", NULL, "screen", 640, 640, 1, NULL, 0, 0, 0, 0, NULL };
+	char err[200], q[1800];
+	unsigned char pens[16][3];
+	int i;
 	int rc, fails = 0;
 
 	if (argc < 4) {
@@ -147,6 +149,25 @@ int main(int argc, char **argv)
 		printf("FAIL the query with thumbs: %s\n", q);
 		fails++;
 	}
+	/* Faster display: the pens as hex, 6 digits each, the column and the
+	   pixels' shape (EPDF 2.40) */
+	for (i = 0; i < 16; i++) {
+		pens[i][0] = (unsigned char)(i * 17);
+		pens[i][1] = (unsigned char)(i & 1 ? 255 : 0);
+		pens[i][2] = (unsigned char)(255 - i * 16);
+	}
+	o.pen_n = 2;
+	o.pen_rgb = (const unsigned char (*)[3])pens;
+	o.pen_col = 600;
+	o.pen_aspect = 32;
+	pg_query(&o, "A.PDF", q, sizeof q);
+	if (strcmp(q, "?pages=mono&pictures=screen&page_width=640&picture_width=640&double=1"
+		      "&pens=0000ff11ffef&column=600&aspect=32&name=A.PDF")) {
+		printf("FAIL the query with pens: %s\n", q);
+		fails++;
+	}
+	o.pen_n = getenv("PENS") ? 16 : 0;	/* (the conversion with them: run.sh) */
+	o.pen_aspect = 16;
 	pg_query(NULL, ".hidden", q, sizeof q);
 	if (strcmp(q, "?name=_hidden")) {
 		printf("FAIL a dot first: %s\n", q);
