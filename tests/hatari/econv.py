@@ -87,6 +87,8 @@ def run(work, machine, src):
             showcase.cut(os.path.join(r.hd, "IN.PDF"))
         make_pdf(os.path.join(r.hd, "IN2.PDF"), book(8))     # the second: stopped in the middle
         inf0 = "NATFEATS=1\nWRITETO=C:\\OUT\nWINDOW=%d,%d\n" % WIN_AT
+        if os.environ.get("ECONV_OPTIMISE"):
+            inf0 += "OPTIMISE=%s\n" % os.environ["ECONV_OPTIMISE"]     # (size: Smaller files; display, the default)
         if PREVIEWS:
             inf0 += "PREVIEWS=1\n"
         r.write("ECONV/ECONVERT.INF", inf0)
@@ -128,6 +130,8 @@ def run(work, machine, src):
         elif b"/AERAPrepared" not in open(out, "rb").read():
             bad.append("the file isn't a converted PDF")
         else:
+            if os.environ.get("ECONV_KEEP"):
+                shutil.copy(out, os.environ["ECONV_KEEP"])     # (the converted file, for another rig)
             # each page's preview only with Settings' Page previews (PREVIEWS=1;
             # Erez, 15 Nov 2026: "a setting flag, off by default")
             data = open(out, "rb").read()
