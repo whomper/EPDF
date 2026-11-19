@@ -202,6 +202,19 @@ int main(int argc, char **argv)
 		} else if (!strcmp(argv[i], "--pictures") && i + 1 < argc) {
 			i++;
 			o.pic_size = !strcmp(argv[i], "screen") ? CV_PIC_SCREEN : CV_PIC_PAGE;
+		} else if (!strcmp(argv[i], "--pens") && i + 1 < argc) {
+			/* Faster display: the screen's pens, 3 bytes each by hardware
+			   register (2 to 256 of them) */
+			FILE *f = fopen(argv[++i], "rb");
+			long n = f ? (long)fread(o.pen_rgb, 1, sizeof o.pen_rgb, f) : 0;
+
+			if (f)
+				fclose(f);
+			if (n < 6 || n % 3) {
+				fprintf(stderr, "econvert: %s: not 2 to 256 pens of 3 bytes\n", argv[i]);
+				return 2;
+			}
+			o.pen_n = (int)(n / 3);
 		} else if (!strcmp(argv[i], "--photos") && i + 1 < argc) {
 			i++;
 			o.photos = !strcmp(argv[i], "jpeg") ? CV_PHOTOS_JPEG : CV_PHOTOS_INDEXED;

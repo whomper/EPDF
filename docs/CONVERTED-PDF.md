@@ -84,6 +84,22 @@ wide, the height in proportion.
 | a scan in black and white (CCITT, JBIG2, 1 bit) | `/DeviceGray`, 1 bit a pixel, FlateDecode |
 | a drawing | `/Indexed /DeviceRGB 15` (16 colours, 4 bits a pixel) or `/DeviceGray` 1 bit when it has no colour, FlateDecode |
 
+### Faster display (EPDF 2.40; Erez, 17 Nov 2026)
+
+With Faster display (EConvert's Settings, the default; the Gateway when EPDF asks it with its screen's
+pens), a picture in colour or grey also has a copy for one screen: `/AERAShown` in its dictionary refers
+to an image XObject the size EPDF's text view shows the picture at on that screen (its width in points up
+to EPDF's text column in a window the size of the desktop, its height by the screen's pixel shape: a
+point a pixel on a square-pixel screen), dithered once in that screen's pens. The copy is
+`/Indexed /DeviceRGB` with as many entries as the screen has pens, colour *i* register *i*'s (the value
+the screen's bitmap holds for that pen), at 1, 2, 4 or 8 bits a pixel (2, 4, 16 or 256 pens), FlateDecode.
+A picture shown at two sizes is stored twice, each with its copy. A black-and-white picture has none (EPDF
+copies its bits already).
+
+EPDF uses the copy when it is the size it shows the picture at and its colours are this screen's pens; it
+copies its pixels as they are. On any other screen, or in a window narrower than the picture, it draws the
+picture itself as before. Another viewer ignores the key.
+
 ### Whole pages
 
 `/Mono` is `/DeviceGray`, 1 bit a pixel (0 black), dithered, FlateDecode. `/Colour` is `/Indexed /DeviceRGB 15`,
@@ -120,7 +136,8 @@ The page's `/Contents` draws the prepared parts, so any viewer shows something s
 - It opens the file as any PDF, then finds the catalog's `/AERA` with `/Version 1`.
 - For a page's text, it reads `/AERA /Text` into its store as it is, without interpreting the content.
 - It draws pictures as it draws any image XObject. They are already the size it shows, so it doesn't scale
-  them, and it decodes no JPEG unless the batch chose `/Photos /JPEG`.
+  them, and it decodes no JPEG unless the batch chose `/Photos /JPEG`. A picture's `/AERAShown` copy made
+  for its screen (Faster display) it copies as it is, with no dither.
 - It draws the badge on each page's heading line.
 - With View > Pages it shows `/Colour` on a screen with 16 colours or more, else `/Mono`.
 - With View > Translate ticked and the file's `/Translate /To` its target, it shows each page's
