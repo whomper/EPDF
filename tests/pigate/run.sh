@@ -11,7 +11,7 @@
 # (tools/sync-gateway.sh; PDFGATE=FOLDER for another): EPDF tests every
 # change to pdfgate (guidelines 1.2); PDFGATE=none, or no copy: the stand-in.
 #
-#   [PDFGATE=FOLDER|none] tests/pigate/run.sh [IN.pdf]   (a book of 6 pages)
+#   [PDFGATE=FOLDER|none] tests/pigate/run.sh [IN.pdf]   (a book of 6 pages, a photo on its second)
 set -e
 cd "$(dirname "$0")/../.."
 fonts=${FONTS:-third_party/liberation/fonts}
@@ -20,7 +20,7 @@ trap 'kill $pid 2>/dev/null; rm -rf "$w"' EXIT
 in=$1
 if [ -z "$in" ]; then
 	in=$w/BOOK.PDF
-	python3 -c 'import sys; sys.path.insert(0, "tests/hatari"); from pdfgen import make_pdf, book; make_pdf(sys.argv[1], book(6))' "$in"
+	python3 -c 'import sys; sys.path.insert(0, "tests/hatari"); from pdfgen import make_pdf, book, jpeg; make_pdf(sys.argv[1], book(6), pictures={1: (jpeg(200, 150), 200, 150, 300, 225)})' "$in"
 fi
 make -s build/econvert
 cc -O1 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-sign-compare -fsanitize=address,undefined \
@@ -44,6 +44,18 @@ sleep 1
 build/econvert --fonts "$fonts" --pages mono --pictures screen --page-width 640 --picture-width 640 \
 	"$in" "$w/direct.pdf" > /dev/null
 cmp "$w/pi.pdf" "$w/direct.pdf" && echo "ok   the Pi's PDF is the direct one, byte for byte"
+# Faster display: 16 pens, the column 600 (test_pigate.c's PENS); a Gateway
+# that has pens= converts with them, as build/econvert does; one without
+# refuses them and is asked again without (the PDF as before)
+PENS=1 "$w/test_pigate" "$port" "$in" "$w/pens.pdf"
+if { [ -z "$PDFGATE" ] || grep -q '"pens"' "$PDFGATE/pdfgate.py"; }; then
+	hex=$(python3 -c 'print("".join("%02x%02x%02x" % (i * 17, 255 if i & 1 else 0, 255 - i * 16) for i in range(16)))')
+	build/econvert --fonts "$fonts" --pages mono --pictures screen --page-width 640 --picture-width 640 \
+		--pens-hex "$hex" --column 600 --aspect 16 "$in" "$w/pdirect.pdf" > /dev/null
+	grep -q /AERAShown "$w/pdirect.pdf" && cmp "$w/pens.pdf" "$w/pdirect.pdf" && echo "ok   pens=: the Pi's PDF is the direct one with --pens-hex"
+else
+	cmp "$w/pens.pdf" "$w/direct.pdf" && echo "ok   pens= refused by this pdfgate: asked again without, the PDF as before"
+fi
 "$w/test_pigate" "$port" "$in" "$w/stopped.pdf" 30 && echo "ok   a stop at 30%: nothing left"
 printf 'GIF89a not a pdf' > "$w/x.pdf"
 "$w/test_pigate" "$port" "$w/x.pdf" "$w/y.pdf" | grep -q 'err "pdfgate: not a PDF"' && \

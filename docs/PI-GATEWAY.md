@@ -41,11 +41,23 @@ EConvert's settings:
 | `name`          | the PDF's own name          | (kept in the result) |
 | `translate`     | a language, ISO 639-1 (`en`, `he`, ...) | `--translate` (below) |
 | `thumbs`        | `1`                         | `--thumbs`           |
+| `pens`          | 2 to 256 pens, 6 lower-case hex digits each | `--pens-hex` |
+| `column`        | 64 to 4096                  | `--column`           |
+| `aspect`        | 4 to 64                     | `--aspect`           |
 
 `thumbs=1` (EPDF 2.33, Erez 15 Nov 2026; AERA-Gateway 1.48 on, an older one refuses it): each page carries
 its preview, its `/Thumb` (CONVERTED-PDF.md, "The page's preview"). EConvert sends it with **Page
 previews** ticked in its Settings, EPDF's Open on the Gateway while View > Page strip is ticked; without
 it the converted PDF has none.
+
+`pens`, `column` and `aspect` (EPDF 2.40, Faster display; Erez 17 Nov 2026): the Atari's screen's pens
+by hardware register (register 0 first, red, green and blue as two hex digits each), the text view's
+column in pixels and a pixel's height to its width x 16 (16 square). Each picture in colour or grey then
+also carries a copy in those pens at the size the text view shows it (CONVERTED-PDF.md, "Faster
+display"). EConvert sends them with **Optimise for: Faster display** (its default); EPDF's Open on the
+Gateway always, on a screen of 256 colours or fewer, with its window's column as it is. A pdfgate without
+them refuses `pens` (400, "no option pens"): EPDF and EConvert then ask again without, and the PDF comes
+as before.
 
 `translate` (Erez, 8 Nov 2026; EPDF with View > Translate ticked): the converted PDF also carries each
 page's text translated into that language (CONVERTED-PDF.md, `/Translation`), translated on the

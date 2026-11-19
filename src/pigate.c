@@ -58,6 +58,21 @@ int pg_query(const PGOPT *o, const char *name, char *q, int qlen)
 		ADD("&double=%d", o->page_double ? 1 : 0);
 	if (o && o->thumbs)
 		ADD("&thumbs=1");
+	if (o && o->pen_n >= 2 && o->pen_n <= 256 && o->pen_rgb && o->pen_col > 0) {
+		static const char hx[] = "0123456789abcdef";
+		int i, j;
+
+		ADD("&pens=");
+		if (n + o->pen_n * 6 >= qlen)
+			return -1;
+		for (i = 0; i < o->pen_n; i++)
+			for (j = 0; j < 3; j++) {
+				q[n++] = hx[o->pen_rgb[i][j] >> 4];
+				q[n++] = hx[o->pen_rgb[i][j] & 15];
+			}
+		q[n] = 0;
+		ADD("&column=%d&aspect=%d", o->pen_col, o->pen_aspect > 0 ? o->pen_aspect : 16);
+	}
 	if (o && o->translate && o->translate[0]) {
 		const char *t;
 
@@ -111,10 +126,13 @@ static int head(CONN *c, SBUF *b, long *length, long *done, long *total)
 	}
 }
 
-int pg_convert(const char *host, unsigned short port, const PGOPT *o, const char *in, const char *out,
-	       pg_progress progress, void *u, char *err, int errlen)
+static int convert(const char *host, unsigned short port, const PGOPT *o, const char *in, const char *out,
+		   pg_progress progress, void *u, char *err, int errlen)
 {
-	char q[256], line[400], *piece = NULL;
+	/* (static: one conversion at a time, and the pens' 1,536 hex digits
+	   are too many for the job's stack) */
+	static char q[1800], line[2000];
+	char *piece = NULL;
 	long size = 0, off, length, done = 0, total = 0;
 	void *src = NULL, *dst = NULL;
 	CONN *c = NULL;
@@ -257,5 +275,21 @@ done:
 	}
 	free(piece);
 	sb_free(&b);
+	return rc;
+}
+
+int pg_convert(const char *host, unsigned short port, const PGOPT *o, const char *in, const char *out,
+	       pg_progress progress, void *u, char *err, int errlen)
+{
+	int rc = convert(host, port, o, in, out, progress, u, err, errlen);
+
+	if (rc == -1 && o && o->pen_n && strstr(err, "no option pens")) {
+		/* a Gateway before Faster display: the same without the pens
+		   (the pictures as before) */
+		PGOPT p = *o;
+
+		p.pen_n = 0;
+		rc = convert(host, port, &p, in, out, progress, u, err, errlen);
+	}
 	return rc;
 }

@@ -86,8 +86,8 @@ wide, the height in proportion.
 
 ### Faster display (EPDF 2.40; Erez, 17 Nov 2026)
 
-With Faster display (EConvert's Settings, the default; the Gateway when EPDF asks it with its screen's
-pens), a picture in colour or grey also has a copy for one screen: `/AERAShown` in its dictionary refers
+With Faster display (EConvert's Settings, the default; the Gateway when EPDF or EConvert asks it with
+its screen's pens: PI-GATEWAY.md's `pens`), a picture in colour or grey also has a copy for one screen: `/AERAShown` in its dictionary refers
 to an image XObject the size EPDF's text view shows the picture at on that screen (its width in points up
 to EPDF's text column in a window the size of the desktop, its height by the screen's pixel shape: a
 point a pixel on a square-pixel screen), dithered once in that screen's pens. The copy is

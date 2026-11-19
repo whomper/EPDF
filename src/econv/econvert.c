@@ -666,6 +666,14 @@ static int on_the_gateway(const char *in, const char *out, char *err, int errlen
 	po.pic_w = iw;
 	po.page_double = -1;
 	po.thumbs = previews_set;		/* (thumbs=1: AERA-Gateway 1.48 on) */
+	if (optimise_set && scr_pen_n >= 2) {
+		/* Faster display: this screen's pens (pens=: a Gateway without
+		   them is asked again without, pigate.c) */
+		po.pen_n = scr_pen_n;
+		po.pen_rgb = (const unsigned char (*)[3])scr_rgb;
+		po.pen_col = scr_col;
+		po.pen_aspect = scr_aspect;
+	}
 	{
 		char q[40];
 

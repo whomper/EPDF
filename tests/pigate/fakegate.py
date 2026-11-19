@@ -32,6 +32,9 @@ OPTS = {
     "picture_width": ("--picture-width", None),
     "double": (None, ("0", "1")),
     "name": (None, None),
+    "pens": ("--pens-hex", None),       # Faster display (EPDF 2.40): 2 to 256 pens, 6 hex digits each
+    "column": ("--column", None),
+    "aspect": ("--aspect", None),
 }
 MOST = 64 << 20
 
@@ -77,6 +80,12 @@ class Gate(http.server.BaseHTTPRequestHandler):
             flag, ok = OPTS[k]
             if k in ("page_width", "picture_width"):
                 if not v.isdigit() or not (64 <= int(v) <= 4096):
+                    return self.refuse(400, "%s out of range" % k)
+            elif k == "pens":
+                if not re.fullmatch(r"(?:[0-9a-f]{6}){2,256}", v):
+                    return self.refuse(400, "pens?")
+            elif k in ("column", "aspect"):
+                if not v.isdigit() or not ((64 <= int(v) <= 4096) if k == "column" else (4 <= int(v) <= 64)):
                     return self.refuse(400, "%s out of range" % k)
             elif k == "name":
                 if not re.fullmatch(r"[A-Za-z0-9_. -]{1,64}", v) or v.startswith("."):
