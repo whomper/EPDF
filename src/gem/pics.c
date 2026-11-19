@@ -195,8 +195,8 @@ typedef struct {
 	unsigned char *racc;
 	int ink0, dark0;		/* dark0: colour 0 the darker of the two */
 	unsigned char *mrow;		/* colour: a 1-bit row, spread to the band's planes */
-	unsigned short dc[16];
-	unsigned char dp[16];
+	unsigned short dc[256];
+	unsigned char dp[256];		/* (256: a converted picture in the screen's own pens, Faster display) */
 } SINK;
 
 static SINK *sink;			/* the one being made */
@@ -427,13 +427,50 @@ static void put_pens(SINK *k, long y)
 			e->ready = y + 1;
 		return;
 	}
-	for (p = 0; p < k->nplanes; p++) {
-		unsigned char *o = k->band + (p * BAND + y - k->b0) * k->wd * 2;
-		int bit = 1 << p;
+	{
+		/* 8 pixels at a time: each pen's bits spread one to a byte per plane
+		   (planes 0-3 in lo, 4-7 in hi, the pixel's bit at 0x80), shifted
+		   to the pixel's place and OR'd, then each plane's byte stored once
+		   (a bit at a time for each plane it was 8 passes over the row: a
+		   Faster display picture's copy on Falcon-4:256 spent most of its
+		   time there) */
+		static unsigned long tlo[256], thi[256];
+		static int made;
+		unsigned char *o[8];
+		const unsigned char *pens = k->pens;
+		long rb = k->wd * 2;
+		int np = k->nplanes;
 
-		for (x = 0; x < k->w; x++)
-			if (k->pens[x] & bit)
-				o[x >> 3] |= (unsigned char)(0x80 >> (x & 7));
+		if (!made) {
+			int v;
+
+			for (v = 0; v < 256; v++) {
+				unsigned long lo = 0, hi = 0;
+
+				for (p = 0; p < 4; p++) {
+					if (v & (1 << p))
+						lo |= 0x80UL << (24 - 8 * p);
+					if (v & (16 << p))
+						hi |= 0x80UL << (24 - 8 * p);
+				}
+				tlo[v] = lo;
+				thi[v] = hi;
+			}
+			made = 1;
+		}
+		for (p = 0; p < np; p++)
+			o[p] = k->band + (p * BAND + y - k->b0) * rb;
+		for (x = 0; x < k->w; x += 8) {
+			unsigned long lo = 0, hi = 0;
+			int j, n = k->w - x < 8 ? (int)(k->w - x) : 8;
+
+			for (j = 0; j < n; j++) {
+				lo |= tlo[pens[x + j]] >> j;
+				hi |= thi[pens[x + j]] >> j;
+			}
+			for (p = 0; p < np; p++)
+				o[p][x >> 3] = (unsigned char)((p < 4 ? lo : hi) >> (24 - 8 * (p & 3)));
+		}
 	}
 	band_row(k, y);
 }
@@ -584,6 +621,7 @@ int pics_rows(PDOC *d, PICE *e, int nplanes, PIC_PAL *pl, int *why)
 {
 	SINK k;
 	int how, sharp = 0;
+	long shown = -1;		/* (the picture's /AERAShown copy, used for it) */
 
 	memset(&k, 0, sizeof k);
 	k.e = e;
@@ -618,27 +656,64 @@ int pics_rows(PDOC *d, PICE *e, int nplanes, PIC_PAL *pl, int *why)
 		unsigned char ip[256 * 3];
 		int n = 0, i, ok;
 
-		ok = pdf_image_palette(d, e->obj, ip, &n);
+		/* EConvert's Faster display: the picture's copy in the screen's
+		   pens at the size shown here (/AERAShown), when it is that size */
+		{
+			POBJ *io = pdf_get(d, e->obj), *so = io && io->t == PO_DICT && !e->flip ? pd_getraw(io, "AERAShown") : NULL;
+
+			if (so && so->t == PO_REF) {
+				POBJ *sd = pdf_get(d, so->a);
+
+				if (sd && sd->t == PO_DICT && pd_int(d, sd, "Width", 0) == e->w && pd_int(d, sd, "Height", 0) == e->h)
+					shown = so->a;
+			}
+		}
+	again:
+		ok = pdf_image_palette(d, shown >= 0 ? shown : e->obj, ip, &n);
 		/* Sharp (Erez, 5 Nov 2026): a picture of few colours (a
 		   screenshot, a diagram), more than the pens near them hold, on 16
 		   colours or fewer: each pixel its nearest pen, no dither (a dither
 		   made its letters dots); photos (EConvert's have 256) keep it */
 		sharp = ok && n <= 128 && nplanes <= 4;
-		ok = ok && n <= 16;
-		for (i = 0; ok && i < n; i++) {
-			int q = pic_pal_nearest(pl, ip[3 * i], ip[3 * i + 1], ip[3 * i + 2]), c;
+		if (n > 16) {
+			/* a picture in the screen's own pens (EConvert's Faster
+			   display): colour i is register i's, to vq_color's rounding;
+			   any other palette (a converted photo's own 256) is dithered
+			   as before, never mapped to near pens (it would band) */
+			ok = ok && n <= pl->n;
+			for (i = 0; ok && i < n; i++) {
+				int c;
 
-			for (c = 0; c < 3; c++) {
-				int dv = ip[3 * i + c] - pl->rgb[q][c];
+				for (c = 0; c < 3; c++) {
+					int dv = ip[3 * i + c] - pl->rgb[i][c];
 
-				if (dv > 48 || dv < -48)
-					ok = 0;
+					if (dv > 4 || dv < -4)
+						ok = 0;
+				}
+				k.dc[i] = (unsigned short)(((ip[3 * i] & 0xF8) << 8) | ((ip[3 * i + 1] & 0xFC) << 3) | (ip[3 * i + 2] >> 3));
+				k.dp[i] = (unsigned char)i;
 			}
-			k.dc[i] = (unsigned short)(((ip[3 * i] & 0xF8) << 8) | ((ip[3 * i + 1] & 0xFC) << 3) | (ip[3 * i + 2] >> 3));
-			k.dp[i] = (unsigned char)q;
-		}
+		} else
+			for (i = 0; ok && i < n; i++) {
+				int q = pic_pal_nearest(pl, ip[3 * i], ip[3 * i + 1], ip[3 * i + 2]), c;
+
+				for (c = 0; c < 3; c++) {
+					int dv = ip[3 * i + c] - pl->rgb[q][c];
+
+					if (dv > 48 || dv < -48)
+						ok = 0;
+				}
+				k.dc[i] = (unsigned short)(((ip[3 * i] & 0xF8) << 8) | ((ip[3 * i + 1] & 0xFC) << 3) | (ip[3 * i + 2] >> 3));
+				k.dp[i] = (unsigned char)q;
+			}
 		if (n == 2)
 			k.dark0 = ip[0] * 3 + ip[1] * 6 + ip[2] < ip[3] * 3 + ip[4] * 6 + ip[5];
+		if (shown >= 0 && n != pl->n)
+			ok = 0;		/* (a copy for a screen of other pens: fewer would show worse) */
+		if (shown >= 0 && !ok) {
+			shown = -1;	/* (made for another screen's pens: the picture itself, as before) */
+			goto again;
+		}
 		k.dn = n;
 		k.direct = ok;
 		if (sharp && !k.direct)
@@ -664,7 +739,8 @@ int pics_rows(PDOC *d, PICE *e, int nplanes, PIC_PAL *pl, int *why)
 			how = 0;
 		}
 	} else {
-		POBJ *o = k.direct && !e->flip ? pdf_get(d, e->obj) : NULL;
+		long use = k.direct && shown >= 0 ? shown : e->obj;
+		POBJ *o = k.direct && !e->flip ? pdf_get(d, use) : NULL;
 
 		k.bpc = o ? (int)pd_int(d, o, "BitsPerComponent", 8) : 0;
 		k.sw = o ? pd_int(d, o, "Width", 0) : 0;
@@ -687,7 +763,7 @@ int pics_rows(PDOC *d, PICE *e, int nplanes, PIC_PAL *pl, int *why)
 		if (o && k.sw > 0 && k.sh > 0 && (k.sw == e->w || k.xs))
 			/* its samples as they are, each colour its pen, a column
 			   and a row taken where it is shown smaller */
-			how = pdf_image_raw_rows(d, e->obj, sink_raw, &k, 2L << 20, why);
+			how = pdf_image_raw_rows(d, use, sink_raw, &k, 2L << 20, why);
 		else
 			how = pdf_image_rows(d, e->obj, e->w, e->h, sink_row, &k, 2L << 20, why);
 		free(k.xs);
