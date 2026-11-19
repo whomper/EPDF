@@ -22,6 +22,7 @@
 #include "pdfimg.h"
 #include "docview.h"
 #include "rdraw.h"
+#include "scrpens.h"
 
 /* pictures kept decoded: 8, or with room (a TT or Falcon with more than
    the stock memory, Erez 10 Nov 2026: "hold both Pages and Text views in
@@ -35,29 +36,11 @@ static PIC_PAL *pal;			/* taken at the first picture (not resident) */
 static int pal_planes = -1;
 static unsigned long tick;
 
-/* VDI pen n uses colour register reg[n] (TOS, 2 to 16 colours; with 256
-   the 16 first so and the rest as they are, pen 1 the last register) */
-static int pen_reg(int pen, int planes)
-{
-	static const unsigned char r4[16] = { 0, 15, 1, 2, 4, 6, 3, 5, 7, 8, 9, 10, 12, 14, 11, 13 };
-	static const unsigned char r2[4] = { 0, 3, 1, 2 };
-
-	if (planes == 1)
-		return pen;
-	if (planes == 2)
-		return r2[pen & 3];
-	if (planes == 4)
-		return r4[pen & 15];
-	if (pen < 16)
-		return pen == 1 ? 255 : r4[pen];
-	return pen == 255 ? 15 : pen;
-}
-
 /* the registers' colours, for the dither */
 PIC_PAL *pics_palette(void)
 {
 	unsigned char rgb[256][3];
-	int n, pen;
+	int n;
 
 	if (planes > 8)
 		return NULL;
@@ -65,25 +48,7 @@ PIC_PAL *pics_palette(void)
 		return pal;
 	if (!pal && !(pal = calloc(1, sizeof *pal)))
 		return NULL;
-	n = 1 << planes;
-	memset(rgb, 0, sizeof rgb);
-	if (planes == 1) {
-		/* white and black, without asking: EmuTOS's mono screen answers
-		   vq_color with colours that made the dither run away */
-		rgb[0][0] = rgb[0][1] = rgb[0][2] = 255;
-		pic_pal_init(pal, 2, (const unsigned char (*)[3])rgb);
-		pal_planes = planes;
-		return pal;
-	}
-	for (pen = 0; pen < n; pen++) {
-		short c[3];
-		int r = pen_reg(pen, planes);
-
-		vq_color(vdi_h, pen, c);
-		rgb[r][0] = (unsigned char)(c[0] * 255L / 1000);
-		rgb[r][1] = (unsigned char)(c[1] * 255L / 1000);
-		rgb[r][2] = (unsigned char)(c[2] * 255L / 1000);
-	}
+	n = scr_pens(vdi_h, planes, rgb);	/* (scrpens.c: by register, as the bitmaps hold them) */
 	pic_pal_init(pal, n, (const unsigned char (*)[3])rgb);
 	pal_planes = planes;
 	return pal;

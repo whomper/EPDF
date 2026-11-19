@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
-"""EConvert's Settings, General page: Page previews (Erez, 15 Nov 2026: "a
-setting flag, off by default"), on each machine:
+"""EConvert's Settings, General page: Optimise for (Erez, 17 Nov 2026: Faster
+display the default) and Page previews (Erez, 15 Nov 2026: "a setting flag,
+off by default"), on each machine:
 
     econv_settings.py WORK [MACHINE...]        (default Falcon:16, ST:mono)
 
 - Options > Settings... (^,) opens on General, Page previews not ticked;
-- ticked and OK: econvert.inf says PREVIEWS=1;
-- opened again it shows ticked; unticked and Esc: the INF as it was.
+- ticked and OK: econvert.inf says PREVIEWS=1 and OPTIMISE=display;
+- opened again it shows ticked; unticked and Esc: the INF as it was;
+- opened a third time, Optimise for's pop-up set to Smaller files and OK:
+  OPTIMISE=size (the shot "popup" shows it open).
 The tick's place is the dialog's (its "dialog settings X Y" line) and the
 8x16 cell's.
 """
@@ -26,7 +29,8 @@ _spec = importlib.util.spec_from_file_location("aera_speed", os.path.join(TOP, "
 speed = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(speed)
 
-TICK = (128, 72)                        # from the dialog's corner to Page previews' box
+TICK = (128, 141)                       # from the dialog's corner to Page previews' box
+POPUP = (296, 72)                       # to Optimise for's pop-up button
 
 
 def inf(r):
@@ -82,6 +86,8 @@ def run(work, machine):
         time.sleep(3)
         if b"PREVIEWS=1" not in inf(r):
             bad.append("OK: the INF doesn't say PREVIEWS=1: %r" % inf(r))
+        if b"OPTIMISE=display" not in inf(r):
+            bad.append("OK: the INF doesn't say OPTIMISE=display (the default): %r" % inf(r))
         was = inf(r)
         r.key("ctrl+comma")
         at = dialog_at(r, 2)
@@ -98,6 +104,23 @@ def run(work, machine):
         time.sleep(3)
         if inf(r) != was:
             bad.append("Esc changed the INF: %r" % inf(r))
+        r.key("ctrl+comma")
+        at = dialog_at(r, 3)
+        if not at:
+            return r.describe(), bad + ["Settings didn't open a third time"]
+        time.sleep(2)
+        r.still()
+        px, py = at[0] + POPUP[0], at[1] + POPUP[1]
+        r.click(px, py)
+        time.sleep(1.5)
+        r.shot("popup")
+        r.click(px, py - int(os.environ.get("POPUP_STEP", "16")))     # the item above Faster display
+        time.sleep(1.5)
+        r.shot("smaller")
+        r.key("Return")
+        time.sleep(3)
+        if b"OPTIMISE=size" not in inf(r):
+            bad.append("Smaller files and OK: the INF doesn't say OPTIMISE=size: %r" % inf(r))
     finally:
         r.stop()
     return r.describe(), bad
