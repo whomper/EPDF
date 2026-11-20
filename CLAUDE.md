@@ -570,6 +570,26 @@ at first. This section is kept up to date: the build, the tests, what a release 
   the Gateway with a fallback, the pdfgate patch held for the AERA-Gateway session) and inflate_fast
   go to 2.41, with common 74d6095 or later (scrpens in common as ui/scrpens.c, 70aff63; past c6ef2f0
   EPDF.PRG's libc.c needs -DLIBC_ZONES: only doc.c calls the zones).
+  2.41 (Faster display; the hub's go 20 Nov 2026): a picture's /AERAShown copy in the screen's pens at
+  the size the text view shows it (conv.c's w_shown, docs/CONVERTED-PDF.md), copied by pics.c where its
+  pens are the screen's; EConvert's Options > Settings... > General > Optimise for (Faster display the
+  default, OPTIMISE=; Erez kept the page as tests/hatari/econv_settings.py shoots it, 20 Nov 2026); the
+  Gateway's pens=/column=/aspect= (pigate.c; aerapdf's --pens-hex, --column, --aspect; a pdfgate without
+  them refuses "no option pens" and is asked again without; AERA-Gateway holds pdfgate's side for
+  2.41's sync-pdf.sh); put_pens 8 pixels at a time through two tables (showcase 15.3 -> 13.4 s on
+  Erez's configuration). common at exactly 72e4e66 (scrpens, LIBC_ZONES, the V4SA dragging trails).
+  The memory 2.41 added is taken when used (put_pens' tables, pigate's query and line, gwopen's pens:
+  6.6 KB of bss had cost ST-1's big.py two documents' pictures). Pads refitted against v2.40 by the
+  link maps for every section (new: EP_PAD_X after pigate.o, EP_PAD_Y after pdftext.o for the merged
+  strings, bss pads through ftpad.S's FT_PAD_BSS, EConvert's after econvert.o, libc.o, pigate.o and
+  conv.o, CONVTEST's after conv.o and before inflate_fast.o, render.ovl's RV_GIF_PAD_STR 258).
+  Erez accepted (20 Nov 2026) the start 330 -> 345 on his configuration and the About box 120 -> 130
+  on Falcon-4:16; the About box's close 40 -> 85 under NVDI is common 55022752e's trade. The
+  inflate_fast study (INFLBENCH.PRG, tools/inflstreams.py, tests/hatari/inflbench.py): 207/146 cycles a
+  byte on an ST (map, text), 68/49 on Falcon-4; two-byte refill and copy gave -2 % on an ST and +18 %
+  on a Falcon (the loop past the 68030's 256-byte cache): no change (the hub, 20 Nov 2026), build()
+  left as it is. Not in 2.41: a 256-colour whole page and its double (a new 8-bit dither, pages about
+  twice the size). Next: common's about_prepare (the hub: in the next release).
   Next, after 2.36 (Erez, 17 Nov 2026: "go with Faster display as default and lets see that the UI is
   real enough"): the converter prepares pictures and whole pages in the screen's own colours, so EPDF
   only unpacks and copies (the rigs' logs: on Falcon-4:256 a photo 1.2 s decoding, 6.7 s fitting to
