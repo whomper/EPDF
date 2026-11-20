@@ -1688,6 +1688,10 @@ int cv_convert(const char *in, const char *out, const CVOPT *o, CVSTAT *st, char
 		w_printf(&c->w, "/Translate << /To /%s >>\n", o->translate_to);
 	w_printf(&c->w, "/Source << /Name ");
 	w_str(&c->w, base_name(in));
+	if (o->source_path && o->source_path[0]) {
+		w_printf(&c->w, " /Path ");
+		w_str(&c->w, o->source_path);
+	}
 	w_printf(&c->w, " /Bytes %ld /Pages %ld >> >> >>\nendobj\n", c->d.size, c->npages);
 	xref = c->w.pos;
 	w_printf(&c->w, "xref\n0 %ld\n0000000000 65535 f \n", c->w.next);

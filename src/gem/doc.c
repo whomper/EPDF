@@ -1425,6 +1425,50 @@ const char *doc_name(void)
 	return name;
 }
 
+/* a converted copy's original (Erez, 20 Nov 2026: a copy EConvert made was
+   zoomed from its own stored page, never sharp): where /Source's /Path says
+   (EConvert on this Atari), else by its /Name in the copy's folder's parent
+   (EConvert's "Write to" a folder inside the PDFs' own); taken only when
+   its size is /Bytes.
+   The name the window shows stays the copy's (doc_set_original's is for
+   EPDF's own Gateway copies) */
+static int original_is(const char *p)
+{
+	long n;
+
+	if (!p[0] || !strcmp(p, opath))
+		return 0;
+	n = pf_size(p);
+	return n > 0 && n == doc->src_bytes;
+}
+
+static void find_original(void)
+{
+	char d[256], p[256], *b;
+	const char *how = NULL;
+
+	if (doc->src_bytes <= 0)
+		return;
+	if (original_is(doc->src_path)) {
+		snprintf(orig, sizeof orig, "%s", doc->src_path);
+		how = "path";
+	} else if (doc->src_name[0] && !strchr(doc->src_name, '\\') && !strchr(doc->src_name, ':')) {
+		snprintf(d, sizeof d, "%s", opath);
+		if ((b = strrchr(d, '\\')) != NULL) {
+			*b = '\0';
+			if ((b = strrchr(d, '\\')) != NULL) {
+				b[1] = '\0';	/* (the parent, with its backslash) */
+				snprintf(p, sizeof p, "%s%s", d, doc->src_name);
+				if (original_is(p)) {
+					snprintf(orig, sizeof orig, "%s", p);
+					how = "parent";
+				}
+			}
+		}
+	}
+	log_event("original", how ? how : "none", how ? orig : doc->src_name);
+}
+
 void doc_set_original(const char *path)
 {
 	const char *base = strrchr(path, '\\');
@@ -1602,6 +1646,8 @@ static long open_done(void)
 	doc = odoc;
 	odoc = NULL;
 	npages = onpages;
+	if (doc->prepared && !orig[0] && rdraw_machine())
+		find_original();
 	/* any other PDF drawn as printed where render.ovl can be (stage 2) */
 	drawn = !doc->prepared && rdraw_machine() && pf_size(rdraw_path) > 0;
 	if (!doc->prepared && rdraw_machine())

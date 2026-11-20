@@ -52,6 +52,8 @@
 #include "icon16.h"
 #include "icon256.h"
 #include "scrpens.h"
+#include "translate.h"
+#include "charset.h"
 
 extern const char app_version[];
 short vdi_h, cw, ch, desk_x, desk_y, desk_w, desk_h, planes, gl_wchar, gl_hchar;	/* (scr_w, scr_h: src/gem/gemui.c) */
@@ -103,6 +105,15 @@ static char out_dir[160], in_dir[160];
 static int has_030, on_gateway;
 static char gate_host[64];
 static unsigned short gate_port = GATE_PORT;
+/* Translate (Erez, 20 Nov 2026: "once you want to convert something, you
+   already know if you want to translate it as well"): a pop-up in the
+   window, Off when EConvert starts (his default; not kept in the INF), else
+   the language each page's text is translated into by the Gateway's
+   translation service, in both modes (on This Atari the text alone goes
+   to it) */
+#define TR_PORT 8480			/* translategate's (AERA-Gateway) */
+static unsigned short tr_port = TR_PORT;
+static char tr_code[TR_LANG], tr_name[24];
 
 /* no Gateway of its own yet: EPDF's, from epdf.inf in the folder above
    (the release's epdf\econvert\), or beside it (Erez, 8 Nov 2026: the
@@ -182,6 +193,8 @@ static void settings_read(void)
 		strcpy(gate_host, v);
 	if ((v = inf_get(&inf, "GATEPORT")) != NULL && atol(v) > 0 && atol(v) < 65536)
 		gate_port = (unsigned short)atol(v);
+	if ((v = inf_get(&inf, "TRPORT")) != NULL && atol(v) > 0 && atol(v) < 65536)
+		tr_port = (unsigned short)atol(v);	/* (translategate's elsewhere: the rigs) */
 	if (!gate_host[0])
 		epdf_gateway();
 }
@@ -320,7 +333,7 @@ enum {
 	BOX, BAND1, BAND2, ICON, LIST, L0, L1, L2, L3, L4, L5, L6,
 	M0, M1, M2, M3, M4, M5, M6, G0, G1, G2, G3, G4, G5, G6,
 	B_ADD, B_FOLDER, B_REMOVE, B_CLEAR, B_OUT, SEP1, SEP1W,
-	T_PAGES, U_PAGES, T_PHOTOS, U_PHOTOS, T_ON, U_ON, SEP2, SEP2W,
+	T_PAGES, U_PAGES, T_PHOTOS, U_PHOTOS, T_ON, U_ON, T_TR, U_TR, SEP2, SEP2W,
 	T_FILE, BAR1, T_BATCH, BAR2, B_GO, NOBJ
 };
 /* a row of the list: L (its ground and the name), M (the mark), G (the size
@@ -333,10 +346,10 @@ enum {
 #define LTEXT (LW - 3)			/* a row's characters (the pane bar at its right) */
 
 static OBJECT tree[NOBJ];
-static TEDINFO ted_b1, ted_b2, ted_u[3], ted_row[7], ted_mark[7], ted_rest[7];
+static TEDINFO ted_b1, ted_b2, ted_u[4], ted_row[7], ted_mark[7], ted_rest[7];
 static BITBLK icon_blk;
 static char s_band1[COLS + 1], s_band2[COLS + 1], s_file[COLS + 1], s_batch[COLS + 1];
-static char s_row[LROWS][NAME_W + 1], s_mark[LROWS][2], s_rest[LROWS][LTEXT + 1], s_u[3][28];
+static char s_row[LROWS][NAME_W + 1], s_mark[LROWS][2], s_rest[LROWS][LTEXT + 1], s_u[4][28];
 
 /* the mock-up's colours (Erez's B2, 9 Nov 2026: "the color coding is not
    like the mockup"), each the nearest of the first 16 pens as this
@@ -508,6 +521,8 @@ static void build(void)
 	popup_button(U_PHOTOS, 1, 44, (short)(11 | (half << 8)), 21);
 	obj(T_ON, BOX, G_STRING, 0, (long)"Convert on:", 2, 13, 11, 1);
 	popup_button(U_ON, 2, 15, 13, 18);
+	obj(T_TR, BOX, G_STRING, 0, (long)"Translate:", 36, 13, 10, 1);
+	popup_button(U_TR, 3, 47, 13, 18);
 	obj(SEP2, BOX, G_BOX, 0, line, 1, (short)(14 | ((half + 2) << 8)), COLS - 2, (short)(0 | (1 << 8)));
 	obj(SEP2W, BOX, G_BOX, 0, 0x00000070L, 1, (short)(14 | ((half + 3) << 8)), COLS - 2, (short)(0 | (1 << 8)));
 	obj(T_FILE, BOX, G_STRING, 0, (long)s_file, 2, (short)(15 | (half << 8)), COLS - 4, 1);
@@ -666,6 +681,7 @@ static int on_the_gateway(const char *in, const char *out, char *err, int errlen
 	po.pic_w = iw;
 	po.page_double = -1;
 	po.thumbs = previews_set;		/* (thumbs=1: AERA-Gateway 1.48 on) */
+	po.translate = tr_code[0] ? tr_code : NULL;
 	if (optimise_set && scr_pen_n >= 2) {
 		/* Faster display: this screen's pens (pens=: a Gateway without
 		   them is asked again without, pigate.c) */
@@ -691,6 +707,36 @@ static int on_the_gateway(const char *in, const char *out, char *err, int errlen
 		snprintf(gate_why, sizeof gate_why, "%s", err);
 	}
 	return r == -3 ? -1 : r;
+}
+
+/* This Atari's conversion, Translate on: a page's paragraphs to the
+   Gateway's translation service (common's translate.c), its waits a turn
+   each (pf_idle); CVOPT's codes for a refusal: 2 no such pair, 3 busy, 4
+   too long */
+static int tr_direct(void *u, const char *to, const char *utf8, long len, char **out, long *outlen, char from[8])
+{
+	char err[120], used[TR_LANG];
+	char *t;
+
+	(void)u;
+	err[0] = '\0';
+	conn_stop = 0;
+	pf_idle = gate_idle;
+	t = translate_utf8(gate_host, tr_port, to, NULL, utf8, len, NULL, used, outlen, err, sizeof err);
+	pf_idle = NULL;
+	if (!t && !err[0]) {
+		*out = NULL;		/* (nothing came back for nothing sent) */
+		snprintf(from, 8, "same");
+		return 0;
+	}
+	if (!t) {
+		log_event("translate-failed", err, NULL);
+		return !strcmp(err, translate_refusal(422)) ? 2 : !strcmp(err, translate_refusal(503)) ? 3 :
+		       !strcmp(err, translate_refusal(504)) ? 4 : 1;
+	}
+	*out = t;
+	snprintf(from, 8, "%s", strcmp(used, to) ? used : "same");
+	return 0;
 }
 
 static void worker(void)
@@ -720,6 +766,11 @@ static void worker(void)
 			o.pages = pages_set;
 			o.photos = photos_set;
 			o.thumbs = previews_set;
+			o.source_path = files[i].path;
+			if (tr_code[0]) {
+				o.translate_to = tr_code;
+				o.translate = tr_direct;
+			}	/* (EPDF's sharp and zoomed pages: the original found by it) */
 			if (optimise_set && scr_pen_n >= 2) {
 				o.pen_n = scr_pen_n;
 				memcpy(o.pen_rgb, scr_rgb, sizeof o.pen_rgb);
@@ -942,6 +993,7 @@ static void texts(void)
 	snprintf(s_u[0], sizeof s_u[0], " %-16s\x02", pages_names[pages_set]);
 	snprintf(s_u[1], sizeof s_u[1], " %-19s\x02", photos_names[photos_set]);
 	snprintf(s_u[2], sizeof s_u[2], " %-16s\x02", on_names[on_gateway]);
+	snprintf(s_u[3], sizeof s_u[3], " %-16.16s\x02", tr_code[0] ? tr_name : "Off");
 	if (!working) {
 		snprintf(s_file, sizeof s_file, "The file");
 		snprintf(s_batch, sizeof s_batch, "%s", s_result[0] ? s_result : "The batch");
@@ -1623,7 +1675,7 @@ static void begin(void)
 		if (!out_dir[0])
 			return;
 	}
-	if (on_gateway) {
+	if (on_gateway || tr_code[0]) {
 		if (!gate_host[0] && !settings_dialog())
 			return;
 		if (!gate_host[0])
@@ -1974,6 +2026,85 @@ static void choose(short o)
 	redraw_obj(o);
 }
 
+/* Translate's pop-up: Off, then the languages the Gateway's translation
+   service has installed (GET /languages, asked each time it opens: the
+   user may have installed one from EPDF meanwhile), the one chosen ticked,
+   over the button (5.7) */
+static void choose_language(void)
+{
+	static SBUF names;
+	static char lab[TR_LANGS_MAX + 1][TR_LANGNAME + 2];
+	static char codes[TR_LANGS_MAX + 1][TR_LANG];
+	const char *l[TR_LANGS_MAX + 1];
+	char err[120];
+	short n = 1, sel = 0, r, x, y;
+	long k;
+
+	if (!gate_host[0] && !settings_dialog())
+		return;
+	if (!gate_host[0])
+		return;
+	if (!net_ready && !(net_ready = net_init())) {
+		alert(1, "[1][The Gateway is reached through STinG, MiNTnet or MagiC-Net, and none of them is running.][ OK ]");
+		return;
+	}
+	graf_mouse(BUSYBEE, NULL);
+	sb_reset(&names);
+	k = translate_languages(gate_host, tr_port, &names, err, sizeof err);
+	graf_mouse(ARROW, NULL);
+	log_event("languages", k ? "ok" : "failed", NULL);
+	if (!k) {
+		alert(1, "[1][The Gateway's languages can't be had:|%.40s][ OK ]", err);
+		return;
+	}
+	codes[0][0] = '\0';
+	snprintf(lab[0], sizeof lab[0], "%sOff", tr_code[0] ? "" : "\x08");
+	l[0] = lab[0];
+	for (k = 0; names.s && k < names.len && n <= TR_LANGS_MAX;) {
+		const char *a = names.s + k, *e = memchr(a, '\n', (size_t)(names.len - k)), *t;
+		long ll = e ? e - a : names.len - k;
+
+		t = memchr(a, '\t', (size_t)ll);
+		if (t && t > a && t - a < TR_LANG) {
+			snprintf(codes[n], sizeof codes[n], "%.*s", (int)(t - a), a);
+			if (translate_code_ok(codes[n])) {
+				long al;
+				char *nm = cs_to_atari(t + 1, ll - (t + 1 - a), CS_UTF8, &al);
+				int on = !strcmp(codes[n], tr_code);
+
+				snprintf(lab[n], sizeof lab[n], "%s%.*s", on ? "\x08" : "", nm ? (int)al : (int)strlen(codes[n]),
+					 nm ? nm : codes[n]);
+				free(nm);
+				if (on)
+					sel = n;
+				l[n] = lab[n];
+				n++;
+			}
+		}
+		k += ll + 1;
+	}
+	if (n == 1) {
+		alert(1, "[1][The Gateway has no languages installed:|EPDF's Settings, Languages....][ OK ]");
+		return;
+	}
+	objc_offset(tree, U_TR, &x, &y);
+	r = popup_m(x, (short)(y - 3 - sel * (ch + 2)), l, n);
+	if (!popup_put_back) {
+		GRECT g = { popup_area.x, popup_area.y, popup_area.w, popup_area.h };
+
+		wind_update(BEG_UPDATE);
+		draw(&g, BOX);
+		wind_update(END_UPDATE);
+	}
+	if (r < 0 || r == sel)
+		return;
+	snprintf(tr_code, sizeof tr_code, "%s", codes[r]);
+	snprintf(tr_name, sizeof tr_name, "%s", lab[r][0] == '\x08' ? lab[r] + 1 : lab[r]);
+	log_event("translate-to", tr_code[0] ? tr_code : "off", NULL);
+	texts();
+	redraw_obj(U_TR);
+}
+
 /* the family's tooltip (D18) on the window's buttons: what each does, its key */
 static int win_tip(short x, short y, char *out, int size)
 {
@@ -1994,6 +2125,7 @@ static int win_tip(short x, short y, char *out, int size)
 	case U_PAGES: t = "Each page whole as a picture: none, mono, or mono and colour"; break;
 	case U_PHOTOS: t = "Photos in 256 colours (fast to show) or as JPEG (small)"; break;
 	case U_ON: t = "Convert on this Atari, or send the PDFs to the Gateway"; break;
+	case U_TR: t = "Translate each page's text through the Gateway, or Off"; break;
 	}
 	if (!t)
 		return 0;
@@ -2042,6 +2174,10 @@ static void click(short mx, short my)
 	case U_PAGES: case U_PHOTOS: case U_ON:
 		if (!working)
 			choose(o);
+		break;
+	case U_TR:
+		if (!working)
+			choose_language();
 		break;
 	default:
 		if (o >= M0 && o < M0 + LROWS)

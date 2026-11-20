@@ -15,8 +15,9 @@ render.ovl and the standard fonts, View > Pages, then keypad + (200 %:
 as wide), + again (nothing more), a drag, the right bar below its slider
 and the foot's left and right arrows (each moves the page, none gives the
 page as it was back), - (back to View > Pages as it was), ^+ and ^0. The
-same through a converted copy whose original is beside it: the zoomed page
-drawn from the original, in colour. On an ST: a converted copy, + gives
+same through a converted copy whose original is in the folder above it (the
+Gateway's), and one whose /Source names the original's path (EConvert's): the
+zoomed page drawn from the original (its glyphs), in colour. On an ST: a converted copy, + gives
 EConvert's double page (200 %, "zoom 200"), + again nothing more.
 """
 import os
@@ -30,6 +31,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TOP = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 import showcase  # noqa: E402
+import erz  # noqa: E402
 from prepared import differ, park  # noqa: E402
 import importlib.util  # noqa: E402
 import natfeats  # noqa: E402 (NATFEATS=1 in the programs' INFs)
@@ -67,22 +69,36 @@ def drag(r, x0, y0, x1, y1):
 
 
 def run(work, machine, converted):
-    name = machine.replace(":", "_") + ("-conv" if converted else "")
+    name = machine.replace(":", "_") + ("-path" if converted == "path" else "-conv" if converted else "")
     r = speed.Rig(os.path.join(work, name), machine, display=os.environ.get("XDISPLAY", ":93"))
     bad = []
     st = machine.startswith("ST")
     try:
         d = os.path.join(r.hd, "EPDF")
         os.makedirs(os.path.join(d, "FONTS"), exist_ok=True)
-        shutil.copy(os.path.join(TOP, "binary", "EPDF.PRG"), os.path.join(d, "EPDF.PRG"))
-        shutil.copy(os.path.join(TOP, "binary", "render.ovl"), os.path.join(d, "RENDER.OVL"))
+        # EPDF_BIN: another build's EPDF.PRG and render.ovl (a release's, against main)
+        b = os.environ.get("EPDF_BIN", os.path.join(TOP, "binary"))
+        shutil.copy(os.path.join(b, "EPDF.PRG"), os.path.join(d, "EPDF.PRG"))
+        shutil.copy(os.path.join(b, "render.ovl"), os.path.join(d, "RENDER.OVL"))
         for f in os.listdir(FONTS):
             shutil.copy(os.path.join(FONTS, f), os.path.join(d, "FONTS", f.upper()))
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
         src = os.path.join(r.hd, "SHOW.PDF")
         showcase.make(src)
         doc = "C:\\SHOW.PDF"
-        if converted:
+        if converted == "path":
+            # EConvert's own: the original's path in /Source (Erez, 20 Nov
+            # 2026: a copy EConvert made was zoomed from its stored page)
+            os.makedirs(os.path.join(r.hd, "DOCS"))
+            os.makedirs(os.path.join(r.hd, "OUT"))
+            os.replace(src, os.path.join(r.hd, "DOCS", "SHOW.PDF"))
+            src = os.path.join(r.hd, "DOCS", "SHOW.PDF")
+            subprocess.run([os.path.join(TOP, "build", "econvert"), "--fonts", FONTS, "--pages", "colour",
+                            "--source-path", "C:\\DOCS\\SHOW.PDF", src, os.path.join(r.hd, "OUT", "SHOW.PDF")],
+                           check=True, stdout=subprocess.DEVNULL)
+            doc = "C:\\OUT\\SHOW.PDF"
+        elif converted:
+            # the Gateway's (no /Path): the original by its name in the folder above
             os.makedirs(os.path.join(r.hd, "ATARI"))
             subprocess.run([os.path.join(TOP, "build", "econvert"), "--fonts", FONTS, "--pages", "colour", src,
                             os.path.join(r.hd, "ATARI", "SHOW.PDF")], check=True, stdout=subprocess.DEVNULL)
@@ -101,6 +117,12 @@ def run(work, machine, converted):
         end = time.time() + 300                 # the first page drawn (or shown)
         while time.time() < end and "EPDF picture ready" not in r.console().split("EPDF pages 1")[-1]:
             time.sleep(1)
+        if converted and not st:
+            # its original found: the page drawn sharp over the stored one
+            # (doc.c's sharp_pages), "Drawing a sharper page..." till it is
+            while time.time() < end and "EPDF page-drawn" not in r.console().split("EPDF pages 1")[-1]:
+                time.sleep(1)
+            time.sleep(4)
         time.sleep(2)
         park(r)
         r.still()
@@ -140,6 +162,14 @@ def run(work, machine, converted):
             park(r)
             r.still()
             z200 = r.shot("zoom200")
+            if converted:
+                # drawn from the original, not the stored page enlarged: its glyphs drawn
+                want = "EPDF original %s" % ("path" if converted == "path" else "parent")
+                if want not in r.console():
+                    bad.append("the original not found: %s" % [l for l in r.console().splitlines() if "original" in l])
+                g = re.findall(r"EPDF page-drawn \d+ ms \d+ rows from \d+ glyphs (\d+)", r.console().split("EPDF zoom 200")[-1])
+                if not g or int(g[0]) == 0:
+                    bad.append("200 %%: not drawn from the original (glyphs %s)" % g[:1])
             if differ(pages, z200) < 5000:
                 bad.append("200 %%: the window hardly changed (%d pixels)" % differ(pages, z200))
             r.key("KP_Add")
@@ -199,7 +229,8 @@ def run(work, machine, converted):
     except RuntimeError:
         pass
     finally:
-        print("%s%s: %s  (%s)" % (r.describe(), ", a converted copy" if converted else "",
+        print("%s%s: %s  (%s)" % (r.describe(), ", a converted copy (%s)" % ("/Path" if converted == "path" else "the folder above")
+                                  if converted else "",
                                   "ok" if not bad else "; ".join(bad), r.shots))
         r.stop()
     return bad
@@ -209,10 +240,14 @@ def main(argv):
     if not argv:
         sys.exit(__doc__)
     bad = []
+    if erz.MACHINE in argv[1:]:
+        erz.setup()             # (Erez's configuration: NVDI where this computer has it)
     for m in argv[1:] or ["Falcon:16", "ST:mono"]:
         if not m.startswith("ST"):
             bad += run(argv[0], m, False)
         bad += run(argv[0], m, True)
+        if not m.startswith("ST"):
+            bad += run(argv[0], m, "path")
     return 1 if bad else 0
 
 

@@ -25,6 +25,8 @@ starts with CONVERT=gateway and two PDFs; Return converts. Checked:
   every page of the copies carries its /Thumb, byte for byte econvert's
   own with --thumbs;
 - a Gateway that isn't there: the alert, and the files stay in the list.
+GW_EPDF="GWPAGES=both GWPHOTOS=jpeg" (EPDF's Settings > Gateway, Erez 20 Nov
+2026, in its INF): EPDF's copy is econvert's own with those.
 Then EPDF with Open on the Gateway ticked (GATEWAY=1): a book opened is
 shown, converted by the Gateway meanwhile into EPDF's own copy beside the
 program (gate1.pdf: byte for byte the direct conversion with EPDF's sizes;
@@ -100,7 +102,9 @@ def run(work, machine, port, there=True):
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
         showcase.cut(os.path.join(r.hd, names[0]))     # (pictures, drawings, fonts: the hub's cut)
         make_pdf(os.path.join(r.hd, names[1]), book(5))
-        r.write("ECONV/ECONVERT.INF", "WRITETO=C:\\OUT\nCONVERT=gateway\nGATE=127.0.0.1\nGATEPORT=%d\nPAGES=%s\n%s" %
+        # (OPTIMISE=size: no pens=, so the copies are econvert's own without
+        # --pens-hex; tests/pigate/run.sh checks pens= byte for byte)
+        r.write("ECONV/ECONVERT.INF", "WRITETO=C:\\OUT\nCONVERT=gateway\nGATE=127.0.0.1\nGATEPORT=%d\nPAGES=%s\nOPTIMISE=size\n%s" %
                 (port if there else 1, PAGES, "PREVIEWS=1\n" if THUMBS else ""))
         r.write("LAUNCH.TXT", "C:\\ECONV\\ECONVERT.PRG\nC:\\%s C:\\%s\n" % names)
         natfeats.on(r.hd)
@@ -163,12 +167,12 @@ def thumbs_ok(path):
     return [] if thumbs == (pages if THUMBS else 0) else ["%s: %d of %d pages with a /Thumb" % (path, thumbs, pages)]
 
 
-def direct_same(src, sizes, got, work, pages="mono"):
+def direct_same(src, sizes, got, work, pages="mono", photos="indexed"):
     """got is byte for byte build/econvert's own conversion of src with sizes
     (pages: EPDF asks for colouronly on a screen of 16 colours or more)"""
     want = os.path.join(work, "direct-" + os.path.basename(src))
     subprocess.run([os.path.join(TOP, "build", "econvert"), "--fonts", FONTS, "--pages", pages,
-                    "--photos", "indexed", "--pictures", "screen", "--page-width", sizes[0],
+                    "--photos", photos, "--pictures", "screen", "--page-width", sizes[0],
                     "--picture-width", sizes[1]] + (["--thumbs"] if THUMBS else []) + [src, want],
                    check=True, stdout=subprocess.DEVNULL)
     return os.path.exists(got) and open(got, "rb").read() == open(want, "rb").read()
@@ -177,6 +181,9 @@ def direct_same(src, sizes, got, work, pages="mono"):
 PAGES = os.environ.get("GW_PAGES", "mono")    # EConvert's whole pages (colouronly: Gateway 1.42)
 THUMBS = os.environ.get("GW_PREVIEWS") == "1"   # Page previews and the page strip on (thumbs=1: Gateway 1.48)
 RATE = int(os.environ.get("GW_RATE", "0")) or None    # bytes a second on the serial line: the phases' shots
+# EPDF's Settings > Gateway (Erez, 20 Nov 2026) in its INF, e.g. GW_EPDF="GWPAGES=both GWPHOTOS=jpeg":
+# the copy byte for byte econvert's with those
+GW_EPDF = dict(kv.split("=", 1) for kv in os.environ.get("GW_EPDF", "").split())
 
 
 def run_epdf(work, machine, port, there=True):
@@ -191,8 +198,8 @@ def run_epdf(work, machine, port, there=True):
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
         src = os.path.join(r.hd, "DOCS", "BOOK.PDF")
         make_pdf(src, book(4))
-        r.write("EPDF/epdf.inf", "GATEWAY=1\nGATE=127.0.0.1\nGATEPORT=%d\n%s" % (port if there else 1,
-                                                                              "PAGESTRIP=1\n" if THUMBS else ""))
+        r.write("EPDF/epdf.inf", "GATEWAY=1\nGATE=127.0.0.1\nGATEPORT=%d\n%s%s" % (port if there else 1,
+                "PAGESTRIP=1\n" if THUMBS else "", "".join("%s=%s\n" % kv for kv in GW_EPDF.items())))
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\DOCS\\BOOK.PDF\n")
         natfeats.on(r.hd)
         r.start("C:\\LAUNCH.PRG", ready="EPDF started")
@@ -228,7 +235,10 @@ def run_epdf(work, machine, port, there=True):
                 if len(copies) != 1:
                     bad.append("EPDF's copy: %s" % sorted(os.listdir(ed)))
                 elif not direct_same(src, sizes[0], copies[0], r.work,
-                                     "colouronly" if machine.split(":")[-1] in ("16", "256") else "mono"):
+                                     {"none": "none", "mono": "mono", "colour": "colouronly", "both": "colour"}.get(
+                                         GW_EPDF.get("GWPAGES"),
+                                         "colouronly" if machine.split(":")[-1] in ("16", "256") else "mono"),
+                                     GW_EPDF.get("GWPHOTOS", "indexed")):
                     bad.append("EPDF's copy isn't the direct conversion")
                 else:
                     bad += thumbs_ok(copies[0])

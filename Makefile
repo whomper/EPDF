@@ -610,7 +610,7 @@ EC_GEM_SRC = src/econv/econvert.c src/gem/gemui.c src/view/inf.c common/atari/ge
              common/ui/click.c common/ui/clip.c common/ui/accmem.c common/src/bidi.c common/ui/fsel.c common/ui/scrsize.c \
              src/pdfio_tos.c src/conv/cvio_tos.c common/src/util.c common/src/futil.c $(RT_C) \
              $(BSSL_SRC) src/pigate.c src/pftime_tos.c common/src/conn.c common/src/tls_none.c src/gem/gatedlg.c \
-             common/atari/net_tos.c common/atari/sting.c common/ui/scrpens.c
+             common/atari/net_tos.c common/atari/sting.c common/ui/scrpens.c common/src/translate.c
 EC_CV_SRC  = $(filter-out src/conv/cvio_tos.c src/pdfio_tos.c common/src/util.c common/src/futil.c \
                $(RT_C) $(BSSL_SRC),$(CV_ATARI_SRC))
 build/m68000ec/%.o: XFLAGS += -DDLG_CLICK -DPDF_DRAW -DAERA_NO_FLOAT -Isrc/gem -Isrc/view -Icommon/ui -Isrc/conv

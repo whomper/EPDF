@@ -68,6 +68,8 @@ static int gw_on;
 static unsigned short tr_port = TR_PORT;	/* translategate's */
 static char gate_host[64];
 static unsigned short gate_port = GATE_PORT;
+/* Settings' Gateway page (Erez, 20 Nov 2026: by default as before it) */
+static GWCONV gwc = { GWP_AUTO, 0, 1, GWV_STRIP };
 static char open_dir[160] = "";		/* where Open looks first (FOLDER=) */
 static int find_dir;			/* a search runs: 1 forwards, -1 back; 0 none */
 static void menu_states(void);
@@ -133,6 +135,16 @@ static void settings_read(void)
 		strcpy(gate_host, v);
 	if ((v = inf_get(&inf, "GATEPORT")) != NULL && atol(v) > 0 && atol(v) < 65536)
 		gate_port = (unsigned short)atol(v);
+	/* Settings' Gateway page (Erez, 20 Nov 2026) */
+	if ((v = inf_get(&inf, "GWPAGES")) != NULL)
+		gwc.pages = !strcmp(v, "none") ? GWP_NONE : !strcmp(v, "mono") ? GWP_MONO : !strcmp(v, "colour") ? GWP_COLOUR :
+			    !strcmp(v, "both") ? GWP_BOTH : GWP_AUTO;
+	if ((v = inf_get(&inf, "GWPHOTOS")) != NULL)
+		gwc.photos = !strcmp(v, "jpeg");
+	if ((v = inf_get(&inf, "GWOPTIMISE")) != NULL)
+		gwc.optimise = strcmp(v, "size") != 0;
+	if ((v = inf_get(&inf, "GWPREVIEWS")) != NULL)
+		gwc.previews = !strcmp(v, "on") ? GWV_ON : !strcmp(v, "off") ? GWV_OFF : GWV_STRIP;
 	{
 		/* View > Translate and the language (Erez, 8 Nov 2026) */
 		int t = (v = inf_get(&inf, "TRANSLATE")) != NULL && v[0] == '1';
@@ -229,6 +241,7 @@ static void gateway_begin(void)
 		return;
 	gw_set_translate(tr_on() ? tr_to() : "");	/* (Translate on: the Gateway translates with the conversion) */
 	gw_set_thumbs(strip_on());	/* (the page strip on: the pages' previews come with it) */
+	gw_set_conv(gwc.pages, gwc.photos, gwc.optimise, gwc.previews);
 	r = gw_start(doc_path(), doc_path(), gate_host, gate_port);
 	if (r == GW_NO_ADDRESS && settings_dialog())
 		r = gw_start(doc_path(), doc_path(), gate_host, gate_port);
@@ -1294,8 +1307,23 @@ static int settings_dialog(void)
 
 	snprintf(to, sizeof to, "%s", tr_to());
 	if (!gate_dialog_tr(gate_host, (int)sizeof gate_host, &gate_port, to, (int)sizeof to, lang_name(to),
-			    pick_language, languages_dialog))
+			    pick_language, languages_dialog, &gwc))
 		return 0;
+	{
+		static const char *const pg[] = { "auto", "none", "mono", "colour", "both" };
+		static const char *const pv[] = { "strip", "on", "off" };
+
+		/* (a key only once it is changed from the default: the INF as it was
+		   when OK changes nothing, 6.1) */
+#define GW_SET(k, v, d, note) do { if (inf_get(&inf, k) || strcmp(v, d)) setting(k, v, note); } while (0)
+		GW_SET("GWPAGES", pg[gwc.pages], "auto", "Open on the Gateway's whole pages: auto (colour on 16 colours or more, "
+			"else mono), none, mono, colour, both");
+		GW_SET("GWPHOTOS", gwc.photos ? "jpeg" : "indexed", "indexed", "Open on the Gateway's photos: indexed (256 colours) or jpeg");
+		GW_SET("GWOPTIMISE", gwc.optimise ? "display" : "size", "display", "Open on the Gateway: display (pictures made for this "
+			"screen) or size");
+		GW_SET("GWPREVIEWS", pv[gwc.previews], "strip", "Open on the Gateway's page previews: strip (with the page strip), on, off");
+#undef GW_SET
+	}
 	setting("GATE", gate_host, "the Gateway's address (Through the Gateway)");
 	snprintf(port, sizeof port, "%u", (unsigned)gate_port);
 	setting("GATEPORT", port, "the Gateway's port for PDFs (8380)");

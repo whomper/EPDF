@@ -23,6 +23,7 @@
 #include "pigate.h"
 #include "coro.h"
 #include "scrsize.h"
+#include "gatedlg.h"
 #include "gwopen.h"
 #include "gemui.h"
 #include "epdf.h"
@@ -47,6 +48,18 @@ void gw_set_translate(const char *to)
 }
 
 static int gw_thumbs;
+
+/* Settings' Gateway page (Erez, 20 Nov 2026): GWP_*, photos (1 JPEG),
+   optimise (0 Smaller files), GWV_* */
+static int gw_pages, gw_photos, gw_optimise = 1, gw_previews;
+
+void gw_set_conv(int pages, int photos, int optimise, int previews)
+{
+	gw_pages = pages;
+	gw_photos = photos;
+	gw_optimise = optimise;
+	gw_previews = previews;
+}
 
 void gw_set_thumbs(int on)
 {
@@ -129,16 +142,22 @@ static void job(void)
 		   ("colouronly": a page with colour gets its /Colour, one without
 		   its /Mono; nothing made twice, AERA-Gateway 1.42 on; Erez, 13
 		   Nov 2026); a mono screen asks for the mono pages (7 Nov 2026) */
-		o.pages = planes >= 4 ? "colouronly" : "mono";
-		o.photos = "indexed";
+		{
+			static const char *const pg[] = { NULL, "none", "mono", "colouronly", "colour" };
+
+			o.pages = gw_pages > GWP_AUTO && gw_pages <= GWP_BOTH ? pg[gw_pages] :
+				  planes >= 4 ? "colouronly" : "mono";
+		}
+		o.photos = gw_photos ? "jpeg" : "indexed";
 		o.pictures = "screen";
 		sizes(&pw, &iw);
 		o.page_w = pw;
 		o.pic_w = iw;
 		o.page_double = -1;
 		o.translate = translate_to[0] ? translate_to : NULL;	/* (View > Translate on) */
-		o.thumbs = gw_thumbs;		/* (View > Page strip on: the pages' previews) */
-		if (sz_pen_n >= 2) {
+		o.thumbs = gw_previews == GWV_ON || (gw_previews == GWV_STRIP && gw_thumbs);	/* (by default
+										   View > Page strip on) */
+		if (sz_pen_n >= 2 && gw_optimise) {
 			o.pen_n = sz_pen_n;
 			o.pen_rgb = (const unsigned char (*)[3])sz_rgb;
 			o.pen_col = sz_col;

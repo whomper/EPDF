@@ -71,6 +71,11 @@ typedef struct {
 	   3 busy, 4 too long, other failed: the conversion stops (CVSTAT's
 	   tr_fail) */
 	const char *translate_to;
+	/* the original's path as this machine names it, written as /Source's
+	   /Path (EConvert on the Atari: EPDF finds the original by it to draw a
+	   page sharp and zoomed); NULL none (the Gateway, econvert on the host:
+	   their files the same byte for byte wherever the original was) */
+	const char *source_path;
 	int (*translate)(void *u, const char *to, const char *utf8, long len, char **out, long *outlen, char from[8]);
 } CVOPT;
 

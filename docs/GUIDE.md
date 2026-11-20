@@ -65,16 +65,18 @@ gives way to you at once.
   keypad's +) shows the page in view at 200% (150% where the memory holds no more), ticked while
   it does; chosen again, or ^-, the keypad's -, ^0 or Esc, gives the pages back. A click on a page
   zooms it too, and a click back. On a Falcon or a TT the
-  bigger page is drawn by the Atari, in colour (a converted PDF's from its original where EPDF
-  knows it, the Gateway's). On an ST, it's EConvert's double page in black and white (200 %).
+  bigger page is drawn by the Atari, in colour; a converted PDF's from its original where EPDF
+  finds it (where EConvert on the Atari read it, or with its name in the folder above the
+  converted one; the Gateway's own copies always). On an ST, it's EConvert's double page in black and white (200 %).
   A zoomed page is moved with the window's sliders and arrows (the one at its foot sideways), by
   dragging it with the mouse, or with the arrow keys. **Translate**: ticked, the text view shows each page translated into the language
   chosen in Settings (see [Translating](#translating)).
 - **Page:** the previous and the next page (^Left, ^Right), the first and the last (^Clr/Home,
   ⇧^Clr/Home).
-- **Options:** Settings... (^,): two pages, **General** (the language View > Translate translates
-  into, and Languages...: see [Translating](#translating)) and **Secure** (the Gateway's address
-  and port: see [The Gateway](#the-gateway)). Font...: the system font in its two sizes, or
+- **Options:** Settings... (^,): three pages, **General** (the language View > Translate translates
+  into, and Languages...: see [Translating](#translating)), **Gateway** (how a PDF opened on the
+  Gateway is converted) and **Secure** (the Gateway's address and port: see
+  [The Gateway](#the-gateway)). Font...: the system font in its two sizes, or
   a fixed-width GDOS font, kept in `EPDF.INF`. Open on the Gateway (ticked: see
   [The Gateway](#the-gateway)).
 - **Help:** EPDF help (Help): this guide. Keys...: EPDF's keys.
@@ -145,7 +147,9 @@ Each setting has a note above it in the file:
 - `LINES=` 1 when **View > The page's lines** is ticked;
 - `PAGESTRIP=` 1 when **View > Page strip** is ticked;
 - `GATEWAY=` 1 when **Options > Open on the Gateway** is ticked;
-- `GATE=` and `GATEPORT=` the Gateway's address and port (**Options > Settings...**, Secure).
+- `GATE=` and `GATEPORT=` the Gateway's address and port (**Options > Settings...**, Secure);
+- `GWPAGES=`, `GWPHOTOS=`, `GWOPTIMISE=` and `GWPREVIEWS=` the **Gateway** page's choices, once
+  you change them.
 
 A line EPDF doesn't know is kept as it is.
 
@@ -163,6 +167,11 @@ pdf --allow ATARI_IP` sets it up. On the Atari you need STinG, MiNTnet or MagiC-
   only: a page without colour comes in black and white). Nothing is written beside the PDF: the converted PDF
   is kept only while it is open (beside `EPDF.PRG`); **File > Save Optimised...** keeps it where
   you choose. Esc stops it.
+- **Options > Settings...**, **Gateway**: how the Gateway converts a PDF you open, with EConvert's
+  choices. **Whole pages:** Automatic (at first: in colour on a screen of 16 colours or more, else
+  in black and white), None, Mono, Colour, or Mono and colour. **Photos:** 256 colours or JPEG.
+  **Optimise for:** Faster display (at first) or Smaller files. **Page previews:** With the page
+  strip (at first: while View > Page strip is shown), Always or Never.
 
 ## Translating
 
@@ -201,7 +210,8 @@ Atari, an ST too, it can have the Gateway convert them instead.
   are converted.
 - **Write to...** chooses the folder the converted PDFs go to, with their own names: a folder of
   their own, not the PDFs' own.
-- **Whole pages**, **Photos** and **Convert on** are buttons that open their choices over them.
+- **Whole pages**, **Photos**, **Convert on** and **Translate** are buttons that open their choices
+  over them.
 - **Whole pages:** None, Mono (black and white, for every Atari), Colour (16 colours, for a Falcon
   or a TT: quicker to make, and an ST shows them in black and white), or Mono and colour (both; a
   page with little colour gets the black and white one only).
@@ -209,6 +219,11 @@ Atari, an ST too, it can have the Gateway convert them instead.
   8 MHz ST). Charts and pictures of few colours are kept exact either way.
 - **Convert on:** This Atari, or the Gateway (its address and port in **Options > Settings...**, ^,;
   until you set them there, EPDF's, from `EPDF.INF` in the folder above). On an ST only the Gateway. The Gateway's converted PDFs are the same as the Falcon's.
+- **Translate:** Off (each time EConvert starts), or a language the Gateway's translation service
+  has installed (the button asks it for them): each page's text is translated too, and EPDF's
+  text view shows the translation with View > Translate. On This Atari only the text goes to the
+  Gateway; on the Gateway it translates while it converts. A converted PDF remembers where its
+  original was, so EPDF can draw its pages sharp and zoomed from it.
 - **Optimise for** (**Options > Settings...**, General): **Faster display** (at first) makes each
   picture ready for the screen it is converted on, or, on the Gateway, for EPDF's screen: EPDF
   then copies it as it is instead of fitting its colours each time it is shown (the pictures in
