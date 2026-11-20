@@ -209,6 +209,12 @@ Atari, an ST too, it can have the Gateway convert them instead.
   8 MHz ST). Charts and pictures of few colours are kept exact either way.
 - **Convert on:** This Atari, or the Gateway (its address and port in **Options > Settings...**, ^,;
   until you set them there, EPDF's, from `EPDF.INF` in the folder above). On an ST only the Gateway. The Gateway's converted PDFs are the same as the Falcon's.
+- **Optimise for** (**Options > Settings...**, General): **Faster display** (at first) makes each
+  picture ready for the screen it is converted on, or, on the Gateway, for EPDF's screen: EPDF
+  then copies it as it is instead of fitting its colours each time it is shown (the pictures in
+  about a third of the time on a Falcon in 256 colours). The files are bigger, and
+  they open anywhere: on another screen EPDF shows the pictures as before. **Smaller files**
+  leaves that copy out.
 - **Page previews** (**Options > Settings...**, General; off at first): each converted page also
   carries a small picture of itself, which EPDF's **View > Page strip** shows. Converting on a
   Falcon, it takes about two seconds more a page; on the Gateway hardly any.

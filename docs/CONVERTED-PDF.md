@@ -84,7 +84,7 @@ wide, the height in proportion.
 | a scan in black and white (CCITT, JBIG2, 1 bit) | `/DeviceGray`, 1 bit a pixel, FlateDecode |
 | a drawing | `/Indexed /DeviceRGB 15` (16 colours, 4 bits a pixel) or `/DeviceGray` 1 bit when it has no colour, FlateDecode |
 
-### Faster display (EPDF 2.40; Erez, 17 Nov 2026)
+### Faster display (EPDF 2.41; Erez, 17 Nov 2026)
 
 With Faster display (EConvert's Settings, the default; the Gateway when EPDF or EConvert asks it with
 its screen's pens: PI-GATEWAY.md's `pens`), a picture in colour or grey also has a copy for one screen: `/AERAShown` in its dictionary refers

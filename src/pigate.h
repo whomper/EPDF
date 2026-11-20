@@ -25,7 +25,7 @@ typedef struct {
 					   (docs/PI-GATEWAY.md, "translate"); NULL: not asked */
 	int thumbs;			/* 1: each page's /Thumb (thumbs=1; AERA-Gateway with it only:
 					   an older one refuses the option); 0: not asked */
-	/* Faster display (EPDF 2.40): the screen's pens by hardware register,
+	/* Faster display (EPDF 2.41): the screen's pens by hardware register,
 	   EPDF's text column in pixels and a pixel's height to its width x 16:
 	   each picture also comes as a copy in those pens at the size EPDF
 	   shows it (pens=, column=, aspect=; AERA-Gateway with them only: an

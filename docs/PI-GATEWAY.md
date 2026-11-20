@@ -50,7 +50,7 @@ its preview, its `/Thumb` (CONVERTED-PDF.md, "The page's preview"). EConvert sen
 previews** ticked in its Settings, EPDF's Open on the Gateway while View > Page strip is ticked; without
 it the converted PDF has none.
 
-`pens`, `column` and `aspect` (EPDF 2.40, Faster display; Erez 17 Nov 2026): the Atari's screen's pens
+`pens`, `column` and `aspect` (EPDF 2.41, Faster display; Erez 17 Nov 2026): the Atari's screen's pens
 by hardware register (register 0 first, red, green and blue as two hex digits each), the text view's
 column in pixels and a pixel's height to its width x 16 (16 square). Each picture in colour or grey then
 also carries a copy in those pens at the size the text view shows it (CONVERTED-PDF.md, "Faster

@@ -27,7 +27,8 @@ it, prepares PDFs so that EPDF opens them fast, on the Atari itself or through t
   own preview (a PDF converted with EConvert's Page previews, in colour) or its first line; a click
   goes to the page.
 - **EConvert:** many PDFs or a whole folder made ready for the Atari, on a Falcon or TT or through
-  the Gateway: the text reflowed already, the pictures at the size the screen shows them, and each
+  the Gateway: the text reflowed already, the pictures at the size the screen shows them (and, with
+  Optimise for: Faster display, in its own colours), and each
   page whole in mono, colour or both. EPDF opens such a file at once on any Atari and marks its
   pages **Optimised**.
 - **The Gateway** (AERA-Gateway on a Raspberry Pi): with Options > Open on the Gateway, a PDF is

@@ -81,7 +81,7 @@ static int progress(void *u, int ph, long d, long t)
    window's kind, the text column's margins) */
 static int sz_page = 640, sz_pic = 640;
 
-/* Faster display (EPDF 2.40, docs/CONVERTED-PDF.md): this screen's pens
+/* Faster display (EPDF 2.41, docs/CONVERTED-PDF.md): this screen's pens
    by register and the text view's column as it is now, so each picture
    also comes in these pens at the size it is shown; none past 256
    colours or without a laid-out document (pigate.c asks a Gateway
