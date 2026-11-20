@@ -283,14 +283,14 @@ EC_OD_PAD ?= 152
 EC_OD_PAD_DATA ?= 254
 # and after its crash.o and progbar.o (AERA-Atari 1c01cfd, 16 Nov 2026)
 build/m68030/eccrpad.o: FT_PAD = -DFT_PAD_NAME=ec_cr_pad -DFT_PAD_TEXT=$(EC_CR_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EC_CR_PAD_BSS)
-EC_CR_PAD ?= 176
+EC_CR_PAD ?= 58
 EC_CR_PAD_BSS ?= 0
 build/m68030/ecpbpad.o: FT_PAD = -DFT_PAD_NAME=ec_pb_pad -DFT_PAD_TEXT=$(EC_PB_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 EC_PB_PAD ?= 222
 # and after its dialog.o and settings.o (AERA-Atari 2fa3aa7, 18 Nov 2026:
 # Settings in turns), against 2.38
 build/m68030/ecdlpad.o: FT_PAD = -DFT_PAD_NAME=ec_dl_pad -DFT_PAD_TEXT=$(EC_DL_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
-EC_DL_PAD ?= 40
+EC_DL_PAD ?= 188
 build/m68030/ecstpad.o: FT_PAD = -DFT_PAD_NAME=ec_st_pad -DFT_PAD_TEXT=$(EC_ST_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 EC_ST_PAD ?= 136
 # and after its text.o (AERA-Atari f553f93, 19 Nov 2026: no Line-A on a
@@ -339,7 +339,7 @@ CS_PAD ?= 178
 build/m68030/ecpad.o: FT_PAD = -DFT_PAD_NAME=ec_cv_pad -DFT_PAD_TEXT=$(EC_PAD) -DFT_PAD_RO=$(EC_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EC_PAD_BSS)
 EC_PAD ?= 192
 EC_PAD_RO ?= 186
-EC_PAD_BSS ?= 38
+EC_PAD_BSS ?= 34
 # CONVTEST.PRG's own, after common's nf.o: its converter code where 2.30 had it
 build/m68030/ctpad.o: FT_PAD = -DFT_PAD_NAME=ct_cv_pad -DFT_PAD_TEXT=$(CT_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 CT_PAD ?= 106
@@ -744,21 +744,21 @@ EP_PAD_K ?= 176
 EP_PAD_L ?= 246
 EP_PAD_L_DATA ?= 404
 EP_PAD_M ?= 110
-EP_PAD_N ?= 210
+EP_PAD_N ?= 92
 EP_PAD_O ?= 130
 EP_PAD_P ?= 72
 EP_PAD_Q ?= 62
-EP_PAD_R ?= 92
+EP_PAD_R ?= 90
 EP_PAD_R_RO ?= 236
 EP_PAD_S ?= 52
 EP_PAD_T ?= 14
-EP_PAD_V ?= 72
+EP_PAD_V ?= 236
 EP_PAD_W ?= 120
 EP_PAD_W_RO ?= 116
 EP_PAD_W_DATA ?= 254
 EP_PAD_X ?= 88
 EP_PAD_X_RO ?= 231
-EP_PAD_X_BSS ?= 30
+EP_PAD_X_BSS ?= 26
 EP_PAD_Y_RO ?= 134
 EP_PAD_M_BSS ?= 252
 EP_PAD_M_RO ?= 20
