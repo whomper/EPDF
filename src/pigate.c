@@ -129,10 +129,11 @@ static int head(CONN *c, SBUF *b, long *length, long *done, long *total)
 static int convert(const char *host, unsigned short port, const PGOPT *o, const char *in, const char *out,
 		   pg_progress progress, void *u, char *err, int errlen)
 {
-	/* (static: one conversion at a time, and the pens' 1,536 hex digits
-	   are too many for the job's stack) */
-	static char q[1800], line[2000];
-	char *piece = NULL;
+	/* (the query and request line on the heap while the request is made:
+	   the pens' 1,536 hex digits are too many for the job's stack, and
+	   3.8 KB held all the time a 1 MB ST's pictures miss) */
+	enum { QLEN = 1800, LLEN = 2000 };
+	char *q = NULL, *line = NULL, *piece = NULL;
 	long size = 0, off, length, done = 0, total = 0;
 	void *src = NULL, *dst = NULL;
 	CONN *c = NULL;
@@ -141,13 +142,25 @@ static int convert(const char *host, unsigned short port, const PGOPT *o, const 
 
 	sb_init(&b);
 	err[0] = 0;
-	if (pg_query(o, in, q, sizeof q) < 0) {
+	q = malloc(QLEN);
+	line = malloc(LLEN);
+	if (!q || !line) {
+		say(err, errlen, "not enough memory");
+		free(q);
+		free(line);
+		return -1;
+	}
+	if (pg_query(o, in, q, QLEN) < 0) {
 		say(err, errlen, "the settings are too long");
+		free(q);
+		free(line);
 		return -1;
 	}
 	src = pdf_os_open(in, &size);
 	if (!src) {
 		say(err, errlen, "cannot open the file");
+		free(q);
+		free(line);
 		return -1;
 	}
 	piece = malloc(PIECE);
@@ -160,7 +173,7 @@ static int convert(const char *host, unsigned short port, const PGOPT *o, const 
 		rc = conn_stop ? -2 : -3;	/* (no Gateway there: the batch can't go on) */
 		goto done;
 	}
-	snprintf(line, sizeof line, "POST /convert%s HTTP/1.1\r\nHost: %s\r\nContent-Type: application/pdf\r\n"
+	snprintf(line, LLEN, "POST /convert%s HTTP/1.1\r\nHost: %s\r\nContent-Type: application/pdf\r\n"
 		 "Content-Length: %ld\r\nConnection: close\r\n\r\n", q, host, size);
 	if (conn_phase)
 		conn_phase(GATE_SEND, (long)strlen(line) + size);	/* (guideline 7.3: the three phases) */
@@ -201,7 +214,7 @@ static int convert(const char *host, unsigned short port, const PGOPT *o, const 
 	c->timeout_ms = 60000;
 	if (status != 200) {
 		/* its one line, "pdfgate: why", as it is */
-		long n = length > 0 && length < (long)sizeof line ? length : (long)sizeof line - 1;
+		long n = length > 0 && length < LLEN ? length : LLEN - 1;
 		long got = 0;
 
 		while (got < n) {
@@ -274,6 +287,8 @@ done:
 		cv_remove(out);
 	}
 	free(piece);
+	free(q);
+	free(line);
 	sb_free(&b);
 	return rc;
 }

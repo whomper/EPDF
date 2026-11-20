@@ -316,7 +316,7 @@ EC_EC_PAD_BSS ?= 248
 EC_LC_PAD ?= 28
 EC_LC_PAD_BSS ?= 0
 build/m68030/ecpgpad.o: FT_PAD = -DFT_PAD_NAME=ec_pg_pad -DFT_PAD_TEXT=$(EC_PG_PAD) -DFT_PAD_RO=$(EC_PG_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EC_PG_PAD_BSS)
-EC_PG_PAD ?= 252
+EC_PG_PAD ?= 202
 EC_PG_PAD_RO ?= 239
 EC_PG_PAD_BSS ?= 0
 # EConvert's own after pic.o and before inflate_fast.o (it has no dspjpeg.o
@@ -339,7 +339,7 @@ CS_PAD ?= 178
 build/m68030/ecpad.o: FT_PAD = -DFT_PAD_NAME=ec_cv_pad -DFT_PAD_TEXT=$(EC_PAD) -DFT_PAD_RO=$(EC_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EC_PAD_BSS)
 EC_PAD ?= 192
 EC_PAD_RO ?= 186
-EC_PAD_BSS ?= 34
+EC_PAD_BSS ?= 250
 # CONVTEST.PRG's own, after common's nf.o: its converter code where 2.30 had it
 build/m68030/ctpad.o: FT_PAD = -DFT_PAD_NAME=ct_cv_pad -DFT_PAD_TEXT=$(CT_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 CT_PAD ?= 106
@@ -743,12 +743,12 @@ EP_PAD_J ?= 298
 EP_PAD_K ?= 176
 EP_PAD_L ?= 246
 EP_PAD_L_DATA ?= 404
-EP_PAD_M ?= 110
+EP_PAD_M ?= 150
 EP_PAD_N ?= 92
 EP_PAD_O ?= 130
 EP_PAD_P ?= 72
 EP_PAD_Q ?= 62
-EP_PAD_R ?= 90
+EP_PAD_R ?= 92
 EP_PAD_R_RO ?= 236
 EP_PAD_S ?= 52
 EP_PAD_T ?= 14
@@ -756,11 +756,11 @@ EP_PAD_V ?= 236
 EP_PAD_W ?= 120
 EP_PAD_W_RO ?= 116
 EP_PAD_W_DATA ?= 254
-EP_PAD_X ?= 88
+EP_PAD_X ?= 58
 EP_PAD_X_RO ?= 231
-EP_PAD_X_BSS ?= 26
+EP_PAD_X_BSS ?= 238
 EP_PAD_Y_RO ?= 134
-EP_PAD_M_BSS ?= 252
+EP_PAD_M_BSS ?= 244
 EP_PAD_M_RO ?= 20
 build/m68000/eppad_a.o build/m68000/eppad_b.o build/m68000/eppad_c.o build/m68000/eppad_d.o \
 build/m68000/eppad_e.o build/m68000/eppad_f.o build/m68000/eppad_g.o build/m68000/eppad_h.o \

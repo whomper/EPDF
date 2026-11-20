@@ -87,14 +87,16 @@ static int sz_page = 640, sz_pic = 640;
    colours or without a laid-out document (pigate.c asks a Gateway
    without them again without) */
 static int sz_pen_n, sz_col;
-static unsigned char sz_rgb[256][3];
+static unsigned char (*sz_rgb)[3];	/* (768 bytes, taken at the first Gateway open) */
 
 static void pens_measure(void)
 {
 	DOCVIEW *v = doc_view();
 
 	sz_col = v && v->pic_w > 0 ? v->pic_w : 0;
-	sz_pen_n = sz_col ? scr_pens(vdi_h, planes, sz_rgb) : 0;
+	if (sz_col && planes <= 8 && !sz_rgb)
+		sz_rgb = malloc(256 * sizeof *sz_rgb);
+	sz_pen_n = sz_col && sz_rgb ? scr_pens(vdi_h, planes, sz_rgb) : 0;
 }
 
 /* asked of the AES on the main stack (gw_start): the job's stack never

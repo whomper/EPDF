@@ -399,13 +399,29 @@ static void put_pens(SINK *k, long y)
 		   (a bit at a time for each plane it was 8 passes over the row: a
 		   Faster display picture's copy on Falcon-4:256 spent most of its
 		   time there) */
-		static unsigned long tlo[256], thi[256];
+		static unsigned long *tlo, *thi;	/* (2 KB taken at the first picture in colour:
+						   a mono ST never needs them, a 1 MB one's memory) */
 		static int made;
 		unsigned char *o[8];
 		const unsigned char *pens = k->pens;
 		long rb = k->wd * 2;
 		int np = k->nplanes;
 
+		if (!made && !tlo && (tlo = malloc(2 * 256 * sizeof *tlo)) != NULL)
+			thi = tlo + 256;
+		if (!tlo) {
+			/* refused: a bit at a time for each plane, as it was */
+			for (p = 0; p < np; p++) {
+				unsigned char *q = k->band + (p * BAND + y - k->b0) * rb;
+
+				memset(q, 0, (size_t)rb);
+				for (x = 0; x < k->w; x++)
+					if (pens[x] & (1 << p))
+						q[x >> 3] |= (unsigned char)(0x80 >> (x & 7));
+			}
+			band_row(k, y);
+			return;
+		}
 		if (!made) {
 			int v;
 
