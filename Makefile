@@ -446,6 +446,28 @@ binary/DITHBENCH.PRG: $(addprefix build/m68000/,$(DITH_OBJ)) build/m68000/crt0.o
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68000/dithbench.elf \
 	  build/m68000/crt0.o build/m68000/nf.o $(addprefix build/m68000/,$(DITH_OBJ)) -lgcc
 	python3 common/tools/elf2tos.py build/m68000/dithbench.elf $@
+# INFLBENCH.PRG / INFLB30.PRG (tests/hatari/inflbench.py): common's inflate_piece over a PDF's
+# streams (tools/inflstreams.py), as the reader asks for them: its milliseconds and a hash of the
+# bytes. INFL_FAST: the inflate_fast.S it links (another build of it, against common's)
+INFL_FAST ?= common/atari/inflate_fast.S
+INFLB_SRC  = atari/inflbench.c $(COMMON_SRC) $(RT_C)
+INFLB_OBJ  = $(patsubst %.c,%.o,$(INFLB_SRC))
+build/m68000/inflb_fast.o build/m68030/inflb_fast.o: $(INFL_FAST) FORCE
+	$(XCC) $(XCPU) -c -o $@ $(INFL_FAST)
+FORCE:
+.PHONY: FORCE
+binary/INFLBENCH.PRG: XCPU = -m68000 -mstrict-align -fdisable-tree-bswap
+binary/INFLBENCH.PRG: $(addprefix build/m68000/,$(INFLB_OBJ)) build/m68000/inflb_fast.o build/m68000/crt0.o build/m68000/nf.o common/atari/link.ld | binary
+	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
+	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68000/inflbench.elf \
+	  build/m68000/crt0.o build/m68000/nf.o build/m68000/inflb_fast.o $(addprefix build/m68000/,$(INFLB_OBJ)) -lgcc
+	python3 common/tools/elf2tos.py build/m68000/inflbench.elf $@
+binary/INFLB30.PRG: XCPU = -m68030 -msoft-float
+binary/INFLB30.PRG: $(addprefix build/m68030/,$(INFLB_OBJ)) build/m68030/inflb_fast.o build/m68030/crt0.o build/m68030/nf.o common/atari/link.ld | binary
+	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
+	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68030/inflbench.elf \
+	  build/m68030/crt0.o build/m68030/nf.o build/m68030/inflb_fast.o $(addprefix build/m68030/,$(INFLB_OBJ)) -lgcc
+	python3 common/tools/elf2tos.py build/m68030/inflbench.elf $@
 # JB2BENCH.PRG / JB2B30.PRG (tests/hatari/jb2bench.py): a JBIG2 page's time and memory
 JB2B_SRC   = atari/jb2bench.c src/mq.c src/ccitt.c src/pdfio_tos.c $(COMMON_SRC) $(RT_C)
 JB2B_OBJ   = $(patsubst %.c,%.o,$(JB2B_SRC)) atari/jbig2_times.o src/jb2t0.o
