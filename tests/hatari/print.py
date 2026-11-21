@@ -17,6 +17,9 @@ as common's tests/print). Twice:
   greyed while it prints (its menu state logged by the rig's shot);
 - every page, Esc after the first: "print-stopped", fewer IMGs than pages,
   none left half open.
+On Falcon-4 also page 3 alone: its progressive JPEG left out for memory,
+the end's words "Printed. Some pictures were left out: not enough
+memory." (Erez, 21 Nov 2026).
 On a Falcon each page is drawn by render.ovl (the showcase: pictures,
 drawings, fonts); on an ST the text view's text, text only.
 """
@@ -155,6 +158,12 @@ def run(work, machine, stop):
             for l in r.console().splitlines():
                 if l.startswith("EPDF printed-page") or l.startswith("EPDF print-scaled"):
                     print("  " + l.strip())
+            # the end's words (Erez, 21 Nov 2026): a picture left out for memory said so
+            said = re.findall(r"EPDF print-said (.*)", r.console())
+            want = "Printed. Some pictures were left out: not enough memory." if os.environ.get("PRINT_LEFT_OUT") \
+                else "Printed."
+            if not said or said[-1].strip() != want:
+                bad.append("the end said %r, not %r" % (said[-1:] , want))
             got = re.findall(r"EPDF printed-page (\d+)", r.console())
             if got != [str(p) for p in range(first, last + 1)]:
                 bad.append("printed pages %s, not %d-%d" % (got, first, last))
@@ -181,6 +190,12 @@ def main(argv):
     for m in argv[1:] or [erz.MACHINE, "ST:mono"]:
         bad += run(argv[0], m, False)
         bad += run(argv[0], m, True)
+        if m == "Falcon-4:256":
+            # page 3 alone on a 4 MB Falcon: its progressive JPEG has no room
+            # beside the printer's page, left out and said so
+            os.environ["PRINT_RANGE"], os.environ["PRINT_LEFT_OUT"] = "3 3", "1"
+            bad += run(argv[0] + "-p3", m, False)
+            del os.environ["PRINT_RANGE"], os.environ["PRINT_LEFT_OUT"]
     return 1 if bad else 0
 
 

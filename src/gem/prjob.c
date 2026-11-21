@@ -47,6 +47,9 @@ static int drawn_mode;
    processed independently ... removed from memory and the next page is
    loaded"); with room it stays open (no fonts read again a page) */
 static int page_alone;
+/* a picture left out for memory on a page printed (the end's words say so:
+   Erez, 21 Nov 2026) */
+static int left_out;
 static CORO pr_co, pr_main;
 static char *stack;
 static unsigned long slice_end;
@@ -312,6 +315,8 @@ static int page_drawn_at(long n, int sc0)
 		rc = -3;
 		goto out;
 	}
+	if (pg.images_missed > 0)
+		left_out = 1;
 	if (sc > 1) {
 		char a[40];
 
@@ -368,6 +373,8 @@ static int page_drawn_at(long n, int sc0)
 			rc = -3;
 			goto out;
 		}
+		if (pg.images_missed > 0)
+			left_out = 1;
 	}
 out:
 	free(buf);
@@ -590,7 +597,7 @@ int prjob_begin(void)
 	}
 	coro_start_long(&pr_co, stack, PR_STACK, job);
 	on = 1;
-	stop_req = finished = failed = 0;
+	stop_req = finished = failed = left_out = 0;
 	why[0] = '\0';
 	k_done = 0;
 	k_total = (long)(pj.last - pj.first + 1) * pj.copies;
@@ -632,7 +639,13 @@ void prjob_slice(unsigned long ms)
 		snprintf(a, sizeof a, "%ld of %ld", k_done, k_total);
 		log_event(failed ? "print-failed" : stop_req ? "print-stopped" : "print-done", a, failed ? why : NULL);
 	}
-	win_status(stop_req || failed ? "Printing stopped." : "Printed.");
+	{
+		const char *say = stop_req || failed ? "Printing stopped." :
+				  left_out ? "Printed. Some pictures were left out: not enough memory." : "Printed.";
+
+		win_status(say);
+		log_event("print-said", say, NULL);
+	}
 }
 
 /* the status bar's words and its bar: "Printing page 3 of 12" */
