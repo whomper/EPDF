@@ -17,6 +17,10 @@ as common's tests/print). Twice:
   greyed while it prints (its menu state logged by the rig's shot);
 - every page, Esc after the first: "print-stopped", fewer IMGs than pages,
   none left half open.
+Then without WDIALOG (the hub, 21 Nov 2026: common 726554d, TOS's AES alone
+gave "Illegal AES function call"): setup 2, no dialog and no alert, page 2
+to the GDOS's default printer, device 21 pointed at META.SYS in the run's
+ASSIGN.SYS only, C:\\GEMFILE.GEM read back.
 On Falcon-4 also page 3 alone: its progressive JPEG left out for memory,
 the end's words "Printed without some pictures: not enough memory."
 (Erez, 21 Nov 2026).
@@ -80,9 +84,9 @@ def wait(r, what, most):
     return what in r.console()
 
 
-def run(work, machine, stop):
+def run(work, machine, stop, nowd=False):
     st = machine.startswith("ST")
-    name = machine.replace(":", "_") + ("-stop" if stop else "")
+    name = machine.replace(":", "_") + ("-stop" if stop else "") + ("-nowd" if nowd else "")
     r = speed.Rig(os.path.join(work, name), machine, nvdi=True, display=os.environ.get("XDISPLAY", ":96"))
     bad = []
     wd = os.path.join(os.environ.get("AERA_NVDI", os.path.expanduser("~/.aera/nvdi/x")), "auto", "wdialog.prg")
@@ -100,10 +104,21 @@ def run(work, machine, stop):
             make_pdf(os.path.join(r.hd, "DOC.PDF"), book(4))
             pages = 4
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
-        if os.path.exists(wd):
+        if os.path.exists(wd) and not nowd:
             r.put(wd, "AUTO")               # (Erez's copy: removed below, never left in a kept hd)
         first, last = (1, pages) if stop else tuple(int(x) for x in os.environ.get("PRINT_RANGE", "2 4").split())
-        r.write("EPDF/epdf.inf", "NATFEATS=1\nPRINTTO=91 C:\\PAGE.IMG\nPRINTRANGE=%d %d\n" % (first, last))
+        if nowd:
+            # TOS's AES alone (the hub, 21 Nov 2026: common 726554d): no dialog,
+            # the GDOS's default printer, device 21, pointed at NVDI's metafile
+            # driver in this run's ASSIGN.SYS only, its C:\GEMFILE.GEM read back
+            first = last = 2
+            a = os.path.join(r.hd, "ASSIGN.SYS")
+            txt = open(a, "rb").read().decode("latin-1")
+            txt = re.sub(r"(?m)^21\s+\S+", "21  META.SYS", txt)
+            open(a, "wb").write(txt.encode("latin-1"))
+            r.write("EPDF/epdf.inf", "NATFEATS=1\nPRINTRANGE=%d %d\n" % (first, last))
+        else:
+            r.write("EPDF/epdf.inf", "NATFEATS=1\nPRINTTO=91 C:\\PAGE.IMG\nPRINTRANGE=%d %d\n" % (first, last))
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\DOC.PDF\n")
         natfeats.on(r.hd)
         r.start("C:\\LAUNCH.PRG", ready="EPDF started", boot=600)
@@ -117,6 +132,24 @@ def run(work, machine, stop):
             raise RuntimeError
         opened = [l for l in r.console().splitlines() if l.startswith("EPDF print-open ")][-1]
         print("  " + opened)
+        if nowd:
+            setup = [l for l in r.console().splitlines() if l.startswith("EPDF print-setup")]
+            if setup != ["EPDF print-setup default "] and setup != ["EPDF print-setup default"]:
+                bad.append("without WDIALOG the setup was %s, not the default printer" % setup)
+            end = time.time() + float(os.environ.get("PRINT_TIMEOUT", "5400"))
+            while time.time() < end and not re.search(r"EPDF print-(done|failed|stopped)", r.console()):
+                time.sleep(2)
+            time.sleep(2)
+            r.still()
+            r.shot("printed")       # (no AES alert over the window)
+            gem = [n for n in os.listdir(r.hd) if n.upper() == "GEMFILE.GEM"]
+            size = os.path.getsize(os.path.join(r.hd, gem[0])) if gem else 0
+            print("  C:\\GEMFILE.GEM %d bytes" % size)
+            if "EPDF print-done" not in r.console():
+                bad.append("not done: %s" % [l for l in r.console().splitlines() if "print" in l][-3:])
+            if size < 1000:
+                bad.append("the metafile has %d bytes" % size)
+            raise RuntimeError
         if stop:
             end = time.time() + 900
             while time.time() < end and not re.search(r"EPDF printed-page|EPDF print-failed", r.console()):
@@ -173,7 +206,7 @@ def run(work, machine, stop):
     except RuntimeError:
         pass
     finally:
-        print("%s%s: %s  (%s)" % (r.describe(), ", Esc" if stop else ", pages %d-%d" % (first, last),
+        print("%s%s: %s  (%s)" % (r.describe(), ", no WDIALOG" if nowd else ", Esc" if stop else ", pages %d-%d" % (first, last),
                                   "ok" if not bad else "; ".join(bad), r.shots))
         r.stop()
         p = os.path.join(r.hd, "AUTO", "WDIALOG.PRG")
@@ -190,6 +223,7 @@ def main(argv):
     for m in argv[1:] or [erz.MACHINE, "ST:mono"]:
         bad += run(argv[0], m, False)
         bad += run(argv[0], m, True)
+        bad += run(argv[0], m, False, nowd=True)
         if m == "Falcon-4:256":
             # page 3 alone on a 4 MB Falcon: its progressive JPEG has no room
             # beside the printer's page, left out and said so
