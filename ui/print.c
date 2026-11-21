@@ -113,7 +113,8 @@ int print_open(PRINTJOB *pj)
 		pj->h = 0;
 		return 0;
 	}
-	pj->w = (short)(wo[0] + 1), pj->ht = (short)(wo[1] + 1);
+	pj->w = wo[0] < 32767 ? (short)(wo[0] + 1) : 32767;	/* (a metafile's is 0..32767: no overflow) */
+	pj->ht = wo[1] < 32767 ? (short)(wo[1] + 1) : 32767;
 	pj->um_w = wo[3], pj->um_h = wo[4];
 	for (pj->planes = 0, d = (short)(wo[13] > 0 ? wo[13] : 2); d > 1; d >>= 1)
 		pj->planes++;
