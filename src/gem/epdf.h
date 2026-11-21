@@ -64,7 +64,9 @@ int doc_pic_ahead_only(void);
 int win_ahead_due(void);		/* pictures ahead of the view to look for */
 void win_ahead(void);			/* (a few rows a turn) */
 void doc_pic_drop_ahead(void);	/* a picture ahead stopped for one shown */
-int doc_pic_hold(void);		/* Esc: the picture or page being made stopped, none begun till the view moves */
+int doc_pic_hold(void);
+void doc_pics_pause(int on);
+void doc_print_room(void);	/* printing: the decoded pictures and the store's spare memory let go */	/* printing: the picture being made stopped, none begun till 0 */		/* Esc: the picture or page being made stopped, none begun till the view moves */
 /* the progress row's: the page being read (-1 none), *prog how far
    through it in thousandths; the picture being made, its page and
    rows made of all (*of 0: not made a row at a time) */
