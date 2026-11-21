@@ -277,6 +277,7 @@ void keys_dialog(void)
 {
 	static const char *const lines[] = {
 		"^O  open a PDF          ^Q  quit",
+		"^P  print",
 		"^C  copy                ^A  select all",
 		"^F  find                ^G  find next",
 		"\x01^G find previous      ^,  settings",

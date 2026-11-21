@@ -49,6 +49,7 @@
 #include "langs.h"
 #include "popup.h"
 #include "gatedlg.h"
+#include "prjob.h"
 
 short ap_id;
 short pix_aspect = 16;
@@ -150,6 +151,18 @@ static void settings_read(void)
 		int t = (v = inf_get(&inf, "TRANSLATE")) != NULL && v[0] == '1';
 		const char *to = inf_get(&inf, "TRANSLATETO");
 
+		/* the rigs' printer (NVDI's picture driver to a file) and range:
+		   not in Settings */
+		if ((v = inf_get(&inf, "PRINTTO")) != NULL && v[0]) {
+			static char dev[96];
+
+			snprintf(dev, sizeof dev, "%s", v);
+			prjob_device = dev;
+		}
+		if ((v = inf_get(&inf, "PRINTRANGE")) != NULL && v[0]) {
+			prjob_first = atol(v);
+			prjob_last = strchr(v, ' ') ? atol(strchr(v, ' ') + 1) : prjob_first;
+		}
 		if ((v = inf_get(&inf, "TRPORT")) != NULL && atol(v) > 0 && atol(v) < 65536)
 			tr_port = (unsigned short)atol(v);	/* (translategate's elsewhere: the rigs) */
 		tr_setup(gate_host, tr_port);
@@ -393,12 +406,12 @@ static long find_left;			/* pages it may still look at */
    every step of a selection dragged) */
 static void menu_states(void)
 {
-	static const short cmd[9] = { CMD_COPY, CMD_SELALL, CMD_FIND, CMD_FINDNEXT, CMD_FINDPREV, CMD_PAGES,
-				      CMD_SAVEOPT, CMD_ZOOMTOGGLE, CMD_OPEN };
-	static signed char was[9] = { -1, -1, -1, -1, -1, -1, -1, -1, -1 };
+	static const short cmd[10] = { CMD_COPY, CMD_SELALL, CMD_FIND, CMD_FINDNEXT, CMD_FINDPREV, CMD_PAGES,
+				       CMD_SAVEOPT, CMD_ZOOMTOGGLE, CMD_OPEN, CMD_PRINT };
+	static signed char was[10] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
 	static signed char tick = -1, ztick = -1;
 	DOCVIEW *v = doc_view();
-	signed char now[9], z;
+	signed char now[10], z;
 	/* a job the user started (a copy, a search, the Gateway's conversion):
 	   the commands that would start another are greyed till it ends (D19,
 	   Erez 9 Nov 2026) */
@@ -417,7 +430,8 @@ static void menu_states(void)
 	z = (signed char)(v && doc_pages_mode() && win_zoom_can(-1));	/* (a page zoomed) */
 	now[7] = z || (v && doc_pages_mode() && win_zoom_can(1));
 	now[8] = !job;
-	for (i = 0; i < 9; i++)
+	now[9] = v && !job;			/* Print...: a document open, no job (D19) */
+	for (i = 0; i < 10; i++)
 		if (now[i] != was[i]) {
 			menu_ienable(menu.tree, mbar_object(&menu, cmd[i]), now[i]);
 			was[i] = now[i];
@@ -560,7 +574,7 @@ static struct {
 /* a job the user started runs: a copy, a search, the Gateway's conversion */
 static int job_running(void)
 {
-	return cp.on || find_dir || gw_busy();
+	return cp.on || find_dir || gw_busy() || prjob_on();
 }
 
 static void copy_end(const char *say)
@@ -973,7 +987,7 @@ static void command(int c)
 	/* a job running: its keys do what the greyed menu says, nothing (D19) */
 	if (job_running() &&
 	    (c == CMD_COPY || c == CMD_FIND || c == CMD_FINDNEXT || c == CMD_FINDPREV || c == CMD_OPEN ||
-	     c == CMD_SAVEOPT))
+	     c == CMD_SAVEOPT || c == CMD_PRINT))
 		return;
 	if (c != CMD_ABOUT && c != CMD_ZOOMIN && c != CMD_ZOOMOUT && c != CMD_ZOOMACTUAL && c != CMD_ZOOMTOGGLE)
 		win_zoom_end();		/* (a picture shown whole: the text back first) */
@@ -986,6 +1000,10 @@ static void command(int c)
 		break;
 	case CMD_SAVEOPT:
 		save_optimised();
+		break;
+	case CMD_PRINT:				/* File > Print... (Erez, 21 Nov 2026) */
+		if (prjob_begin())
+			menus_due = 1;
 		break;
 	case CMD_ZOOMTOGGLE:			/* View > Zoom In: zoomed, or back */
 		if (win_zoom_can(-1))
@@ -1363,6 +1381,11 @@ static void key(short kstate, short k)
 		log_event("gateway-stopped", NULL, NULL);
 		return;
 	}
+	if (prjob_on() && (scan == 0x01 || scan == 0x61)) {
+		prjob_stop();		/* Esc or Undo: the printing stopped at the next band */
+		log_event("print-stop", NULL, NULL);
+		return;
+	}
 	if (cp.on && (scan == 0x01 || scan == 0x61)) {
 		copy_end("copy stopped");	/* Esc or Undo: the copy given up */
 		log_event("copy-stopped", NULL, NULL);
@@ -1395,6 +1418,7 @@ static void key(short kstate, short k)
 	if (key_ctrl(kstate, k)) {
 		switch (scan) {
 		case 0x18: command(CMD_OPEN); return;		/* ^O */
+		case 0x19: command(CMD_PRINT); return;		/* ^P */
 		case 0x33: command(CMD_SETTINGS); return;	/* ^, */
 		case 0x16: command(CMD_CLOSE); return;		/* ^U: one window, so quit (3.2) */
 		case 0x11: return;				/* ^W: one window, so nothing */
@@ -1503,7 +1527,12 @@ static void progress(void)
 	rp = doc_reading(&pm);
 	win_pages_shown(&p0, &p1);
 	pic = doc_pic_progress(&pg, &made, &of);
-	if (cp.on) {
+	if (prjob_on()) {
+		long d, t;
+
+		prjob_progress(w, (int)sizeof w, &d, &t);	/* "Printing page 3 of 12" (Erez, 21 Nov 2026) */
+		win_progress(9, w, d, t);
+	} else if (cp.on) {
 		snprintf(w, sizeof w, "Copying page %ld of %ld", cp.p - cp.p0 + 1 > cp.p1 - cp.p0 + 1 ? cp.p1 - cp.p0 + 1 : cp.p - cp.p0 + 1,
 			 cp.p1 - cp.p0 + 1);
 		win_progress(4, w, cp.p - cp.p0, cp.p1 - cp.p0 + 1);
@@ -1735,7 +1764,7 @@ int main(void)
 		pics_focus = doc_view() ? dv_page_at_top(doc_view()) : -1;
 		int strip_now;
 		int pending = doc_pending() || find_dir || doc_pic_busy() || pics_waiting() || cp.on || gw_busy() ||
-			      tr_busy() || ljob_on;
+			      tr_busy() || ljob_on || prjob_on();
 
 		progress();
 
@@ -1796,6 +1825,15 @@ int main(void)
 				menu_states();
 			} else if (strip_now) {
 				strip_turn();
+			} else if (prjob_on()) {
+				/* File > Print...: a band (or some lines) a turn, the
+				   turn's whole; its end closes the printer's job */
+				int was = prjob_on();
+
+				bg_begin();
+				prjob_slice(bg_room(BG_SLICE_030 + 10) ? BG_SLICE_000 : BG_SLICE_030);
+				if (was && !prjob_on())
+					menus_due = 1;	/* (D19: the commands back) */
 			} else if (cp.on) {
 				/* a copy the user asked for: before the reading and the
 				   pictures; a step starts only if one as long as the last

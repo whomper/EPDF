@@ -650,7 +650,7 @@ GEM_SRC = src/gem/epdf.c src/gem/doc.c src/gem/rdraw.c common/src/ovl.c src/gem/
           src/gem/gwopen.c src/gem/gatedlg.c src/pigate.c src/pftime_tos.c src/conv/cvio_tos.c src/gem/strip.c common/src/conn.c \
           common/src/tls_none.c common/atari/net_tos.c common/atari/sting.c common/ui/scrsize.c \
           src/gem/trview.c src/view/trpara.c common/src/translate.c common/ui/langs.c common/ui/panebar.c common/ui/settings.c common/ui/dlgbuild.c \
-          common/ui/scrpens.c
+          common/ui/scrpens.c src/gem/prjob.c common/ui/print.c
 GEM_OBJ = $(patsubst %.c,build/m68000/%.o,$(GEM_SRC)) build/m68000/version.o build/m68000/sting_s.o
 build/m68000/sting_s.o: common/atari/sting.S | build/m68000
 	$(XCC) -m68000 -c -o $@ $<

@@ -19,6 +19,8 @@ static const MBAR_ITEM file_items[] = {
 	{ "Open...", "^O", CMD_OPEN },
 	{ "Save Optimised...", NULL, CMD_SAVEOPT },	/* greyed but for a converted PDF (Erez, 8 Nov 2026) */
 	{ "-", NULL, CMD_NONE },
+	{ "Print...", "^P", CMD_PRINT },	/* through NVDI (Erez, 21 Nov 2026); ^P the family's */
+	{ "-", NULL, CMD_NONE },
 	{ "Quit", "^Q", CMD_QUIT },
 	{ NULL, NULL, CMD_NONE }
 };

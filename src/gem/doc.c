@@ -405,6 +405,7 @@ int doc_prepared(void)
 
 static void page_pic_stop(void);
 static int pics_held;		/* Esc: no picture begun till the view moves (doc_pic_hold) */
+static int pics_paused;		/* printing: render.ovl is the print job's (doc_pics_pause) */
 
 /* the view on the pages' text or on their pictures: laid out again from
    the page at the top (the caller lays the window out and draws it) */
@@ -1133,7 +1134,7 @@ int doc_pic_start(void)
 {
 	PICE *e;
 
-	if (!doc || rpic || pics_held || !doc_view_resting() || !(e = pics_next()))
+	if (!doc || rpic || pics_held || pics_paused || !doc_view_resting() || !(e = pics_next()))
 		return 0;
 	{
 		/* its stack: 12 KB, 64 KB once pages are drawn (render.ovl's);
@@ -1335,6 +1336,37 @@ int doc_pic_hold(void)
 		pic_give_way("held");
 	pics_held = 1;
 	return 1;
+}
+
+/* File > Print... (prjob.c): the picture or page being made stopped
+   (render.ovl may not be in the middle of a page of this document while
+   the job draws its own), none begun till it ends */
+void doc_pics_pause(int on)
+{
+	if (on && rpic) {
+		if (rpic->obj >= PICS_PAGE)
+			page_pic_stop();
+		else
+			pic_give_way("print");
+	}
+	pics_paused = on;
+}
+
+/* File > Print... on a short machine (a 4 MB Falcon under NVDI keeps about
+   10 KB once the printer's driver holds its page): the decoded pictures
+   (made again when shown) and the store's spare blocks back to the heap
+   render.ovl draws the printed page from */
+void doc_print_room(void)
+{
+	long b;
+	char a[24];
+
+	pics_forget();
+	b = doc ? ts_shrink(&store, STORE_KEEP) : 0;
+	if (b > 0)
+		cache_kb = store.budget / 1024;
+	snprintf(a, sizeof a, "%ld", b);
+	log_event("memory-back", "print", a);
 }
 
 /* the picture being made is one ahead of the view and one shown waits:

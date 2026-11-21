@@ -46,7 +46,8 @@ page at a time while you read, starting with the page you are on; a page it hasn
 gives way to you at once.
 
 - **File:** Open... (^O), Save Optimised... (a converted PDF written where you choose, as it is:
-  nothing is converted again; greyed for a PDF that isn't converted), Quit (^Q).
+  nothing is converted again; greyed for a PDF that isn't converted), Print... (^P: see
+  [Printing](#printing)), Quit (^Q).
 - **Edit:** Copy (^C) puts the text you selected on the clipboard (a big selection is copied a
   page at a time, with its progress in the status bar; Esc stops it); Select all (^A); Find... (^F)
   looks for a word or a phrase, whatever its case, across the lines it was set on; Find next (^G)
@@ -127,6 +128,7 @@ icon shows the page you are on.
 | ^Clr/Home | the first page |
 | ⇧^Clr/Home, ^End | the last page |
 | ^O | open a document |
+| ^P | print |
 | ^C, ^A | copy the selection, select everything |
 | ^F, ^G, ⇧^G | find, find next, find previous |
 | ^+, ^-, ^0 (and the keypad's + and -) | the page larger, smaller, as it was (View > Pages) |
@@ -172,6 +174,22 @@ pdf --allow ATARI_IP` sets it up. On the Atari you need STinG, MiNTnet or MagiC-
   in black and white), None, Mono, Colour, or Mono and colour. **Photos:** 256 colours or JPEG.
   **Optimise for:** Faster display (at first) or Smaller files. **Page previews:** With the page
   strip (at first: while View > Page strip is shown), Always or Never.
+
+## Printing
+
+**File > Print...** (^P) prints through NVDI (or another GDOS) on any printer its drivers drive.
+With WDIALOG installed you choose the printer, the pages and the copies in its dialog; without it
+the GDOS's default printer prints every page.
+
+- On a Falcon or a TT each page is printed as it looks, at the printer's resolution, pictures and
+  drawings included (a converted PDF's from its original where EPDF finds it).
+- On an ST each page's text is printed as the text view has it, text only.
+- The status bar says "Printing page 3 of 12" with its bar; Esc stops it. At the end it says
+  "Printed." (or "Printing stopped."). On a Falcon short of memory (a 4 MB one, beside the
+  printer driver's page) a page is drawn smaller and enlarged to the paper; a picture there is
+  no room for is left out, and the status bar says "Printed without some pictures: not enough
+  memory."
+- Without NVDI or another GDOS, EPDF says printing needs one.
 
 ## Translating
 
