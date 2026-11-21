@@ -11,7 +11,9 @@ printer.
     run.py WORK MACHINE [DRIVER [PAGES [DEVICE]]] [--no-wdialog]
 
 --no-wdialog boots without WDIALOG.PRG: print_setup must give 2 (the default printer) and TOS's AES no
-"Illegal AES function call" alert (EMail, 21 Nov 2026); the run must reach its end
+"Illegal AES function call" alert (EMail, 21 Nov 2026); the run must reach its end. With
+PRT_ASSIGN21=META.SYS (device 21 pointed at the metafile driver in this run's ASSIGN.SYS only, CRLF and
+the rest of the file kept) the default printer must open and print too (EPDF, 21 Nov 2026)
 """
 import os
 import sys
@@ -30,6 +32,15 @@ try:
     with open(os.path.join(r.hd, "PRT.CFG"), "w") as f:
         f.write(" ".join((a[2:] + ["91", "3", "C:\\PAGE.IMG"][len(a) - 2:])[:3]) + "\n")
     wd = os.path.join(os.environ.get("AERA_NVDI", os.path.expanduser("~/.aera/nvdi/x")), "auto", "wdialog.prg")
+    a21 = os.environ.get("PRT_ASSIGN21")       # device 21 pointed elsewhere in this run's ASSIGN.SYS only
+    if a21:
+        asg = os.path.join(r.hd, "ASSIGN.SYS")
+        with open(asg, "rb") as f:
+            t = f.read()
+        import re
+        t = re.sub(rb"(?m)^21 +\S+", b"21  " + a21.encode(), t)
+        with open(asg, "wb") as f:
+            f.write(t)
     nowd = "--no-wdialog" in sys.argv          # TOS's AES alone: print_setup must not ask it for the dialog
     if os.path.exists(wd) and not nowd:
         r.put(wd, "AUTO")                       # WDIALOG after NVDI: the print dialog
@@ -73,7 +84,9 @@ def img_ink(path):
 bad = 0
 log = r.console()
 if nowd:                                        # the default printer, no dialog and no AES alert
-    ok = "PRT setup 2" in log and "PRT done" in log
+    # the open itself only where 21 is a driver Hatari opens (PRT_ASSIGN21=META.SYS: the metafile);
+    # NVDI's printer drivers (PCL.SYS, Erez's 21) don't open here
+    ok = "PRT setup 2" in log and "PRT done" in log and (not a21 or "PRT open 1" in log)
     print("ok: no WDIALOG, the default printer (setup 2)" if ok else "FAIL: no WDIALOG: %s" %
           [l for l in log.splitlines() if l.startswith("PRT setup")])
     sys.exit(0 if ok else 1)
