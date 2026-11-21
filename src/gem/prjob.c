@@ -590,6 +590,12 @@ int prjob_begin(void)
 		alert(1, "[1][The printer can't be opened.|Check NVDI's printer driver|and that the printer is on.][ OK ]");
 		return 0;
 	}
+	/* a device with no paper (NVDI's metafile: 0..32767 at 85 um, 2.8 m
+	   across) set at an A4 sheet; a printer's area is its paper's, smaller */
+	if (pj.um_w > 0 && pj.w > 210000L / pj.um_w)
+		pj.w = (short)(210000L / pj.um_w);
+	if (pj.um_h > 0 && pj.ht > 297000L / pj.um_h)
+		pj.ht = (short)(297000L / pj.um_h);
 	if (!stack && !(stack = malloc(PR_STACK))) {
 		print_end(&pj);
 		if (drawn_mode)

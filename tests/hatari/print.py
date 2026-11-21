@@ -112,10 +112,18 @@ def run(work, machine, stop, nowd=False):
             # the GDOS's default printer, device 21, pointed at NVDI's metafile
             # driver in this run's ASSIGN.SYS only, its C:\GEMFILE.GEM read back
             first = last = 2
-            a = os.path.join(r.hd, "ASSIGN.SYS")
-            txt = open(a, "rb").read().decode("latin-1")
-            txt = re.sub(r"(?m)^21\s+\S+", "21  META.SYS", txt)
-            open(a, "wb").write(txt.encode("latin-1"))
+
+            def meta21(install=r.m.nvdi):
+                # (on the bytes, CRLF kept, as common's run.py PRT_ASSIGN21; again
+                # each time NVDI is put on C:: a Falcon's start installs it anew)
+                ok = install()
+                a = os.path.join(r.hd, "ASSIGN.SYS")
+                if ok and os.path.exists(a):
+                    t = open(a, "rb").read()
+                    open(a, "wb").write(re.sub(rb"(?m)^21 +\S+", b"21  META.SYS", t))
+                return ok
+            r.m.nvdi = meta21
+            meta21(lambda: True)
             r.write("EPDF/epdf.inf", "NATFEATS=1\nPRINTRANGE=%d %d\n" % (first, last))
         else:
             r.write("EPDF/epdf.inf", "NATFEATS=1\nPRINTTO=91 C:\\PAGE.IMG\nPRINTRANGE=%d %d\n" % (first, last))
@@ -147,8 +155,12 @@ def run(work, machine, stop, nowd=False):
             print("  C:\\GEMFILE.GEM %d bytes" % size)
             if "EPDF print-done" not in r.console():
                 bad.append("not done: %s" % [l for l in r.console().splitlines() if "print" in l][-3:])
-            if size < 1000:
+            # (a drawn page goes out as raster copies, which NVDI's metafile
+            # driver doesn't record: its file is the header alone; text is kept)
+            if not gem or (st and size < 1000):
                 bad.append("the metafile has %d bytes" % size)
+            if not re.search(r"EPDF printed-page 2 ", r.console()):
+                bad.append("page 2 not printed")
             raise RuntimeError
         if stop:
             end = time.time() + 900
