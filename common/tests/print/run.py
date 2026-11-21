@@ -8,7 +8,10 @@ to WORK-printer.out. NVDI's printer drivers (PCL, ESC/P2...) don't open in Hatar
 emulated port unusable and puts its metafile driver (31) in their place; they are tried on the real
 printer.
 
-    run.py WORK MACHINE [DRIVER [PAGES [DEVICE]]]
+    run.py WORK MACHINE [DRIVER [PAGES [DEVICE]]] [--no-wdialog]
+
+--no-wdialog boots without WDIALOG.PRG: print_setup must give 2 (the default printer) and TOS's AES no
+"Illegal AES function call" alert (EMail, 21 Nov 2026); the run must reach its end
 """
 import os
 import sys
@@ -27,7 +30,8 @@ try:
     with open(os.path.join(r.hd, "PRT.CFG"), "w") as f:
         f.write(" ".join((a[2:] + ["91", "3", "C:\\PAGE.IMG"][len(a) - 2:])[:3]) + "\n")
     wd = os.path.join(os.environ.get("AERA_NVDI", os.path.expanduser("~/.aera/nvdi/x")), "auto", "wdialog.prg")
-    if os.path.exists(wd):
+    nowd = "--no-wdialog" in sys.argv          # TOS's AES alone: print_setup must not ask it for the dialog
+    if os.path.exists(wd) and not nowd:
         r.put(wd, "AUTO")                       # WDIALOG after NVDI: the print dialog
         import atexit                           # Erez's copy: never left in a kept hd
         atexit.register(lambda: os.path.exists(os.path.join(r.hd, "AUTO", "WDIALOG.PRG")) and
@@ -67,6 +71,12 @@ def img_ink(path):
 
 
 bad = 0
+log = r.console()
+if nowd:                                        # the default printer, no dialog and no AES alert
+    ok = "PRT setup 2" in log and "PRT done" in log
+    print("ok: no WDIALOG, the default printer (setup 2)" if ok else "FAIL: no WDIALOG: %s" %
+          [l for l in log.splitlines() if l.startswith("PRT setup")])
+    sys.exit(0 if ok else 1)
 if (a[2:3] or ["91"])[0] == "91":                  # the picture driver: one IMG a page, each with the page on it
     want = int((a[3:4] or ["3"])[0])
     names = sorted(n for n in os.listdir(r.hd) if n.upper().startswith("PAGE") and n.upper().endswith(".IMG"))

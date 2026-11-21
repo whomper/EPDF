@@ -6,6 +6,7 @@
  */
 #include <string.h>
 #include "gem.h"
+#include "tos.h"
 #include "print.h"
 
 #define S_FIRST 20
@@ -17,16 +18,42 @@
 #define PDLG_COPIES 0x0010
 #define PDLG_OK 2
 
+/* WDIALOG.PRG in trap #2's XBRA chain (a Supexec) */
+static int wdlg;
+
+static long find_wdlg(void)
+{
+	volatile long vec = 0x88;		/* trap #2's vector */
+	const long *v = *(const long **)vec;
+	int n;
+	for (n = 0; v && n < 32 && v[-3] == 0x58425241L; n++, v = (const long *)v[-1])	/* XBRA */
+		if (v[-2] == 0x77646C67L)	/* wdlg */
+			wdlg = 1;
+	return 0;
+}
+
 static short sh(void *s, int o) { return *(short *)((char *)s + o); }
 static void sh_set(void *s, int o, short v) { *(short *)((char *)s + o) = v; }
 
 int print_setup(PRINTJOB *pj, short pages)
 {
+	short o1, o2, o3, o4;
 	memset(pj, 0, sizeof(*pj));
 	pj->pages = pages > 0 ? pages : 1;
 	pj->first = 1, pj->last = pj->pages, pj->copies = 1;
 	if (!vq_gdos())
 		return 0;
+	/* WDIALOG's print dialog only where the AES has it: one that says so
+	   (appl_getinfo(7)'s bit 4: MagiC, XaAES), or WDIALOG.PRG on TOS's,
+	   which says nothing but hooks trap #2 as "wdlg". TOS's own AES
+	   answers pdlg_create with "Illegal AES function call" (EMail, 21 Nov
+	   2026) */
+	if (!(appl_getinfo(7, &o1, &o2, &o3, &o4) && (o1 & 0x10))) {
+		wdlg = 0;
+		Supexec(find_wdlg);
+		if (!wdlg)
+			return 2;
+	}
 	pj->dlg = pdlg_create(1);
 	if (pj->dlg)
 		pj->set = pdlg_new_settings(pj->dlg);
