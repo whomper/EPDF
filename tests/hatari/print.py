@@ -18,8 +18,8 @@ as common's tests/print). Twice:
 - every page, Esc after the first: "print-stopped", fewer IMGs than pages,
   none left half open.
 On Falcon-4 also page 3 alone: its progressive JPEG left out for memory,
-the end's words "Printed. Some pictures were left out: not enough
-memory." (Erez, 21 Nov 2026).
+the end's words "Printed without some pictures: not enough memory."
+(Erez, 21 Nov 2026).
 On a Falcon each page is drawn by render.ovl (the showcase: pictures,
 drawings, fonts); on an ST the text view's text, text only.
 """
@@ -160,7 +160,7 @@ def run(work, machine, stop):
                     print("  " + l.strip())
             # the end's words (Erez, 21 Nov 2026): a picture left out for memory said so
             said = re.findall(r"EPDF print-said (.*)", r.console())
-            want = "Printed. Some pictures were left out: not enough memory." if os.environ.get("PRINT_LEFT_OUT") \
+            want = "Printed without some pictures: not enough memory." if os.environ.get("PRINT_LEFT_OUT") \
                 else "Printed."
             if not said or said[-1].strip() != want:
                 bad.append("the end said %r, not %r" % (said[-1:] , want))

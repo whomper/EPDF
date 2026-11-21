@@ -185,7 +185,10 @@ the GDOS's default printer prints every page.
   drawings included (a converted PDF's from its original where EPDF finds it).
 - On an ST each page's text is printed as the text view has it, text only.
 - The status bar says "Printing page 3 of 12" with its bar; Esc stops it. At the end it says
-  "Printed." (or "Printing stopped.").
+  "Printed." (or "Printing stopped."). On a Falcon short of memory (a 4 MB one, beside the
+  printer driver's page) a page is drawn smaller and enlarged to the paper; a picture there is
+  no room for is left out, and the status bar says "Printed without some pictures: not enough
+  memory."
 - Without NVDI or another GDOS, EPDF says printing needs one.
 
 ## Translating

@@ -641,7 +641,7 @@ void prjob_slice(unsigned long ms)
 	}
 	{
 		const char *say = stop_req || failed ? "Printing stopped." :
-				  left_out ? "Printed. Some pictures were left out: not enough memory." : "Printed.";
+				  left_out ? "Printed without some pictures: not enough memory." : "Printed.";
 
 		win_status(say);
 		log_event("print-said", say, NULL);
