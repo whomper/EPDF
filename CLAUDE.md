@@ -590,6 +590,28 @@ at first. This section is kept up to date: the build, the tests, what a release 
   on a Falcon (the loop past the 68030's 256-byte cache): no change (the hub, 20 Nov 2026), build()
   left as it is. Not in 2.41: a 256-colour whole page and its double (a new 8-bit dither, pages about
   twice the size). Next: common's about_prepare (the hub: in the next release).
+  2.42 (21 Nov 2026; v2.42 on 04473ea20, the hub's go on b8efdf1c9): Erez's 2.41 fault, "the precise
+  zoomed in image is not presented": a copy EConvert made zoomed from its own stored page. The
+  converter writes /Source /Path (EConvert on the Atari only: CVOPT.source_path, econvert
+  --source-path; aerapdf's files unchanged); doc.c's find_original takes it, else /Name in the copy's
+  folder's parent, each only when its size is /Bytes (a 68020+; "original path|parent|none"), and
+  View > Pages draws such pages sharp too. zoom.py's two converted cases (the folder above, /Path)
+  check the zoomed page's glyphs: 2.40's build fails them, 2.42 passes on Falcon:256 and, as Erez's
+  real 14 MB + TT RAM, Falcon:256 under NVDI (Erez, 21 Nov 2026: "I have both 14MB and tt ram"; the
+  hub keeps Falcon-4:256 the floor for the pairs). Where no zoom fits (Falcon-4:256: 200 % is 2 MB
+  of bitmap) the status bar says "Not enough memory to zoom" (Erez). EConvert's Translate (Erez, 20
+  Nov 2026: a pop-up in the window, Off at the start, not kept): the Gateway's languages asked when
+  it opens; This Atari through common's translate.c (tr_direct), the Gateway translate=;
+  tests/hatari/econv_translate.py. EPDF's Options > Settings... > Gateway (Erez: a page of its own,
+  today's defaults): Whole pages (Automatic, None, Mono, Colour, Mono and colour), Photos, Optimise
+  for, Page previews (With the page strip, Always, Never); GWPAGES= GWPHOTOS= GWOPTIMISE= GWPREVIEWS=
+  written once changed; tests/hatari/gwsettings.py, gateway.py's GW_EPDF (its EConvert now converts
+  with OPTIMISE=size: pdfgate 1.51 takes pens=, run.sh checks those byte for byte). gateway/ synced
+  to AERA-Gateway 1.51 (7d67b84). Pads refitted against a clean v2.41 build (EPDF all sections at
+  2.41's places; EConvert's scrpens.o and sting_s.o off, outside loops). The pairs: two ST:mono rows
+  (About 135 -> 142.5, Select all 45 -> 50 medians of six) cleared by the hub on gemprof (the same
+  work to 0.1 ms). Next: 2.43, printing (branch print243: File > Print... ^P through NVDI, Erez's
+  words of 21 Nov 2026), then common's about_prepare.
   Next, after 2.36 (Erez, 17 Nov 2026: "go with Faster display as default and lets see that the UI is
   real enough"): the converter prepares pictures and whole pages in the screen's own colours, so EPDF
   only unpacks and copies (the rigs' logs: on Falcon-4:256 a photo 1.2 s decoding, 6.7 s fitting to
