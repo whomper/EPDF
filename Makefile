@@ -297,23 +297,23 @@ EC_ST_PAD ?= 136
 # FireBee; text.c, offdraw.c and aboutbox.c grew), against 2.39
 build/m68030/ectxpad.o: FT_PAD = -DFT_PAD_NAME=ec_tx_pad -DFT_PAD_TEXT=$(EC_TX_PAD) -DFT_PAD_RO=$(EC_TX_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=$(EC_TX_PAD_DATA)
 EC_TX_PAD ?= 84
-EC_TX_PAD_RO ?= 128
+EC_TX_PAD_RO ?= 60
 EC_TX_PAD_DATA ?= 254
 # and after its conv.o (Faster display, 2.41: +1,402 bytes), so render.o,
 # raster.o, quant.o and the rest of the converter keep their places
 build/m68030/eccvpad.o: FT_PAD = -DFT_PAD_NAME=ec_cvo_pad -DFT_PAD_TEXT=$(EC_CV_PAD) -DFT_PAD_RO=$(EC_CV_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EC_CV_PAD_BSS)
-EC_CV_PAD ?= 134
+EC_CV_PAD ?= 72
 EC_CV_PAD_RO ?= 0
 EC_CV_PAD_BSS ?= 0
 # and after its econvert.o and its libc.o (2.41: econvert.o grew, libc.o lost
 # the heap zones), so gem.o and crash.o, and tos.o on, keep their places
 build/m68030/ececpad.o: FT_PAD = -DFT_PAD_NAME=ec_ec_pad -DFT_PAD_TEXT=$(EC_EC_PAD) -DFT_PAD_RO=$(EC_EC_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=$(EC_EC_PAD_DATA) -DFT_PAD_BSS=$(EC_EC_PAD_BSS)
 build/m68030/eclcpad.o: FT_PAD = -DFT_PAD_NAME=ec_lc_pad -DFT_PAD_TEXT=$(EC_LC_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EC_LC_PAD_BSS)
-EC_EC_PAD ?= 44
+EC_EC_PAD ?= 114
 EC_EC_PAD_RO ?= 0
-EC_EC_PAD_DATA ?= 250
-EC_EC_PAD_BSS ?= 248
-EC_LC_PAD ?= 28
+EC_EC_PAD_DATA ?= 248
+EC_EC_PAD_BSS ?= 176
+EC_LC_PAD ?= 222
 EC_LC_PAD_BSS ?= 0
 build/m68030/ecpgpad.o: FT_PAD = -DFT_PAD_NAME=ec_pg_pad -DFT_PAD_TEXT=$(EC_PG_PAD) -DFT_PAD_RO=$(EC_PG_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EC_PG_PAD_BSS)
 EC_PG_PAD ?= 202
@@ -322,7 +322,7 @@ EC_PG_PAD_BSS ?= 0
 # EConvert's own after pic.o and before inflate_fast.o (it has no dspjpeg.o
 # there: CONVTEST's PIC_PAD and DJ_PAD don't fit it)
 build/m68030/ecpicpad.o: FT_PAD = -DFT_PAD_NAME=ec_pic_pad -DFT_PAD_TEXT=$(EC_PIC_PAD) -DFT_PAD_RO=$(EC_PIC_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0
-EC_PIC_PAD ?= 218
+EC_PIC_PAD ?= 210
 EC_PIC_PAD_RO ?= 64
 build/m68030/ecifpad.o: FT_PAD = -DFT_PAD_NAME=ec_if_pad -DFT_PAD_TEXT=$(EC_IF_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 EC_IF_PAD ?= 0
@@ -337,9 +337,9 @@ RV_GIF_PAD_STR ?= 258
 build/m68030/cspad.o: FT_PAD = -DFT_PAD_NAME=cs_cv_pad -DFT_PAD_TEXT=$(CS_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 CS_PAD ?= 178
 build/m68030/ecpad.o: FT_PAD = -DFT_PAD_NAME=ec_cv_pad -DFT_PAD_TEXT=$(EC_PAD) -DFT_PAD_RO=$(EC_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EC_PAD_BSS)
-EC_PAD ?= 192
-EC_PAD_RO ?= 186
-EC_PAD_BSS ?= 250
+EC_PAD ?= 72
+EC_PAD_RO ?= 130
+EC_PAD_BSS ?= 242
 # CONVTEST.PRG's own, after common's nf.o: its converter code where 2.30 had it
 build/m68030/ctpad.o: FT_PAD = -DFT_PAD_NAME=ct_cv_pad -DFT_PAD_TEXT=$(CT_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 CT_PAD ?= 106
@@ -726,20 +726,20 @@ build/m68000/eppad_w.o: FT_PAD = -DFT_PAD_NAME=ep_pad_w -DFT_PAD_TEXT=$(EP_PAD_W
 build/m68000/eppad_y.o: FT_PAD = -DFT_PAD_NAME=ep_pad_y -DFT_PAD_TEXT=0 -DFT_PAD_RO=$(EP_PAD_Y_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 build/m68000/eppad_x.o: FT_PAD = -DFT_PAD_NAME=ep_pad_x -DFT_PAD_TEXT=$(EP_PAD_X) -DFT_PAD_RO=$(EP_PAD_X_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EP_PAD_X_BSS)
 EP_PAD_A ?= 108
-EP_PAD_A_RO ?= 210
+EP_PAD_A_RO ?= 198
 EP_PAD_A_DATA ?= 220
-EP_PAD_B ?= 130
+EP_PAD_B ?= 42
 EP_PAD_C ?= 144
 EP_PAD_D ?= 388
 EP_PAD_E ?= 62
-EP_PAD_E_DATA ?= 252
+EP_PAD_E_DATA ?= 244
 EP_PAD_F ?= 214
 EP_PAD_G ?= 212
 EP_PAD_H ?= 372
 EP_PAD_H_RO ?= 238
 EP_PAD_I ?= 198
 EP_PAD_I_RO ?= 248
-EP_PAD_J ?= 298
+EP_PAD_J ?= 172
 EP_PAD_K ?= 176
 EP_PAD_L ?= 246
 EP_PAD_L_DATA ?= 404
@@ -747,7 +747,7 @@ EP_PAD_M ?= 150
 EP_PAD_N ?= 92
 EP_PAD_O ?= 130
 EP_PAD_P ?= 72
-EP_PAD_Q ?= 62
+EP_PAD_Q ?= 84
 EP_PAD_R ?= 92
 EP_PAD_R_RO ?= 236
 EP_PAD_S ?= 52
@@ -756,12 +756,12 @@ EP_PAD_V ?= 236
 EP_PAD_W ?= 120
 EP_PAD_W_RO ?= 116
 EP_PAD_W_DATA ?= 254
-EP_PAD_X ?= 58
-EP_PAD_X_RO ?= 231
-EP_PAD_X_BSS ?= 238
-EP_PAD_Y_RO ?= 134
-EP_PAD_M_BSS ?= 244
-EP_PAD_M_RO ?= 20
+EP_PAD_X ?= 254
+EP_PAD_X_RO ?= 155
+EP_PAD_X_BSS ?= 218
+EP_PAD_Y_RO ?= 8
+EP_PAD_M_BSS ?= 240
+EP_PAD_M_RO ?= 244
 build/m68000/eppad_a.o build/m68000/eppad_b.o build/m68000/eppad_c.o build/m68000/eppad_d.o \
 build/m68000/eppad_e.o build/m68000/eppad_f.o build/m68000/eppad_g.o build/m68000/eppad_h.o \
 build/m68000/eppad_i.o build/m68000/eppad_j.o build/m68000/eppad_k.o build/m68000/eppad_l.o \
