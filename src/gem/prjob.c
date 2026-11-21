@@ -572,17 +572,30 @@ int prjob_begin(void)
 		pj.first = (short)prjob_first;
 		pj.last = (short)(prjob_last >= prjob_first && prjob_last <= pj.pages ? prjob_last : prjob_first);
 	}
+	drawn_mode = rdraw_machine() && pf_size(rdraw_path) > 0;
+	if (drawn_mode) {
+		/* the room given back before the driver opens: a printer's driver
+		   takes its page's buffer at v_opnwk (a 4 MB Falcon in 256 colours) */
+		doc_pics_pause(1);	/* (render.ovl is the job's while it prints) */
+		doc_print_room();
+	}
 	if (!print_open(&pj)) {
+		char a[40];
+
 		print_end(&pj);
-		log_event("print-open", "failed", NULL);
+		if (drawn_mode)
+			doc_pics_pause(0);
+		snprintf(a, sizeof a, "failed free %ld", (long)Malloc(-1L));
+		log_event("print-open", a, NULL);
 		alert(1, "[1][The printer can't be opened.|Check NVDI's printer driver|and that the printer is on.][ OK ]");
 		return 0;
 	}
 	if (!stack && !(stack = malloc(PR_STACK))) {
 		print_end(&pj);
+		if (drawn_mode)
+			doc_pics_pause(0);
 		return 0;
 	}
-	drawn_mode = rdraw_machine() && pf_size(rdraw_path) > 0;
 	{
 		char a[80];
 
@@ -590,11 +603,8 @@ int prjob_begin(void)
 			 pj.planes, pj.first, pj.last, pj.copies, drawn_mode ? "drawn" : "text");
 		log_event("print-open", a, NULL);
 	}
-	if (drawn_mode) {
-		doc_pics_pause(1);	/* (render.ovl is the job's while it prints) */
-		doc_print_room();
+	if (drawn_mode)
 		page_alone = (long)Malloc(-1L) < 2L * 1024 * 1024;
-	}
 	coro_start_long(&pr_co, stack, PR_STACK, job);
 	on = 1;
 	stop_req = finished = failed = left_out = 0;
