@@ -145,6 +145,13 @@ def run(work, machine, converted):
             # two sizes, Normal and Zoom (Erez, 14 Nov 2026): keypad + gives
             # 200 % at once, + again nothing more
             if not wait(r, "EPDF zoom 200", 1, 30):
+                if "EPDF zoom-refused memory" in r.console():
+                    # (a 4 MB Falcon in 256 colours: no room for the bitmap;
+                    # the status bar says so, Erez 21 Nov 2026)
+                    time.sleep(2)
+                    r.shot("refused")
+                    print("  zoom refused for memory, said in the status bar (shot)")
+                    raise RuntimeError
                 bad.append("keypad +: no 200 %%: %s" % [l for l in r.console().splitlines() if "zoom" in l])
                 raise RuntimeError
             # the page's picture enlarged at once, before the sharp one is drawn

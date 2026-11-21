@@ -1602,6 +1602,10 @@ void win_zoom_in(void)
 			zoom_to(k, (short)(work.x + work.w / 2), (short)(work.y + work.h / 2));
 			return;
 		}
+	/* no size had the memory (a 4 MB Falcon in 256 colours: 200 % is about
+	   2 MB of bitmap): said, not nothing at all (Erez, 21 Nov 2026) */
+	log_event("zoom-refused", "memory", NULL);
+	win_status("Not enough memory to zoom");
 }
 
 /* the zoom ended (View > Zoom In again, ^-, ^0): View > Pages' page as it was */
