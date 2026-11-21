@@ -728,7 +728,7 @@ build/m68000/eppad_x.o: FT_PAD = -DFT_PAD_NAME=ep_pad_x -DFT_PAD_TEXT=$(EP_PAD_X
 EP_PAD_A ?= 108
 EP_PAD_A_RO ?= 198
 EP_PAD_A_DATA ?= 220
-EP_PAD_B ?= 42
+EP_PAD_B ?= 180
 EP_PAD_C ?= 144
 EP_PAD_D ?= 388
 EP_PAD_E ?= 62
@@ -739,12 +739,12 @@ EP_PAD_H ?= 372
 EP_PAD_H_RO ?= 238
 EP_PAD_I ?= 198
 EP_PAD_I_RO ?= 248
-EP_PAD_J ?= 172
+EP_PAD_J ?= 202
 EP_PAD_K ?= 176
 EP_PAD_L ?= 246
 EP_PAD_L_DATA ?= 404
 EP_PAD_M ?= 150
-EP_PAD_N ?= 92
+EP_PAD_N ?= 0
 EP_PAD_O ?= 130
 EP_PAD_P ?= 72
 EP_PAD_Q ?= 84
@@ -771,7 +771,10 @@ build/m68000/eppad_t.o build/m68000/eppad_v.o build/m68000/eppad_w.o build/m6800
 	@mkdir -p $(dir $@)
 	$(XCC) -m68000 $(FT_PAD) -c -o $@ $<
 EP_KEEP = -Wl,-u,ep_pad_a -Wl,-u,ep_pad_a_data -Wl,-u,ep_pad_a_ro -Wl,-u,ep_pad_b -Wl,-u,ep_pad_c -Wl,-u,ep_pad_d -Wl,-u,ep_pad_e -Wl,-u,ep_pad_f -Wl,-u,ep_pad_g -Wl,-u,ep_pad_h -Wl,-u,ep_pad_h_ro -Wl,-u,ep_pad_i -Wl,-u,ep_pad_i_ro -Wl,-u,ep_pad_j -Wl,-u,ep_pad_k -Wl,-u,ep_pad_l -Wl,-u,ep_pad_l_data -Wl,-u,ep_pad_m -Wl,-u,ep_pad_n -Wl,-u,ep_pad_o -Wl,-u,ep_pad_p -Wl,-u,ep_pad_q -Wl,-u,ep_pad_r -Wl,-u,ep_pad_s -Wl,-u,ep_pad_t -Wl,-u,ep_pad_v -Wl,-u,ep_pad_w -Wl,-u,ep_pad_w_ro -Wl,-u,ep_pad_w_data -Wl,-u,ep_pad_e_data -Wl,-u,ep_pad_x -Wl,-u,ep_pad_x_ro -Wl,-u,ep_pad_r_ro -Wl,-u,ep_pad_y_ro -Wl,-u,ep_pad_m_bss -Wl,-u,ep_pad_m_ro -Wl,-u,ep_pad_x_bss
-EPDF_ORDER0 = $(patsubst %/src/gem/epdf.o,%/src/gem/epdf.o build/m68000/eppad_b.o,$(patsubst %/common/src/conn.o,%/common/src/conn.o build/m68000/eppad_c.o,$(patsubst %/common/src/ovl.o,%/common/src/ovl.o build/m68000/eppad_d.o,$(EPDF_HOT) $(filter-out $(EPDF_HOT),$(EPDF_OBJS)))))
+# what came after 2.42 (printing: 2.43) linked last, so nothing that was
+# there moves off its cache places (text, its tables, its variables)
+EPDF_LAST = build/m68000/src/gem/prjob.o build/m68000/common/ui/print.o
+EPDF_ORDER0 = $(patsubst %/src/gem/epdf.o,%/src/gem/epdf.o build/m68000/eppad_b.o,$(patsubst %/common/src/conn.o,%/common/src/conn.o build/m68000/eppad_c.o,$(patsubst %/common/src/ovl.o,%/common/src/ovl.o build/m68000/eppad_d.o,$(EPDF_HOT) $(filter-out $(EPDF_HOT) $(EPDF_LAST),$(EPDF_OBJS)) $(EPDF_LAST))))
 EPDF_ORDER1 = $(patsubst %/src/gem/pics.o,%/src/gem/pics.o build/m68000/eppad_m.o,$(patsubst %/src/gem/doc.o,%/src/gem/doc.o build/m68000/eppad_j.o,$(patsubst %/src/pdfimg.o,%/src/pdfimg.o build/m68000/eppad_h.o,$(patsubst %/src/jpx.o,%/src/jpx.o build/m68000/eppad_i.o,$(EPDF_ORDER0)))))
 EPDF_ORDER2 = $(patsubst %/src/pigate.o,%/src/pigate.o build/m68000/eppad_x.o,$(patsubst %/common/ui/text.o,%/common/ui/text.o build/m68000/eppad_w.o,$(patsubst %/common/atari/gem.o,%/common/atari/gem.o build/m68000/eppad_n.o,$(patsubst %/common/ui/dialog.o,%/common/ui/dialog.o build/m68000/eppad_v.o,$(patsubst %/common/ui/textcells.o,%/common/ui/textcells.o build/m68000/eppad_o.o,$(patsubst %/common/atari/net_tos.o,%/common/atari/net_tos.o build/m68000/eppad_p.o,$(patsubst %/src/gem/font.o,%/src/gem/font.o build/m68000/eppad_q.o,$(EPDF_ORDER3))))))))
 EPDF_ORDER3 = $(patsubst %/src/pdftext.o,%/src/pdftext.o build/m68000/eppad_y.o,$(patsubst %/common/ui/dlgbuild.o,%/common/ui/dlgbuild.o build/m68000/eppad_r.o,$(patsubst %/common/atari/libc.o,%/common/atari/libc.o build/m68000/eppad_t.o,$(patsubst %/common/atari/tos.o,%/common/atari/tos.o build/m68000/eppad_s.o,$(EPDF_ORDER1)))))
