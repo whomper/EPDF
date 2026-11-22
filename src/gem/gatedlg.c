@@ -70,6 +70,11 @@ static void langs_act(SETTINGS *s, void *user)
 		tr_languages();
 }
 
+/* the log's tick, last on General (the guidelines' 6.5, D8: "Write a
+   log" in Options and in Settings; Erez, 22 Nov 2026): the program sets
+   it before Settings and takes it after OK */
+short settings_log;
+
 static void page_general(SETTINGS *s, short x, short y, void *user)
 {
 	short n = set_y(s, 5);
@@ -81,6 +86,7 @@ static void page_general(SETTINGS *s, short x, short y, void *user)
 	set_text(s, x, n, "The languages are the Gateway's. On it:");
 	set_text(s, x + 2, (short)(n + 1), "aera-gateway install translate");
 	set_text(s, x, (short)(n + 2), "Translations are kept in memory only.");
+	set_tick(s, x, set_y(s, 9), "Write a log", &settings_log);
 }
 
 /* EConvert's General: Optimise for (Faster display the default: Erez, 17
@@ -101,6 +107,7 @@ static void page_conv(SETTINGS *s, short x, short y, void *user)
 	set_text(s, x, m, "Each page carries a small picture of");
 	set_text(s, x, (short)(m + 1), "itself, for EPDF's page strip. On a");
 	set_text(s, x, (short)(m + 2), "Falcon, 2 seconds more a page.");
+	set_tick(s, x, set_y(s, 8), "Write a log", &settings_log);
 }
 
 /* EPDF's Gateway page: how Open on the Gateway has a PDF converted (Erez,

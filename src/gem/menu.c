@@ -65,6 +65,7 @@ static const MBAR_ITEM options_items[] = {
 	{ "Font...", NULL, CMD_FONT },		/* no key (Erez, 9 Nov 2026, D6) */
 	{ "-", NULL, CMD_NONE },
 	{ "Open on the Gateway", NULL, CMD_GATEWAY },	/* a tick: on (Erez, 7 Nov 2026) */
+	{ "Write a log", NULL, CMD_LOG },	/* a tick, last (6.5, D8): epdf.log beside EPDF.PRG (Erez, 22 Nov 2026) */
 	{ NULL, NULL, CMD_NONE }
 };
 

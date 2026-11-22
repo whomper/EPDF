@@ -49,6 +49,7 @@
 #include "langs.h"
 #include "popup.h"
 #include "gatedlg.h"
+#include "conn.h"
 #include "prjob.h"
 
 short ap_id;
@@ -83,12 +84,48 @@ static int job_running(void);	/* a copy, a search or the Gateway's conversion (D
 #define END_MCTRL 2
 #endif
 
+/* the log (the guidelines' 6.5, D8: Options > Write a log and Settings'
+   tick, LOG= off at first; Erez, 22 Nov 2026: "When I want to debug
+   something, a log file is very helpful"): epdf.log beside EPDF.PRG,
+   through common's conn.c (each line written at once, the file closed a
+   second after, 256 KB rolling to epdf.old) */
+static int log_on;
+
 void log_event(const char *what, const char *a, const char *b)
 {
 	char line[200];
+	int n = snprintf(line, sizeof line, "EPDF %s %s %s\n", what, a ? a : "", b ? b : "");
 
-	snprintf(line, sizeof line, "EPDF %s %s %s\n", what, a ? a : "", b ? b : "");
 	nf_debug(line);
+	if (log_on && n > 0) {
+		/* "what -- a b": the time and the name are conn.c's; the tag,
+		   the trailing blanks and the newline off */
+		char *s = line + 5 + strlen(what) + 1, *e = line + (n < (int)sizeof line ? n : (int)sizeof line - 1);
+
+		while (e > s && (e[-1] == '\n' || e[-1] == ' '))
+			e--;
+		conn_log(what, " -- ", s, (long)(e - s));
+	}
+}
+
+/* the log's first line: "start -- EPDF 2.44, 2026-11-22 14:05:31" */
+static void log_begin(void)
+{
+	char v[32];
+
+	snprintf(v, sizeof v, "EPDF %s", app_version);
+	conn_log_start(v);
+}
+
+static void log_set(int on, const char *dir)
+{
+	log_on = on;
+	if (on && !conn_logfile[0])
+		path_join(conn_logfile, sizeof conn_logfile, dir, "epdf.log");
+	else if (!on) {
+		conn_log_flush();
+		conn_logfile[0] = '\0';
+	}
 }
 
 int settings_lines(void)
@@ -132,6 +169,8 @@ static void settings_read(void)
 		strcpy(open_dir, v);
 	if ((v = inf_get(&inf, "GATEWAY")) != NULL)
 		gw_on = v[0] == '1';
+	if ((v = inf_get(&inf, "LOG")) != NULL)
+		log_on = v[0] == '1';	/* (the file named at the start: log_set) */
 	if ((v = inf_get(&inf, "GATE")) != NULL && strlen(v) < sizeof gate_host)
 		strcpy(gate_host, v);
 	if ((v = inf_get(&inf, "GATEPORT")) != NULL && atol(v) > 0 && atol(v) < 65536)
@@ -191,6 +230,21 @@ static void setting(const char *name, const char *value, const char *note)
 		return;
 	inf_set(&inf, name, value, note);
 	settings_write();
+}
+
+/* Options > Write a log, or Settings' tick: on or off, kept in LOG= */
+static void log_tick(int on)
+{
+	if (on) {
+		log_set(1, start_dir);
+		log_begin();
+	} else {
+		log_event("log", "off", NULL);
+		log_set(0, start_dir);
+	}
+	setting("LOG", on ? "1" : "0", "1: epdf.log written beside EPDF.PRG (Options > Write a log)");
+	if (has_menu)
+		menu_icheck(menu.tree, mbar_object(&menu, CMD_LOG), on);
 }
 
 static void window_place_save(void)
@@ -1047,6 +1101,9 @@ static void command(int c)
 		else
 			gw_stop();
 		break;
+	case CMD_LOG:
+		log_tick(!log_on);
+		break;
 	case CMD_SETTINGS:
 		settings_dialog();
 		break;
@@ -1324,6 +1381,7 @@ static int settings_dialog(void)
 	tr_stop();
 
 	snprintf(to, sizeof to, "%s", tr_to());
+	settings_log = (short)log_on;
 	if (!gate_dialog_tr(gate_host, (int)sizeof gate_host, &gate_port, to, (int)sizeof to, lang_name(to),
 			    pick_language, languages_dialog, &gwc))
 		return 0;
@@ -1342,6 +1400,8 @@ static int settings_dialog(void)
 		GW_SET("GWPREVIEWS", pv[gwc.previews], "strip", "Open on the Gateway's page previews: strip (with the page strip), on, off");
 #undef GW_SET
 	}
+	if (settings_log != log_on)
+		log_tick(settings_log);
 	setting("GATE", gate_host, "the Gateway's address (Through the Gateway)");
 	snprintf(port, sizeof port, "%u", (unsigned)gate_port);
 	setting("GATEPORT", port, "the Gateway's port for PDFs (8380)");
@@ -1693,6 +1753,10 @@ int main(void)
 	av_init("EPDF");
 	bg_init(BG_NOW);
 	settings_read();
+	if (log_on) {			/* (LOG=1: the log begun with the run) */
+		log_set(1, start_dir);
+		log_begin();
+	}
 	font_init(inf_get(&inf, "FONT"), start_dir);
 	if ((v = inf_get(&inf, "WINDOW")) != NULL) {
 		short *f[4];
@@ -1733,6 +1797,8 @@ int main(void)
 				menu_icheck(menu.tree, mbar_object(&menu, CMD_STRIP), 1);
 			menu_icheck(menu.tree, mbar_object(&menu, CMD_GATEWAY), gw_on);
 			menu_icheck(menu.tree, mbar_object(&menu, CMD_TRANSLATE), tr_on());
+			if (log_on)
+				menu_icheck(menu.tree, mbar_object(&menu, CMD_LOG), 1);
 		}
 		menu_states();
 	}
@@ -1957,5 +2023,6 @@ int main(void)
 	log_event("quit", "the VDI given back", NULL);
 	appl_exit();
 	log_event("quit", "out of the AES", NULL);
+	conn_log_flush();
 	return 0;
 }

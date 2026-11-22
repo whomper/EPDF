@@ -62,12 +62,45 @@ static char start_dir[160], inf_path[180], font_dir[180];
 static INF inf;
 static MBAR menu;
 
+/* the log (the guidelines' 6.5, D8; Erez, 22 Nov 2026): econvert.log
+   beside ECONVERT.PRG through common's conn.c, as EPDF's */
+static int log_on;
+
 void log_event(const char *what, const char *a, const char *b)
 {
 	char line[200];
+	int n = snprintf(line, sizeof line, "ECONVERT %s %s %s\n", what, a ? a : "", b ? b : "");
 
-	snprintf(line, sizeof line, "ECONVERT %s %s %s\n", what, a ? a : "", b ? b : "");
 	nf_debug(line);
+	if (log_on && n > 0) {
+		/* "what -- a b": the time and the name are conn.c's; the tag,
+		   the trailing blanks and the newline off */
+		char *s = line + 9 + strlen(what) + 1, *e = line + (n < (int)sizeof line ? n : (int)sizeof line - 1);
+
+		while (e > s && (e[-1] == '\n' || e[-1] == ' '))
+			e--;
+		conn_log(what, " -- ", s, (long)(e - s));
+	}
+}
+
+/* the log's first line: "start -- EConvert 2.44, 2026-11-22 14:05:31" */
+static void log_begin(void)
+{
+	char v[32];
+
+	snprintf(v, sizeof v, "EConvert %s", app_version);
+	conn_log_start(v);
+}
+
+static void log_set(int on, const char *dir)
+{
+	log_on = on;
+	if (on && !conn_logfile[0])
+		path_join(conn_logfile, sizeof conn_logfile, dir, "econvert.log");
+	else if (!on) {
+		conn_log_flush();
+		conn_logfile[0] = '\0';
+	}
 }
 
 /* the system font is the only one (gemui.h's: the About box asks) */
@@ -171,6 +204,8 @@ static void settings_read(void)
 		inf_parse(&inf, inf_head, (long)strlen(inf_head));
 	/* NatFeats only where the INF asks (NATFEATS=1: the test rigs; not in
 	   Settings), before the first log_event, as EPDF's (Erez, 15 Nov 2026) */
+	if ((v = inf_get(&inf, "LOG")) != NULL)
+		log_on = v[0] == '1';	/* (the file named at the start: log_set) */
 	if ((v = inf_get(&inf, "NATFEATS")) != NULL && v[0] == '1')
 		nf_on = 1;
 	if ((v = inf_get(&inf, "PAGES")) != NULL)
@@ -1850,7 +1885,7 @@ static void about_box(void)
 	about_show(&a);
 }
 
-enum { CMD_NONE, CMD_ABOUT, CMD_ADD, CMD_FOLDER, CMD_REMOVE, CMD_CLEAR, CMD_OUT, CMD_GO, CMD_QUIT, CMD_GUIDE, CMD_SETTINGS };
+enum { CMD_NONE, CMD_ABOUT, CMD_ADD, CMD_FOLDER, CMD_REMOVE, CMD_CLEAR, CMD_OUT, CMD_GO, CMD_QUIT, CMD_GUIDE, CMD_SETTINGS, CMD_LOG };
 
 static const MBAR_ITEM desk_items[] = { { "About EConvert...", NULL, CMD_ABOUT }, { NULL, NULL, CMD_NONE } };
 static const MBAR_ITEM file_items[] = {
@@ -1865,10 +1900,27 @@ static const MBAR_ITEM file_items[] = {
 	{ "Quit", "^Q", CMD_QUIT },
 	{ NULL, NULL, CMD_NONE } };
 /* Options as the family's: Settings... (^,) first (the hub's review, 9 Nov 2026) */
-static const MBAR_ITEM options_items[] = { { "Settings...", "^,", CMD_SETTINGS }, { NULL, NULL, CMD_NONE } };
+static const MBAR_ITEM options_items[] = { { "Settings...", "^,", CMD_SETTINGS }, { "-", NULL, CMD_NONE },
+					     { "Write a log", NULL, CMD_LOG },	/* a tick, last (6.5, D8) */
+					     { NULL, NULL, CMD_NONE } };
 static const MBAR_ITEM help_items[] = { { "EConvert help", "Help", CMD_GUIDE }, { NULL, NULL, CMD_NONE } };
 static const MBAR_TITLE titles[] = { { " EConvert ", desk_items }, { " File ", file_items }, { " Options ", options_items },
 				     { " Help ", help_items }, { NULL, NULL } };
+
+/* Options > Write a log, or Settings' tick: on or off, kept in LOG= */
+static void log_tick(int on)
+{
+	if (on) {
+		log_set(1, start_dir);
+		log_begin();
+	} else {
+		log_event("log", "off", NULL);
+		log_set(0, start_dir);
+	}
+	setting("LOG", on ? "1" : "0", "1: econvert.log written beside ECONVERT.PRG (Options > Write a log)");
+	if (has_menu)
+		menu_icheck(menu.tree, mbar_object(&menu, CMD_LOG), on);
+}
 
 /* Options > Settings... (^,): where the Gateway is; 1 when OK */
 static int settings_dialog(void)
@@ -1877,8 +1929,11 @@ static int settings_dialog(void)
 
 	if (working)
 		return 0;
+	settings_log = (short)log_on;
 	if (!gate_dialog_conv(gate_host, (int)sizeof gate_host, &gate_port, &previews_set, &optimise_set))
 		return 0;
+	if (settings_log != log_on)
+		log_tick(settings_log);
 	setting("PREVIEWS", previews_set ? "1" : "0", "1: each page carries a small picture of itself, for EPDF's page strip");
 	setting("OPTIMISE", optimise_set ? "display" : "size", "display: pictures made for this screen's colours too (bigger files); size: as small as can be");
 	setting("GATE", gate_host, "the Gateway's address (Through the Gateway)");
@@ -1892,6 +1947,9 @@ static void command(int c)
 	switch (c) {
 	case CMD_SETTINGS:
 		settings_dialog();
+		break;
+	case CMD_LOG:
+		log_tick(!log_on);
 		break;
 	case CMD_ABOUT:
 		about_box();
@@ -2400,10 +2458,16 @@ int main(void)
 	help_init();
 	av_init("ECONVERT");
 	settings_read();
+	if (log_on) {			/* (LOG=1: the log begun with the run) */
+		log_set(1, start_dir);
+		log_begin();
+	}
 	build();
 	texts();
 	if (mbar_build(&menu, titles, gl_wchar, gl_hchar, scr_w, scr_h) == 0)
 		has_menu = menu_bar(menu.tree, 1) != 0;
+	if (has_menu && log_on)
+		menu_icheck(menu.tree, mbar_object(&menu, CMD_LOG), 1);
 	wind_calc(0, icon_kind(NAME | CLOSER | MOVER), 0, 0, tree[BOX].ob_width, tree[BOX].ob_height, &d, &d, &w, &h);
 	x = (short)(desk_x + (desk_w - w) / 2);
 	y = (short)(desk_y + (desk_h - h) / 2);
@@ -2545,5 +2609,6 @@ int main(void)
 	log_event("quit", "the VDI given back", NULL);
 	appl_exit();
 	log_event("quit", "out of the AES", NULL);
+	conn_log_flush();
 	return 0;
 }

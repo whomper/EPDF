@@ -10,6 +10,7 @@
 #                   (and ECONVERT.txt when AERA-Atari has it)
 #   make gui-test   EPDF.PRG driven in Hatari (tests/hatari/gui.py)
 #   make cf-test    the FireBee's code and the shipped one's, byte for byte under qemu-m68k (tests/coldfire/run.py)
+#   make log-test   epdf.log with LOG=1 and Options > Write a log (tests/hatari/logfile.py)
 #   make fb-test    the FireBee package's programs (binary/fb/, mkfirebee.py) and the standard ones name each other (tests/hatari/fbalert.py)
 #   make rovl-test  render.ovl, the page as printed (stage 2), loaded and drawn in Hatari (tests/hatari/rovl.py)
 #   make files-test each file's opens on a 1 MB ST against the budget (tests/hatari/files.py, 6.5)
@@ -285,7 +286,7 @@ EC_OD_PAD ?= 152
 EC_OD_PAD_DATA ?= 254
 # and after its crash.o and progbar.o (AERA-Atari 1c01cfd, 16 Nov 2026)
 build/m68030/eccrpad.o: FT_PAD = -DFT_PAD_NAME=ec_cr_pad -DFT_PAD_TEXT=$(EC_CR_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EC_CR_PAD_BSS)
-EC_CR_PAD ?= 58
+EC_CR_PAD ?= 216
 EC_CR_PAD_BSS ?= 0
 build/m68030/ecpbpad.o: FT_PAD = -DFT_PAD_NAME=ec_pb_pad -DFT_PAD_TEXT=$(EC_PB_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 EC_PB_PAD ?= 222
@@ -311,10 +312,10 @@ EC_CV_PAD_BSS ?= 0
 # the heap zones), so gem.o and crash.o, and tos.o on, keep their places
 build/m68030/ececpad.o: FT_PAD = -DFT_PAD_NAME=ec_ec_pad -DFT_PAD_TEXT=$(EC_EC_PAD) -DFT_PAD_RO=$(EC_EC_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=$(EC_EC_PAD_DATA) -DFT_PAD_BSS=$(EC_EC_PAD_BSS)
 build/m68030/eclcpad.o: FT_PAD = -DFT_PAD_NAME=ec_lc_pad -DFT_PAD_TEXT=$(EC_LC_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EC_LC_PAD_BSS)
-EC_EC_PAD ?= 114
-EC_EC_PAD_RO ?= 0
+EC_EC_PAD ?= 222
+EC_EC_PAD_RO ?= 94
 EC_EC_PAD_DATA ?= 248
-EC_EC_PAD_BSS ?= 176
+EC_EC_PAD_BSS ?= 172
 EC_LC_PAD ?= 214
 EC_LC_PAD_BSS ?= 0
 build/m68030/ecpgpad.o: FT_PAD = -DFT_PAD_NAME=ec_pg_pad -DFT_PAD_TEXT=$(EC_PG_PAD) -DFT_PAD_RO=$(EC_PG_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EC_PG_PAD_BSS)
@@ -343,9 +344,9 @@ RV_GIF_PAD_STR ?= 258
 build/m68030/cspad.o: FT_PAD = -DFT_PAD_NAME=cs_cv_pad -DFT_PAD_TEXT=$(CS_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 CS_PAD ?= 178
 build/m68030/ecpad.o: FT_PAD = -DFT_PAD_NAME=ec_cv_pad -DFT_PAD_TEXT=$(EC_PAD) -DFT_PAD_RO=$(EC_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EC_PAD_BSS)
-EC_PAD ?= 72
+EC_PAD ?= 48
 EC_PAD_RO ?= 130
-EC_PAD_BSS ?= 242
+EC_PAD_BSS ?= 240
 # CONVTEST.PRG's own, after common's nf.o: its converter code where 2.30 had it
 build/m68030/ctpad.o: FT_PAD = -DFT_PAD_NAME=ct_cv_pad -DFT_PAD_TEXT=$(CT_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 CT_PAD ?= 106
@@ -779,14 +780,14 @@ build/m68000/eppad_z.o: FT_PAD = -DFT_PAD_NAME=ep_pad_z -DFT_PAD_TEXT=0 -DFT_PAD
 build/m68000/eppad_y.o: FT_PAD = -DFT_PAD_NAME=ep_pad_y -DFT_PAD_TEXT=0 -DFT_PAD_RO=$(EP_PAD_Y_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 build/m68000/eppad_x.o: FT_PAD = -DFT_PAD_NAME=ep_pad_x -DFT_PAD_TEXT=$(EP_PAD_X) -DFT_PAD_RO=$(EP_PAD_X_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EP_PAD_X_BSS)
 EP_PAD_A ?= 108
-EP_PAD_A_RO ?= 154
+EP_PAD_A_RO ?= 176
 EP_PAD_A_DATA ?= 220
-EP_PAD_B ?= 180
-EP_PAD_C ?= 144
+EP_PAD_B ?= 156
+EP_PAD_C ?= 176
 EP_PAD_D ?= 382
 EP_PAD_E ?= 62
 EP_PAD_E_DATA ?= 242
-EP_PAD_F ?= 214
+EP_PAD_F ?= 160
 EP_PAD_G ?= 212
 EP_PAD_H ?= 372
 EP_PAD_H_RO ?= 238
@@ -811,13 +812,13 @@ EP_PAD_W_RO ?= 116
 EP_PAD_W_DATA ?= 0
 EP_PAD_X ?= 254
 EP_PAD_X_RO ?= 152
-EP_PAD_X_BSS ?= 218
-EP_PAD_Y_RO ?= 8
+EP_PAD_X_BSS ?= 216
+EP_PAD_Y_RO ?= 72
 EP_PAD_B_RO ?= 254
-EP_PAD_Z_RO ?= 232
+EP_PAD_Z_RO ?= 220
 EP_PAD_U_RO ?= 98
 EP_PAD_U_DATA ?= 230
-EP_PAD_B_BSS ?= 160
+EP_PAD_B_BSS ?= 156
 EP_PAD_J_BSS ?= 252
 EP_PAD_M_BSS ?= 240
 EP_PAD_M_RO ?= 244
@@ -924,6 +925,10 @@ hebfont-test: binary/EPDF.PRG binary/LAUNCH.PRG
 strip-test: binary/EPDF.PRG binary/LAUNCH.PRG build/econvert
 	python3 tests/hatari/strip.py build/strip
 .PHONY: strip-test
+# the log (6.5, D8; Erez, 22 Nov 2026): LOG=1 and Options > Write a log
+log-test: binary/EPDF.PRG binary/LAUNCH.PRG
+	python3 tests/hatari/logfile.py build/logfile ST:mono
+.PHONY: log-test
 
 # each file's opens and lookups from Hatari's GEMDOS trace, a 40-page book on
 # a 1 MB ST (the text goes to EPDF.TXC), against the job's budget (6.5)

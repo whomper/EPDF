@@ -79,7 +79,7 @@ gives way to you at once.
   Gateway is converted) and **Secure** (the Gateway's address and port: see
   [The Gateway](#the-gateway)). Font...: the system font in its two sizes, or
   a fixed-width GDOS font, kept in `EPDF.INF`. Open on the Gateway (ticked: see
-  [The Gateway](#the-gateway)).
+  [The Gateway](#the-gateway)). Write a log (ticked: see [The log](#the-log)).
 - **Help:** EPDF help (Help): this guide. Keys...: EPDF's keys.
 
 **Pictures** stand where they are on the page, as wide as the window lets them (a point of the
@@ -151,9 +151,20 @@ Each setting has a note above it in the file:
 - `GATEWAY=` 1 when **Options > Open on the Gateway** is ticked;
 - `GATE=` and `GATEPORT=` the Gateway's address and port (**Options > Settings...**, Secure);
 - `GWPAGES=`, `GWPHOTOS=`, `GWOPTIMISE=` and `GWPREVIEWS=` the **Gateway** page's choices, once
-  you change them.
+  you change them;
+- `LOG=` 1 when **Options > Write a log** is ticked.
 
 A line EPDF doesn't know is kept as it is.
+
+## The log
+
+When something doesn't work as it should, tick **Options > Write a log** (or Write a log on
+Settings' General page) and do it again. EPDF then writes what it does to `EPDF.LOG` beside
+`EPDF.PRG`: a line for each step, with the time, such as the document opened, each page read, a
+picture refused memory, a connection to the Gateway, and each page printed, with what went to the
+printer. Send that file with your report. The log keeps its last 256 to 512 KB: an older part is
+moved to `EPDF.OLD`. Untick it when you are done: it is off at first, and EPDF writes nothing while
+it is off. EConvert has the same, in its Options menu, writing `ECONVERT.LOG`.
 
 ## The Gateway
 

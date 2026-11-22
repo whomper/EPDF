@@ -58,6 +58,9 @@ static unsigned long t_page;
 static int page_permille;
 static void *rdoc;
 static char why[120];
+/* what went to the printer on the page (the log's "print-bands": Erez, 22
+   Nov 2026, EPDF 2.43 printed nothing on his printer where EMail does) */
+static long k_bands, k_ink;
 
 static int pr_turn(void)
 {
@@ -121,6 +124,13 @@ static void put_rows(int w, int x, long top, int rows, int nplanes, int npens, c
 		col[0] = 1;			/* black where a bit is set */
 		col[1] = 0;
 		vrt_cpyfm(pj.h, 1, pxy, &src, &dst, col);	/* MD_REPLACE */
+		k_bands++;
+		{
+			long i, nw = (long)wdw * rows;
+
+			for (i = 0; i < nw; i++)
+				k_ink += buf[i] != 0;	/* (words with ink) */
+		}
 		return;
 	}
 	/* a pen at a time: its pixels' mask, put down transparent in it */
@@ -152,6 +162,8 @@ static void put_rows(int w, int x, long top, int rows, int nplanes, int npens, c
 			col[0] = (short)p;
 			col[1] = 0;
 			vrt_cpyfm(pj.h, 2, pxy, &src, &dst, col);	/* MD_TRANS */
+			k_bands++;
+			k_ink++;		/* (a pen put down) */
 		}
 	}
 }
@@ -502,6 +514,7 @@ static void job(void)
 			cur_page = n;
 			page_permille = 0;
 			t_page = tos_ms();
+			k_bands = k_ink = 0;
 			r = drawn_mode ? page_drawn(n - 1) : page_text(n - 1);
 			if (r == -1) {
 				failed = 1;
@@ -523,6 +536,13 @@ static void job(void)
 				snprintf(a, sizeof a, "%ld", n);
 				snprintf(b, sizeof b, "%lu ms", tos_ms() - t_page);
 				log_event("printed-page", a, b);
+				if (drawn_mode) {
+					char pb[64];
+
+					snprintf(pb, sizeof pb, "%ld copies %ld ink %ld%s", n, k_bands, k_ink,
+						 c == pj.copies - 1 && n == pj.last ? " last" : "");
+					log_event("print-bands", pb, NULL);
+				}
 			}
 			pr_turn();
 		}
@@ -605,9 +625,17 @@ int prjob_begin(void)
 	{
 		char a[80];
 
+		char d[48];
+
 		snprintf(a, sizeof a, "%d %d um %d %d planes %d pages %d-%d copies %d %s", pj.w, pj.ht, pj.um_w, pj.um_h,
 			 pj.planes, pj.first, pj.last, pj.copies, drawn_mode ? "drawn" : "text");
-		log_event("print-open", a, NULL);
+		/* WDIALOG's choice (its PRN_SETTINGS: the driver's id at 32, the
+		   device at 128), or the default printer, device 21 */
+		if (pj.set)
+			snprintf(d, sizeof d, "driver %d %.32s", *(short *)((char *)pj.set + 32), (char *)pj.set + 128);
+		else
+			snprintf(d, sizeof d, "driver 21 (the default)");
+		log_event("print-open", a, d);
 	}
 	if (drawn_mode)
 		page_alone = (long)Malloc(-1L) < 2L * 1024 * 1024;

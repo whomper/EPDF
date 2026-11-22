@@ -32,6 +32,8 @@ int gate_dialog_tr(char *host, int hostcap, unsigned short *port, char *to, int 
 /* while the dialog is open: the address as typed so far (pick and
    languages ask the Gateway there; the caller's own only after OK) */
 const char *gate_dialog_host(void);
+/* Settings' "Write a log" tick (General): set before, taken after OK */
+extern short settings_log;
 /* Help > Keys... (EPDF) */
 void keys_dialog(void);
 
