@@ -890,16 +890,17 @@ lc = $(shell echo '$(notdir $(1))' | tr A-Z a-z)
 EC_DIST    := binary/ECONVERT.PRG
 EC_FONTS   := $(wildcard third_party/liberation/fonts/*.ttf) third_party/liberation/OFL.txt
 # the FireBee's package (epdf-x.y-firebee.zip): the same files and folders,
-# its programs and render.ovl the ColdFire's (binary/fb/); the loose files
-# beside the zips are the standard package's
+# its programs and render.ovl the ColdFire's (binary/fb/). A release is the
+# two zips only (Erez, 22 Nov 2026: "Remove all files from root and just
+# have two ZIP files, one for each platform")
 FB_OF = $(if $(filter binary/EPDF.PRG binary/render.ovl binary/ECONVERT.PRG,$(1)),binary/fb/$(notdir $(1)),$(1))
 dist: binary/EPDF.PRG binary/render.ovl binary/ECONVERT.PRG binary/fb/EPDF.PRG binary/fb/render.ovl binary/fb/ECONVERT.PRG help
 	rm -rf dist
 	mkdir -p dist/zip/icons dist/zip/econvert/fonts dist/fbzip/icons dist/fbzip/econvert/fonts
-	$(foreach f,$(DIST),cp $(f) dist/$(call lc,$(f)) && cp $(f) dist/zip/$(call lc,$(f)) && cp $(call FB_OF,$(f)) dist/fbzip/$(call lc,$(f)) &&) true
-	$(foreach f,$(ICONS),cp $(f) dist/$(call lc,$(f)) && cp $(f) dist/zip/icons/$(call lc,$(f)) && cp $(f) dist/fbzip/icons/$(call lc,$(f)) &&) true
-	$(foreach f,$(EC_DIST),cp $(f) dist/$(call lc,$(f)) && cp $(f) dist/zip/econvert/$(call lc,$(f)) && cp $(call FB_OF,$(f)) dist/fbzip/econvert/$(call lc,$(f)) &&) true
-	$(foreach f,$(EC_FONTS),cp $(f) dist/$(call lc,$(f)) && cp $(f) dist/zip/econvert/fonts/$(call lc,$(f)) && cp $(f) dist/fbzip/econvert/fonts/$(call lc,$(f)) &&) true
+	$(foreach f,$(DIST),cp $(f) dist/zip/$(call lc,$(f)) && cp $(call FB_OF,$(f)) dist/fbzip/$(call lc,$(f)) &&) true
+	$(foreach f,$(ICONS),cp $(f) dist/zip/icons/$(call lc,$(f)) && cp $(f) dist/fbzip/icons/$(call lc,$(f)) &&) true
+	$(foreach f,$(EC_DIST),cp $(f) dist/zip/econvert/$(call lc,$(f)) && cp $(call FB_OF,$(f)) dist/fbzip/econvert/$(call lc,$(f)) &&) true
+	$(foreach f,$(EC_FONTS),cp $(f) dist/zip/econvert/fonts/$(call lc,$(f)) && cp $(f) dist/fbzip/econvert/fonts/$(call lc,$(f)) &&) true
 	cd dist/zip && zip -q -9 -r ../epdf-$(VERSION_STR).zip .
 	cd dist/fbzip && zip -q -9 -r ../epdf-$(VERSION_STR)-firebee.zip .
 	rm -rf dist/zip dist/fbzip

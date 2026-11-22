@@ -40,8 +40,11 @@ it, prepares PDFs so that EPDF opens them fast, on the Atari itself or through t
 
 ## Getting started
 
-Take the latest release from the [Releases page](https://github.com/whomper/EPDF/releases). Its zip
-holds:
+Take the latest release from the [Releases page](https://github.com/whomper/EPDF/releases). It has
+two zips: `epdf-x.y.zip` for an ST, STE, TT or Falcon, and `epdf-x.y-firebee.zip` for a FireBee. Both
+hold the same files under the same names; in the FireBee's, the programs and `RENDER.OVL` are built
+for its ColdFire. A program started on the other kind of machine says which package to install.
+Each zip holds:
 
 | File | What it is |
 |---|---|
@@ -93,15 +96,15 @@ the Gateway in plain HTTP on the home network; it has no TLS of its own.
 sudo apt install gcc-m68k-linux-gnu python3   # Debian/Ubuntu; no MiNTLib needed
 make            # binary/EPDF.PRG; host tools in build/
 make test       # unit tests on this computer
-make dist       # dist/EPDF-x.y.zip, as on the Releases page
+make dist       # dist/epdf-x.y.zip and dist/epdf-x.y-firebee.zip, as on the Releases page
 make help HCP=/path/to/hcp   # EPDF.HYP from docs/GUIDE.md (hcp: common/tools/build-hcp.sh)
 make icons      # icons/, src/gem/icon*.h and src/econv/icon*.h from common/icons/EPDF.txt, EPDFDOC.txt
 ```
 
 `binary/` and `dist/` are what make builds; they are never committed, and a build changes no tracked
 file. A release: `tools/bump.py`, commit and push, then **Actions > Release > Run workflow** on `main`
-with what is new. The workflow tests, builds, tags the commit `vX.Y` and publishes the files and the
-zip on the Releases page. Builds in between are never handed out: to try a change, release it.
+with what is new. The workflow tests, builds, tags the commit `vX.Y` and publishes the two
+zips on the Releases page. Builds in between are never handed out: to try a change, release it.
 
 The measurement run that chose EPDF's design (stage 0) is in [docs/MEASUREMENT.md](docs/MEASUREMENT.md):
 `make measure` on this computer, `make measure-atari` and `tests/hatari/measure.py` in Hatari.
