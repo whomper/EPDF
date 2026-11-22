@@ -21,7 +21,8 @@ Then without WDIALOG (the hub, 21 Nov 2026: common 726554d, TOS's AES alone
 gave "Illegal AES function call"): setup 2, no dialog and no alert, page 2
 to the GDOS's default printer, device 21 pointed at META.SYS in the run's
 ASSIGN.SYS only, C:\\GEMFILE.GEM read back.
-On Falcon-4 also page 3 alone: its progressive JPEG left out for memory,
+On Falcon-4 pages 2 and 3 have pictures left out for memory (page 3 also
+alone: its progressive JPEG),
 the end's words "Printed without some pictures: not enough memory."
 (Erez, 21 Nov 2026).
 On a Falcon each page is drawn by render.ovl (the showcase: pictures,
@@ -233,15 +234,20 @@ def main(argv):
     erz.setup()
     bad = []
     for m in argv[1:] or [erz.MACHINE, "ST:mono"]:
+        # a 4 MB Falcon has no room for pages 2 and 3's pictures beside the
+        # printer's page: they are left out and the end says so
+        if m.startswith("Falcon-4"):
+            os.environ["PRINT_LEFT_OUT"] = "1"
         bad += run(argv[0], m, False)
         bad += run(argv[0], m, True)
         bad += run(argv[0], m, False, nowd=True)
         if m == "Falcon-4:256":
             # page 3 alone on a 4 MB Falcon: its progressive JPEG has no room
             # beside the printer's page, left out and said so
-            os.environ["PRINT_RANGE"], os.environ["PRINT_LEFT_OUT"] = "3 3", "1"
+            os.environ["PRINT_RANGE"] = "3 3"
             bad += run(argv[0] + "-p3", m, False)
-            del os.environ["PRINT_RANGE"], os.environ["PRINT_LEFT_OUT"]
+            del os.environ["PRINT_RANGE"]
+        os.environ.pop("PRINT_LEFT_OUT", None)
     return 1 if bad else 0
 
 
