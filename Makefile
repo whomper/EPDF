@@ -10,7 +10,7 @@
 #                   (and ECONVERT.txt when AERA-Atari has it)
 #   make gui-test   EPDF.PRG driven in Hatari (tests/hatari/gui.py)
 #   make cf-test    the FireBee's code and the shipped one's, byte for byte under qemu-m68k (tests/coldfire/run.py)
-#   make fb-test    EPDFFB.PRG and ECONVFB.PRG (the FireBee's, mkfirebee.py) and the 68000 files name each other (tests/hatari/fbalert.py)
+#   make fb-test    the FireBee package's programs (binary/fb/, mkfirebee.py) and the standard ones name each other (tests/hatari/fbalert.py)
 #   make rovl-test  render.ovl, the page as printed (stage 2), loaded and drawn in Hatari (tests/hatari/rovl.py)
 #   make files-test each file's opens on a 1 MB ST against the budget (tests/hatari/files.py, 6.5)
 #   big documents on a 1 MB ST: python3 tests/hatari/big.py WORK [NAME...] (the corpus)
@@ -533,7 +533,7 @@ binary/MEAS30F.PRG: build/m68030/measure.elf | binary
 	PRGFLAGS=7 python3 common/tools/elf2tos.py $< $@
 binary/FTTEST30F.PRG: build/m68030/fttest.elf | binary
 	PRGFLAGS=7 python3 common/tools/elf2tos.py $< $@
-atari: binary/EPDF.PRG binary/LAUNCH.PRG binary/ECONVERT.PRG binary/render.ovl binary/EPDFFB.PRG binary/ECONVFB.PRG
+atari: binary/EPDF.PRG binary/LAUNCH.PRG binary/ECONVERT.PRG binary/render.ovl binary/fb/EPDF.PRG binary/fb/ECONVERT.PRG binary/fb/render.ovl
 measure-atari: binary/MEASURE.PRG binary/MEAS30.PRG binary/MEAS30F.PRG
 fttest: binary/FTTEST.PRG binary/FTTEST30.PRG
 
@@ -564,16 +564,21 @@ binary/CONVTEST.PRG: $(CV_ATARI_OBJ) build/m68030cv/atari/convtest.o build/m6803
 	  build/m68030/crt0.o build/m68030/nf.o build/m68030/ctpad.o build/m68030cv/atari/convtest.o $(CV_ATARI_OBJ) -lgcc
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/m68030/convtest.elf $@
 
-# ---------------------------------------------------------------- the FireBee's editions
-# (Erez, 22 Nov 2026: "Make the other apps native on the FireBee too"; the
-# guidelines' 7.4): the same rules' commands made again for the ColdFire by
+# ---------------------------------------------------------------- the FireBee's package
+# (Erez, 22 Nov 2026: "Make the other apps native on the FireBee too", then
+# "two packages, one for FireBee and the other for standard ST ... Same
+# names"; the guidelines' 7.4): binary/fb/ holds EPDF.PRG, ECONVERT.PRG and
+# render.ovl, the same rules' commands made again for the ColdFire by
 # common/tools/mkfirebee.py (-mcpu=5475, cpucheck_cf.S as main, no EMAC, no
-# pads). Each names the other on the wrong machine (fbalert.c; tests/hatari/fbalert.py).
-binary/EPDFFB.PRG: binary/EPDF.PRG common/tools/mkfirebee.py
+# pads). Each package's program names the other package on the wrong machine
+# (fbalert.c; tests/hatari/fbalert.py).
+binary/fb/EPDF.PRG: binary/EPDF.PRG common/tools/mkfirebee.py
+	@mkdir -p binary/fb
 	python3 common/tools/mkfirebee.py --elf build/m68000/epdf.elf $@
-binary/ECONVFB.PRG: binary/ECONVERT.PRG common/tools/mkfirebee.py
+binary/fb/ECONVERT.PRG: binary/ECONVERT.PRG common/tools/mkfirebee.py
+	@mkdir -p binary/fb
 	python3 common/tools/mkfirebee.py --elf build/m68030/econvert.elf --outdir build/cfec/ $@
-fb-test: binary/EPDFFB.PRG binary/ECONVFB.PRG binary/LAUNCH.PRG
+fb-test: binary/fb/EPDF.PRG binary/fb/ECONVERT.PRG binary/LAUNCH.PRG
 	python3 tests/hatari/fbalert.py build/fbalert
 .PHONY: fb-test
 # the FireBee's code against the shipped one's under qemu-m68k (-cpu cfv4e):
@@ -608,8 +613,9 @@ binary/render.ovl: $(ROVL_OBJ) common/tlsovl/ovl.ld | binary
 	  -o build/m68030ovl/render.elf $(ROVL_OBJ) -lgcc
 	python3 common/tools/elf2tos.py build/m68030ovl/render.elf $@
 build/m68030ovl/render.elf: binary/render.ovl ;
-# RENDERFB.OVL, EPDFFB.PRG's: render.ovl's commands again for the ColdFire
-binary/RENDERFB.OVL: binary/render.ovl common/tools/mkfirebee.py
+# the FireBee package's render.ovl: its commands again for the ColdFire
+binary/fb/render.ovl: binary/render.ovl common/tools/mkfirebee.py
+	@mkdir -p binary/fb
 	python3 common/tools/mkfirebee.py --elf build/m68030ovl/render.elf --outdir build/cfovl/ --prgflags 0 $@
 
 # ROVLTEST.PRG (tests/hatari/rovl.py): render.ovl loaded and its pages drawn
@@ -661,7 +667,7 @@ build/m68030/ecavpad.o: FT_PAD = -DFT_PAD_NAME=ec_av_pad -DFT_PAD_TEXT=$(EC_AV_P
 EC_AV_PAD ?= 192
 build/m68030/eclastpad.o: FT_PAD = -DFT_PAD_NAME=ec_last_pad -DFT_PAD_TEXT=$(EC_LAST_PAD) -DFT_PAD_RO=$(EC_LAST_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=$(EC_LAST_PAD_DATA)
 EC_LAST_PAD ?= 60
-EC_LAST_PAD_RO ?= 160
+EC_LAST_PAD_RO ?= 144
 EC_LAST_PAD_DATA ?= 232
 binary/ECONVERT.PRG: $(EC_OBJS) $(EC_LAST) build/m68000ec/crt0_ec.o build/m68000/nf.o build/m68000ec/crash_s.o build/m68000ec/coro.o common/atari/link.ld | binary
 	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections $(FT_CV_KEEP) \
@@ -805,7 +811,7 @@ EP_PAD_X_BSS ?= 218
 EP_PAD_Y_RO ?= 8
 EP_PAD_B_RO ?= 254
 EP_PAD_Z_RO ?= 232
-EP_PAD_U_RO ?= 114
+EP_PAD_U_RO ?= 98
 EP_PAD_U_DATA ?= 230
 EP_PAD_B_BSS ?= 160
 EP_PAD_J_BSS ?= 252
@@ -875,24 +881,30 @@ binary/EPDF.HYP: docs/GUIDE.md tools/mkhelp.py VERSION docs/front.json docs/help
 # what a user needs, by name: the program, its guide, the licences and the icons.
 # Every file a release carries, and every folder in its zip, is named in
 # lowercase (guidelines 6.6: on MiNT's ext2 EPDF.INF and epdf.inf are two files)
-DIST  := binary/EPDF.PRG binary/EPDFFB.PRG binary/render.ovl binary/EPDF.HYP binary/EPDF.REF NOTICES.TXT
+DIST  := binary/EPDF.PRG binary/render.ovl binary/EPDF.HYP binary/EPDF.REF NOTICES.TXT
 ICONS := icons/EPDF.RSC icons/EPDFNV.RSC icons/EPDF.ICN icons/EPDFMK.ICN icons/EPDFDOC.RSC icons/EPDFDNV.RSC \
          icons/ECONVERT.RSC icons/ECONVNV.RSC icons/ECONVERT.ICN icons/ECONVMK.ICN
 lc = $(shell echo '$(notdir $(1))' | tr A-Z a-z)
 # EConvert (a 68030's): its program and the standard fonts it draws with
 # (third_party/liberation, the OFL's text beside them), in the zip's econvert folder
-EC_DIST    := binary/ECONVERT.PRG binary/ECONVFB.PRG
+EC_DIST    := binary/ECONVERT.PRG
 EC_FONTS   := $(wildcard third_party/liberation/fonts/*.ttf) third_party/liberation/OFL.txt
-dist: binary/EPDF.PRG binary/EPDFFB.PRG binary/render.ovl binary/ECONVERT.PRG binary/ECONVFB.PRG help
+# the FireBee's package (epdf-x.y-firebee.zip): the same files and folders,
+# its programs and render.ovl the ColdFire's (binary/fb/); the loose files
+# beside the zips are the standard package's
+FB_OF = $(if $(filter binary/EPDF.PRG binary/render.ovl binary/ECONVERT.PRG,$(1)),binary/fb/$(notdir $(1)),$(1))
+dist: binary/EPDF.PRG binary/render.ovl binary/ECONVERT.PRG binary/fb/EPDF.PRG binary/fb/render.ovl binary/fb/ECONVERT.PRG help
 	rm -rf dist
-	mkdir -p dist/zip/icons dist/zip/econvert/fonts
-	$(foreach f,$(DIST),cp $(f) dist/$(call lc,$(f)) && cp $(f) dist/zip/$(call lc,$(f)) &&) true
-	$(foreach f,$(ICONS),cp $(f) dist/$(call lc,$(f)) && cp $(f) dist/zip/icons/$(call lc,$(f)) &&) true
-	$(foreach f,$(EC_DIST),cp $(f) dist/$(call lc,$(f)) && cp $(f) dist/zip/econvert/$(call lc,$(f)) &&) true
-	$(foreach f,$(EC_FONTS),cp $(f) dist/$(call lc,$(f)) && cp $(f) dist/zip/econvert/fonts/$(call lc,$(f)) &&) true
+	mkdir -p dist/zip/icons dist/zip/econvert/fonts dist/fbzip/icons dist/fbzip/econvert/fonts
+	$(foreach f,$(DIST),cp $(f) dist/$(call lc,$(f)) && cp $(f) dist/zip/$(call lc,$(f)) && cp $(call FB_OF,$(f)) dist/fbzip/$(call lc,$(f)) &&) true
+	$(foreach f,$(ICONS),cp $(f) dist/$(call lc,$(f)) && cp $(f) dist/zip/icons/$(call lc,$(f)) && cp $(f) dist/fbzip/icons/$(call lc,$(f)) &&) true
+	$(foreach f,$(EC_DIST),cp $(f) dist/$(call lc,$(f)) && cp $(f) dist/zip/econvert/$(call lc,$(f)) && cp $(call FB_OF,$(f)) dist/fbzip/econvert/$(call lc,$(f)) &&) true
+	$(foreach f,$(EC_FONTS),cp $(f) dist/$(call lc,$(f)) && cp $(f) dist/zip/econvert/fonts/$(call lc,$(f)) && cp $(f) dist/fbzip/econvert/fonts/$(call lc,$(f)) &&) true
 	cd dist/zip && zip -q -9 -r ../epdf-$(VERSION_STR).zip .
-	rm -rf dist/zip
-	@up=$$(find dist -name '*[A-Z]*'; unzip -Z1 dist/epdf-$(VERSION_STR).zip | grep '[A-Z]'); \
+	cd dist/fbzip && zip -q -9 -r ../epdf-$(VERSION_STR)-firebee.zip .
+	rm -rf dist/zip dist/fbzip
+	@up=$$(find dist -name '*[A-Z]*'; unzip -Z1 dist/epdf-$(VERSION_STR).zip | grep '[A-Z]'; \
+	  unzip -Z1 dist/epdf-$(VERSION_STR)-firebee.zip | grep '[A-Z]'); \
 	  test -z "$$up" || { echo "dist: not lowercase: $$up"; exit 1; }
 
 gui-test: binary/EPDF.PRG binary/LAUNCH.PRG

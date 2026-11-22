@@ -2377,7 +2377,7 @@ int main(void)
 	   does a FireBee (_CF_: FireTOS says _CPU 60 for a ColdFire, which
 	   runs no 68030 code; as EPDF's rdraw_machine, 15 Nov 2026) */
 #ifdef __mcoldfire__
-	has_030 = 1;		/* ECONVFB.PRG: the converter is ColdFire code too */
+	has_030 = 1;		/* the FireBee package's: the converter is ColdFire code too */
 #else
 	has_030 = get_cookie(0x5F435055L) >= 20 && !get_cookie(0x5F43465FL);
 #endif

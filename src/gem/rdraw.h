@@ -10,18 +10,12 @@
 
 #include "rovl.h"
 
-/* where render.ovl is (set by the program: beside it); the FireBee's
-   edition (EPDFFB.PRG) loads its own ColdFire build, RENDERFB.OVL */
+/* where render.ovl is (set by the program: beside it); in the FireBee's
+   package (Erez, 22 Nov 2026: the same names) it is the ColdFire's build */
 extern char rdraw_path[200];
-#ifdef __mcoldfire__
-#define RDRAW_FILE "renderfb.ovl"
-#define RDRAW_NAME "RENDERFB.OVL"
-#define RDRAW_PRG "EPDFFB.PRG"
-#else
 #define RDRAW_FILE "render.ovl"
 #define RDRAW_NAME "RENDER.OVL"
 #define RDRAW_PRG "EPDF.PRG"
-#endif
 
 /* this machine can draw pages: a 68020 or better (an ST never loads it) */
 int rdraw_machine(void);

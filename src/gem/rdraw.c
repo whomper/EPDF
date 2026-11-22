@@ -31,7 +31,7 @@ static long resv_size;
 int rdraw_machine(void)
 {
 #ifdef __mcoldfire__
-	return 1;			/* EPDFFB.PRG: a FireBee, RENDERFB.OVL its ColdFire build */
+	return 1;			/* the FireBee package's: a FireBee, render.ovl its ColdFire build */
 #endif
 	return get_cookie(0x5F435055L) >= 20	/* _CPU: 0, 10, 20, 30, 40, 60 */
 	       && !get_cookie(0x5F43465FL);	/* _CF_ */

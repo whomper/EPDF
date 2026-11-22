@@ -11,7 +11,7 @@ The reader as EPDF.PRG has it (tools/textgold.c over src/ and common/src:
 every page's text, counts, pictures and every glyph) is built twice with
 tests/coldfire's C library (cflibc.c over Linux's calls, cfrt.S), the same
 sources and options but the CPU: for the 68000, as EPDF.PRG, and for the
-ColdFire, as EPDFFB.PRG (-mcpu=5475, as common/tools/mkfirebee.py makes
+ColdFire, as the FireBee package's EPDF.PRG (-mcpu=5475, as common/tools/mkfirebee.py makes
 it). Each runs under qemu-m68k (-cpu m68020 for the 68000 code, whose
 libgcc is 68020 code; -cpu cfv4e for the ColdFire's), on every PDF of the
 corpus (build/pdfs, tools/fetch-corpus.py) and its first N pages; their
@@ -21,7 +21,7 @@ well and its differences said, not failed (a host's long has 64 bits).
 The converter (tools/econvert.c: render.c, raster.c, quant.c, deflate.c,
 jpegenc.c, pic.c's JPEG, FreeType) the same, for the 68030 (-m68030
 -msoft-float, as ECONVERT.PRG and render.ovl) against the ColdFire
-(ECONVFB.PRG, RENDERFB.OVL): each converted file compared byte for byte.
+(the FireBee package's ECONVERT.PRG and render.ovl): each converted file compared byte for byte.
 """
 import glob
 import hashlib
@@ -47,7 +47,7 @@ COPT = ["-O2", "-fomit-frame-pointer", "-ffreestanding", "-fno-builtin", "-fno-p
 BUILDS = {  # name: CPU options, QEMU CPU
     "m68000": (["-m68000"], "m68020"),         # the reader as EPDF.PRG has it
     "m68030": (["-m68030", "-msoft-float"], "m68030"),  # the converter as ECONVERT.PRG and render.ovl
-    "cf": (["-mcpu=5475"], "cfv4e"),           # EPDFFB.PRG, ECONVFB.PRG, RENDERFB.OVL
+    "cf": (["-mcpu=5475"], "cfv4e"),           # the FireBee package's EPDF.PRG, ECONVERT.PRG, render.ovl
 }
 FT = "third_party/freetype"
 FT_SRC = [FT + "/src/" + s for s in ("base/ftbase.c", "base/ftinit.c", "base/ftdebug.c", "base/ftbbox.c",
