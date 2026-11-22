@@ -9,6 +9,7 @@
 #   make icons      icons/, src/gem/icon*.h and src/econv/icon*.h from common/icons/EPDF.txt, EPDFDOC.txt
 #                   (and ECONVERT.txt when AERA-Atari has it)
 #   make gui-test   EPDF.PRG driven in Hatari (tests/hatari/gui.py)
+#   make cf-test    the FireBee's code and the shipped one's, byte for byte under qemu-m68k (tests/coldfire/run.py)
 #   make fb-test    EPDFFB.PRG and ECONVFB.PRG (the FireBee's, mkfirebee.py) and the 68000 files name each other (tests/hatari/fbalert.py)
 #   make rovl-test  render.ovl, the page as printed (stage 2), loaded and drawn in Hatari (tests/hatari/rovl.py)
 #   make files-test each file's opens on a 1 MB ST against the budget (tests/hatari/files.py, 6.5)
@@ -575,6 +576,12 @@ binary/ECONVFB.PRG: binary/ECONVERT.PRG common/tools/mkfirebee.py
 fb-test: binary/EPDFFB.PRG binary/ECONVFB.PRG binary/LAUNCH.PRG
 	python3 tests/hatari/fbalert.py build/fbalert
 .PHONY: fb-test
+# the FireBee's code against the shipped one's under qemu-m68k (-cpu cfv4e):
+# the reader (68000) and the converter and render.c (68030) on the corpus,
+# byte for byte (tests/coldfire/run.py; build/pdfs: tools/fetch-corpus.py)
+cf-test: build/textgold build/econvert
+	python3 tests/coldfire/run.py build/cfq
+.PHONY: cf-test
 
 # ---------------------------------------------------------------- render.ovl (stage 2)
 # The page as printed, drawn on a Falcon or TT (src/rovl/rovl.h): the
