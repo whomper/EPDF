@@ -612,6 +612,18 @@ at first. This section is kept up to date: the build, the tests, what a release 
   (About 135 -> 142.5, Select all 45 -> 50 medians of six) cleared by the hub on gemprof (the same
   work to 0.1 ms). Next: 2.43, printing (branch print243: File > Print... ^P through NVDI, Erez's
   words of 21 Nov 2026), then common's about_prepare.
+  2.43 (22 Nov 2026; v2.43 on cadca7570's programs, 1b51bd8b5, the hub's go): File > Print... ^P through
+  NVDI or another GDOS (src/gem/prjob.c on common's print.c, 523d378), Erez's words of 21 Nov 2026: the
+  two alerts (as EMail's), "Printing page 3 of 12" with the family's bar, "Printed." / "Printing
+  stopped.", a picture left out for memory "Printed without some pictures: not enough memory." (the
+  shorter wording, his choice). An ST prints the text view's text; a 68020+ with render.ovl draws each
+  page (on under 2 MB free render.ovl's document closed after each page: Erez's "each page processed
+  independently"), the pictures paused first (doc_pics_pause, doc_print_room). Without WDIALOG print.c
+  opens device 21 itself; a paperless device (META.SYS, 0..32767) is held to A4. prjob.o and print.o
+  linked last; pads refitted against v2.42 (new eppad_z, eppad_u, bss pads on b and j). Rig
+  tests/hatari/print.py (Erez's configuration, ST:mono, Falcon:256 14 MB; pages 2-4, Esc, no WDIALOG,
+  page 3 alone on Falcon-4: its pictures left out and said so). A page with pictures takes 5-8 min on
+  a 4 MB Falcon, about 2 with 14 MB; an ST's text page 35 s. Next: FireBee native (#131), about_prepare.
   Next, after 2.36 (Erez, 17 Nov 2026: "go with Faster display as default and lets see that the UI is
   real enough"): the converter prepares pictures and whole pages in the screen's own colours, so EPDF
   only unpacks and copies (the rigs' logs: on Falcon-4:256 a photo 1.2 s decoding, 6.7 s fitting to
