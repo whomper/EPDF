@@ -917,7 +917,7 @@ gui-test: binary/EPDF.PRG binary/LAUNCH.PRG
 	python3 tests/hatari/gui.py ST:mono build/gui
 	python3 tests/hatari/fontdlg.py build/fontdlg ST:mono
 # Hebrew in a GDOS font (decided 17 Nov 2026: FreeMono's Hebrew wrong): FreeMono,
-# Courier 10 Pitch and the system font under NVDI on Erez's configuration
+# Courier 10 Pitch and the system font under NVDI on the reference configuration
 hebfont-test: binary/EPDF.PRG binary/LAUNCH.PRG
 	python3 tests/hatari/hebfont.py build/hebfont
 .PHONY: hebfont-test

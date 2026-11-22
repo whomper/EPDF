@@ -147,7 +147,7 @@ The Hatari rigs start the family's machines (`ST`, `ST-1`, `TT`, `Falcon`, `Falc
   Gateway's own `pdfgate.py`) and `translate_view.py`: the pages, converted PDFs, EConvert, the
   Gateway and translation.
 
-The Falcon of these rigs is Erez's configuration where the machine has the files: a 4 MB Falcon with
+The Falcon of these rigs is the reference configuration where the machine has the files: a 4 MB Falcon with
 TOS 4.04 and NVDI in 256 colours (`tests/hatari/erz.py`); else the same machine on EmuTOS.
 
 ## Licence

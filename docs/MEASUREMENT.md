@@ -17,7 +17,7 @@ are not measured at all.
 - **The text is checked against pdftotext** (poppler, reference only): F1 of the words per document
   0.82–1.0 (table at the end); Hebrew comes out in logical order.
 - **Machines** (`common/tools/machines.py`): `Falcon-4` (stock Falcon, 68030 at 16 MHz, 4 MB ST RAM, no
-  FPU), `ST` (68000 at 8 MHz, 4 MB), `ST-1` (1 MB), and `Falcon` (32 MHz, TT RAM; the nearest to Erez's
+  FPU), `ST` (68000 at 8 MHz, 4 MB), `ST-1` (1 MB), and `Falcon` (32 MHz, TT RAM; the nearest to the owner's
   DFB1 that Hatari does). Times are the 200 Hz clock with MFP timer C's counter: 26 µs steps.
 - **Corpus**: 25 PDFs (`tools/corpus.json`, fetched by `tools/fetch-corpus.py` into `build/pdfs`, sha256
   pinned, never committed): two novels, three manuals, two RFCs, two datasheets, a NASA magazine and two
@@ -102,7 +102,7 @@ pages" is the median (maximum) of the other sampled pages. "Heap" is common's `h
 - **Falcon at 32 MHz with TT RAM** (the DFB1's neighbour): 2.1–2.6 x faster than Falcon-4 on text
   pages (novel 0.41 s, RFC 0.48 s, manual 0.30 s). Pages with megabytes of Flate (maps, the photo
   page) were *slower* (0.4–0.7 x) in the TT RAM run; not explained (Hatari's TT RAM timing?), to be
-  checked on Erez's machine.
+  checked on the owner's machine.
 - **ST is 2.7–3.9 x slower than Falcon-4** on every page kind.
 - **ST-1 (1 MB)** reads every page, but the pages whose decoded content is bigger than the memory left
   are *cut short without an error* (the three maps and the photo page; heap peak 0.4 MB where the 4 MB
@@ -204,7 +204,7 @@ DFB1 brings the text pages near one second. Needs: a path/clip filler with the V
 ## Recommendation
 
 1. **Build stage 1 now**, on every machine, as the one 68000 PRG.
-2. **Stage 2 only for Falcon/TT**, with the progress-and-stop behaviour above; **Erez to decide** whether
+2. **Stage 2 only for Falcon/TT**, with the progress-and-stop behaviour above; **the owner to decide** whether
    a stock Falcon's 2–6 s a text page and 20–60 s scans/maps are acceptable, or whether full pages are for
    accelerated machines only (the text view stays for the rest).
 3. **Ask the hub** about: a faster inflate in `common/` (with a 68000 assembler core), SHA-512 on the 68000
@@ -224,7 +224,7 @@ python3 tests/hatari/imgbench.py Falcon-4 68030dsp 340            # pictures (ne
 python3 tests/hatari/profile.py Falcon-4 68000 novel-twocities=8  # cycle profile
 python3 tools/report.py                  # these tables
 ```
-The hub can rerun on Erez's TOS with the same commands (the images in `~/.aera/tos` are picked up by
+The hub can rerun on real TOS with the same commands (the images in `~/.aera/tos` are picked up by
 `machines.py`); for drawing and blitting a VDI rig is still to be written.
 
 ## Text against pdftotext

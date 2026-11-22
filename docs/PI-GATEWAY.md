@@ -14,7 +14,7 @@ The Gateway's side lives in AERA-Gateway (`gateway/pdfgate.py`, `pdf/`), its
 copy of the converter taken from this repository by its
 `tools/sync-pdf.sh` at a named commit. The protocol is EPDF's: a change to
 it is made here first, then in pdfgate. Everything the user sees says
-"Gateway" (guideline 7.3, Erez 7 Nov); "Raspberry Pi" only for the
+"Gateway" (guideline 7.3, decided 7 Nov); "Raspberry Pi" only for the
 hardware and its install steps.
 
 ## The exchange
@@ -45,12 +45,12 @@ EConvert's settings:
 | `column`        | 64 to 4096                  | `--column`           |
 | `aspect`        | 4 to 64                     | `--aspect`           |
 
-`thumbs=1` (EPDF 2.33, Erez 15 Nov 2026; AERA-Gateway 1.48 on, an older one refuses it): each page carries
+`thumbs=1` (EPDF 2.33, decided 15 Nov 2026; AERA-Gateway 1.48 on, an older one refuses it): each page carries
 its preview, its `/Thumb` (CONVERTED-PDF.md, "The page's preview"). EConvert sends it with **Page
 previews** ticked in its Settings, EPDF's Open on the Gateway while View > Page strip is ticked; without
 it the converted PDF has none.
 
-`pens`, `column` and `aspect` (EPDF 2.41, Faster display; Erez 17 Nov 2026): the Atari's screen's pens
+`pens`, `column` and `aspect` (EPDF 2.41, Faster display; decided 17 Nov 2026): the Atari's screen's pens
 by hardware register (register 0 first, red, green and blue as two hex digits each), the text view's
 column in pixels and a pixel's height to its width x 16 (16 square). Each picture in colour or grey then
 also carries a copy in those pens at the size the text view shows it (CONVERTED-PDF.md, "Faster
@@ -59,7 +59,7 @@ Gateway always, on a screen of 256 colours or fewer, with its window's column as
 them refuses `pens` (400, "no option pens"): EPDF and EConvert then ask again without, and the PDF comes
 as before.
 
-`translate` (Erez, 8 Nov 2026; EPDF with View > Translate ticked): the converted PDF also carries each
+`translate` (decided 8 Nov 2026; EPDF with View > Translate ticked): the converted PDF also carries each
 page's text translated into that language (CONVERTED-PDF.md, `/Translation`), translated on the
 Gateway's own machine by its translation service, so the text crosses the network once. Without
 `translate` the exchange is byte for byte as before. The 102 answers cover converting and translating

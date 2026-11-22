@@ -54,7 +54,7 @@ The bytes are in the Atari character set, exactly as EPDF's text store (`epdf.tx
 
 A drawing (a chart, a diagram, a map) is one picture. Its labels are in the picture, not in the text.
 
-### The translation (Erez, 8 Nov 2026)
+### The translation (decided 8 Nov 2026)
 
 When the Atari asked the Gateway for a translation (PI-GATEWAY.md's `translate`), each page keeps its
 `/Text` as it is and carries its translation beside it, so EPDF shows either without converting again:
@@ -84,7 +84,7 @@ wide, the height in proportion.
 | a scan in black and white (CCITT, JBIG2, 1 bit) | `/DeviceGray`, 1 bit a pixel, FlateDecode |
 | a drawing | `/Indexed /DeviceRGB 15` (16 colours, 4 bits a pixel) or `/DeviceGray` 1 bit when it has no colour, FlateDecode |
 
-### Faster display (EPDF 2.41; Erez, 17 Nov 2026)
+### Faster display (EPDF 2.41; decided 17 Nov 2026)
 
 With Faster display (EConvert's Settings, the default; the Gateway when EPDF or EConvert asks it with
 its screen's pens: PI-GATEWAY.md's `pens`), a picture in colour or grey also has a copy for one screen: `/AERAShown` in its dictionary refers
@@ -109,10 +109,10 @@ the page's shape (an A4 page 905 rows).
 EPDF shows them with View > Pages, one page after another. The menu item is greyed out for a file without
 them.
 
-### The page's preview (EPDF 2.33; Erez, 15 Nov 2026)
+### The page's preview (EPDF 2.33; decided 15 Nov 2026)
 
 When asked (EConvert's **Options > Settings... > General > Page previews**, `PREVIEWS=1` in its INF; the
-Gateway's `thumbs=1`; econvert's `--thumbs`; off by default, Erez, 15 Nov 2026: it costs a 4 MB Falcon about
+Gateway's `thumbs=1`; econvert's `--thumbs`; off by default, decided 15 Nov 2026: it costs a 4 MB Falcon about
 1.9 s a page), each page carries the PDF's own `/Thumb` (ISO 32000 12.3.4), whatever the whole-page setting: an image
 XObject 96 pixels wide, its height the page's shape (an A4 page 136 rows), `/Indexed /DeviceRGB 15` with TOS's
 16 colours, 4 bits a pixel, FlateDecode, about half a kilobyte. It is the page as the converter drew it, made 96
