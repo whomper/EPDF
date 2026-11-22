@@ -9,6 +9,7 @@
 #   make icons      icons/, src/gem/icon*.h and src/econv/icon*.h from common/icons/EPDF.txt, EPDFDOC.txt
 #                   (and ECONVERT.txt when AERA-Atari has it)
 #   make gui-test   EPDF.PRG driven in Hatari (tests/hatari/gui.py)
+#   make fb-test    EPDFFB.PRG and ECONVFB.PRG (the FireBee's, mkfirebee.py) and the 68000 files name each other (tests/hatari/fbalert.py)
 #   make rovl-test  render.ovl, the page as printed (stage 2), loaded and drawn in Hatari (tests/hatari/rovl.py)
 #   make files-test each file's opens on a 1 MB ST against the budget (tests/hatari/files.py, 6.5)
 #   big documents on a 1 MB ST: python3 tests/hatari/big.py WORK [NAME...] (the corpus)
@@ -262,7 +263,7 @@ comma := ,
 FT_CV_KEEP = $(addprefix -Wl$(comma)-u$(comma),FT_Matrix_Invert FT_Get_Next_Char FT_Vector_Transform \
                FT_Outline_Get_Orientation FT_Outline_EmboldenXY FT_Get_Advances FT_Get_Advance \
                ft_cv_pad ft_cv_pad_ro ft_cv_pad_str ft_cv_pad_data ft_cv_pad_init_ro lj_cv_pad pic_cv_pad cs_cv_pad ec_cv_pad ec_cv_pad_ro head_cv_pad ct_cv_pad \
-               dj_cv_pad ec_ab_pad ec_od_pad ec_cr_pad ec_pb_pad ec_pic_pad ec_if_pad ec_dl_pad ec_st_pad ec_tx_pad ec_tx_pad_ro ec_tx_pad_data ec_cvo_pad ec_cvo_pad_ro ec_cvo_pad_bss ec_pic_pad_ro ec_cr_pad_bss ec_cv_pad_bss ec_ec_pad ec_ec_pad_ro ec_ec_pad_data ec_ec_pad_bss ec_lc_pad ec_lc_pad_bss ec_pg_pad ec_pg_pad_ro ec_pg_pad_bss ct_cvo_pad ct_cvo_pad_ro ct_cvo_pad_bss ct_if_pad pic_cv_pad_ro ec_ab_pad_data ec_od_pad_data rv_pic_pad rv_gif_pad rv_gif_pad_ro rv_gif_pad_str)
+               dj_cv_pad ec_ab_pad ec_od_pad ec_cr_pad ec_pb_pad ec_pic_pad ec_if_pad ec_dl_pad ec_st_pad ec_tx_pad ec_tx_pad_ro ec_tx_pad_data ec_cvo_pad ec_cvo_pad_ro ec_cvo_pad_bss ec_pic_pad_ro ec_cr_pad_bss ec_cv_pad_bss ec_ec_pad ec_ec_pad_ro ec_ec_pad_data ec_ec_pad_bss ec_lc_pad ec_lc_pad_bss ec_pg_pad ec_pg_pad_ro ec_pg_pad_bss ct_cvo_pad ct_cvo_pad_ro ct_cvo_pad_bss ct_if_pad pic_cv_pad_ro ec_ab_pad_data ec_od_pad_data ec_av_pad ec_last_pad ec_last_pad_ro ec_last_pad_data rv_pic_pad rv_gif_pad rv_gif_pad_ro rv_gif_pad_str)
 FT_CV_OBJS = $(patsubst ft/autofit/autofit.o,ft/ftpad_af.o,$(patsubst ft/base/ftinit.o,ft/base/ftinit_noaf.o ft/ftpad_init.o,$(FT_OBJS)))
 build/m68030/ft/ftpad_af.o: FT_PAD = -DFT_PAD_NAME=ft_cv_pad -DFT_PAD_TEXT=68 -DFT_PAD_RO=36 -DFT_PAD_STR=18 -DFT_PAD_DATA=8
 build/m68030/ft/ftpad_init.o: FT_PAD = -DFT_PAD_NAME=ft_cv_pad_init -DFT_PAD_TEXT=0 -DFT_PAD_RO=4 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
@@ -355,7 +356,7 @@ build/m68030/headpad.o: FT_PAD = -DFT_PAD_NAME=head_cv_pad -DFT_PAD_TEXT=$(HEAD_
 HEAD_PAD ?= 220
 build/m68030/ctpad.o build/m68030/headpad.o build/m68030/ecpad.o build/m68030/cspad.o build/m68030/picpad.o build/m68030/ljpad.o build/m68030/ft/ftpad_af.o build/m68030/ft/ftpad_init.o \
 build/m68030/djpad.o build/m68030/ecabpad.o build/m68030/ecodpad.o build/m68030/eccrpad.o build/m68030/ecpbpad.o build/m68030/ecpicpad.o build/m68030/ecifpad.o build/m68030/ecdlpad.o build/m68030/ecstpad.o build/m68030/ectxpad.o build/m68030/eccvpad.o build/m68030/ececpad.o build/m68030/eclcpad.o build/m68030/ecpgpad.o build/m68030/ctcvpad.o build/m68030/ctifpad.o \
-build/m68030/rvpicpad.o build/m68030/rvgifpad.o: src/conv/ftpad.S Makefile | build/m68030
+build/m68030/rvpicpad.o build/m68030/rvgifpad.o build/m68030/eclastpad.o build/m68030/ecavpad.o: src/conv/ftpad.S Makefile | build/m68030
 	@mkdir -p $(dir $@)
 	$(XCC) -m68030 $(FT_PAD) -c -o $@ $<
 build/m68030/ft/base/ftinit_noaf.o: $(FT)/src/base/ftinit.c | build/m68030
@@ -531,7 +532,7 @@ binary/MEAS30F.PRG: build/m68030/measure.elf | binary
 	PRGFLAGS=7 python3 common/tools/elf2tos.py $< $@
 binary/FTTEST30F.PRG: build/m68030/fttest.elf | binary
 	PRGFLAGS=7 python3 common/tools/elf2tos.py $< $@
-atari: binary/EPDF.PRG binary/LAUNCH.PRG binary/ECONVERT.PRG binary/render.ovl
+atari: binary/EPDF.PRG binary/LAUNCH.PRG binary/ECONVERT.PRG binary/render.ovl binary/EPDFFB.PRG binary/ECONVFB.PRG
 measure-atari: binary/MEASURE.PRG binary/MEAS30.PRG binary/MEAS30F.PRG
 fttest: binary/FTTEST.PRG binary/FTTEST30.PRG
 
@@ -562,6 +563,19 @@ binary/CONVTEST.PRG: $(CV_ATARI_OBJ) build/m68030cv/atari/convtest.o build/m6803
 	  build/m68030/crt0.o build/m68030/nf.o build/m68030/ctpad.o build/m68030cv/atari/convtest.o $(CV_ATARI_OBJ) -lgcc
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/m68030/convtest.elf $@
 
+# ---------------------------------------------------------------- the FireBee's editions
+# (Erez, 22 Nov 2026: "Make the other apps native on the FireBee too"; the
+# guidelines' 7.4): the same rules' commands made again for the ColdFire by
+# common/tools/mkfirebee.py (-mcpu=5475, cpucheck_cf.S as main, no EMAC, no
+# pads). Each names the other on the wrong machine (fbalert.c; tests/hatari/fbalert.py).
+binary/EPDFFB.PRG: binary/EPDF.PRG common/tools/mkfirebee.py
+	python3 common/tools/mkfirebee.py --elf build/m68000/epdf.elf $@
+binary/ECONVFB.PRG: binary/ECONVERT.PRG common/tools/mkfirebee.py
+	python3 common/tools/mkfirebee.py --elf build/m68030/econvert.elf --outdir build/cfec/ $@
+fb-test: binary/EPDFFB.PRG binary/ECONVFB.PRG binary/LAUNCH.PRG
+	python3 tests/hatari/fbalert.py build/fbalert
+.PHONY: fb-test
+
 # ---------------------------------------------------------------- render.ovl (stage 2)
 # The page as printed, drawn on a Falcon or TT (src/rovl/rovl.h): the
 # renderer and the reader as CONVTEST.PRG has them, built for the 68030,
@@ -586,6 +600,10 @@ binary/render.ovl: $(ROVL_OBJ) common/tlsovl/ovl.ld | binary
 	  -Wl,--gc-sections $(FT_CV_KEEP) -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments \
 	  -o build/m68030ovl/render.elf $(ROVL_OBJ) -lgcc
 	python3 common/tools/elf2tos.py build/m68030ovl/render.elf $@
+build/m68030ovl/render.elf: binary/render.ovl ;
+# RENDERFB.OVL, EPDFFB.PRG's: render.ovl's commands again for the ColdFire
+binary/RENDERFB.OVL: binary/render.ovl common/tools/mkfirebee.py
+	python3 common/tools/mkfirebee.py --elf build/m68030ovl/render.elf --outdir build/cfovl/ --prgflags 0 $@
 
 # ROVLTEST.PRG (tests/hatari/rovl.py): render.ovl loaded and its pages drawn
 # as EPDF.PRG would (rdraw.c, the 68000 build), without EPDF's window
@@ -624,15 +642,26 @@ build/m68000ec/sting_s.o: common/atari/sting.S | build/m68000ec
 	$(XCC) -m68000 -c -o $@ $<
 build/m68000ec/crt0_ec.o: common/atari/crt0.S | build/m68000ec
 	$(XCC) -m68000 -DSTACK_SIZE=16384 -c -o $@ $<
-EC_OBJS = $(patsubst %/src/pigate.o,%/src/pigate.o build/m68030/ecpgpad.o,$(patsubst %/src/econv/econvert.o,%/src/econv/econvert.o build/m68030/ececpad.o,$(patsubst %/common/atari/libc.o,%/common/atari/libc.o build/m68030/eclcpad.o,$(patsubst %/common/ui/text.o,%/common/ui/text.o build/m68030/ectxpad.o,$(patsubst %/common/ui/dialog.o,%/common/ui/dialog.o build/m68030/ecdlpad.o,$(patsubst %/common/ui/settings.o,%/common/ui/settings.o build/m68030/ecstpad.o,$(patsubst %/common/atari/crash.o,%/common/atari/crash.o build/m68030/eccrpad.o,$(patsubst %/common/ui/progbar.o,%/common/ui/progbar.o build/m68030/ecpbpad.o,$(patsubst %/common/ui/offdraw.o,%/common/ui/offdraw.o build/m68030/ecodpad.o,$(patsubst %/common/ui/aboutbox.o,%/common/ui/aboutbox.o build/m68030/ecabpad.o,$(patsubst %.c,build/m68000ec/%.o,$(EC_GEM_SRC)))))))))))) build/m68000ec/version.o build/m68000ec/sting_s.o build/m68030/ecpad.o \
+EC_OBJS = $(patsubst %/common/ui/av.o,%/common/ui/av.o build/m68030/ecavpad.o,$(patsubst %/src/pigate.o,%/src/pigate.o build/m68030/ecpgpad.o,$(patsubst %/src/econv/econvert.o,%/src/econv/econvert.o build/m68030/ececpad.o,$(patsubst %/common/atari/libc.o,%/common/atari/libc.o build/m68030/eclcpad.o,$(patsubst %/common/ui/text.o,%/common/ui/text.o build/m68030/ectxpad.o,$(patsubst %/common/ui/dialog.o,%/common/ui/dialog.o build/m68030/ecdlpad.o,$(patsubst %/common/ui/settings.o,%/common/ui/settings.o build/m68030/ecstpad.o,$(patsubst %/common/atari/crash.o,%/common/atari/crash.o build/m68030/eccrpad.o,$(patsubst %/common/ui/progbar.o,%/common/ui/progbar.o build/m68030/ecpbpad.o,$(patsubst %/common/ui/offdraw.o,%/common/ui/offdraw.o build/m68030/ecodpad.o,$(patsubst %/common/ui/aboutbox.o,%/common/ui/aboutbox.o build/m68030/ecabpad.o,$(patsubst %.c,build/m68000ec/%.o,$(EC_GEM_SRC))))))))))))) build/m68000ec/version.o build/m68000ec/sting_s.o build/m68030/ecpad.o \
           $(call JB2ASM,$(patsubst %/src/conv/conv.o,%/src/conv/conv.o build/m68030/eccvpad.o,$(patsubst %/common/src/charset.o,%/common/src/charset.o build/m68030/cspad.o,$(patsubst %/common/src/pic.o,%/common/src/pic.o build/m68030/ecpicpad.o,$(patsubst %/jdcoefct.o,%/jdcoefct.o build/m68030/ljpad.o,$(addprefix build/m68030cv/,$(patsubst %.c,%.o,$(EC_CV_SRC)))))))) build/m68030/ecifpad.o build/m68030/inflate_fast.o \
           $(addprefix build/m68030/,$(FT_CV_OBJS))
 binary/ECONVERT.PRG: XCPU = -m68000
-binary/ECONVERT.PRG: $(EC_OBJS) build/m68000ec/crt0_ec.o build/m68000/nf.o build/m68000ec/crash_s.o build/m68000ec/coro.o common/atari/link.ld | binary
+# the two editions' alerts (common's cpucheck.c, fbalert.c), linked last
+# and a pad at the very end (2.44: after them), so the tables, the variables
+# and the bss start at 2.43's places
+EC_LAST = build/m68000ec/common/atari/cpucheck.o build/m68000ec/src/econv/fbalert.o build/m68030/eclastpad.o
+build/m68030/ecavpad.o: FT_PAD = -DFT_PAD_NAME=ec_av_pad -DFT_PAD_TEXT=$(EC_AV_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
+EC_AV_PAD ?= 192
+build/m68030/eclastpad.o: FT_PAD = -DFT_PAD_NAME=ec_last_pad -DFT_PAD_TEXT=$(EC_LAST_PAD) -DFT_PAD_RO=$(EC_LAST_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=$(EC_LAST_PAD_DATA)
+EC_LAST_PAD ?= 220
+EC_LAST_PAD_RO ?= 160
+EC_LAST_PAD_DATA ?= 232
+binary/ECONVERT.PRG: $(EC_OBJS) $(EC_LAST) build/m68000ec/crt0_ec.o build/m68000/nf.o build/m68000ec/crash_s.o build/m68000ec/coro.o common/atari/link.ld | binary
 	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections $(FT_CV_KEEP) \
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -Wl,-Map,build/m68030/econvert.elf.map -o build/m68030/econvert.elf \
-	  build/m68000ec/crt0_ec.o build/m68000/nf.o build/m68000ec/crash_s.o build/m68000ec/coro.o $(EC_OBJS) -lgcc
+	  build/m68000ec/crt0_ec.o build/m68000/nf.o build/m68000ec/crash_s.o build/m68000ec/coro.o $(EC_OBJS) $(EC_LAST) -lgcc
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/m68030/econvert.elf $@
+build/m68030/econvert.elf: binary/ECONVERT.PRG ;
 
 # ---------------------------------------------------------------- EPDF.PRG (the GEM program)
 # one build for every machine (68000); the text view of the pages
@@ -726,15 +755,18 @@ build/m68000/eppad_w.o: FT_PAD = -DFT_PAD_NAME=ep_pad_w -DFT_PAD_TEXT=$(EP_PAD_W
 # (linked last: the data's start and the bss's after what 2.43 added)
 build/m68000/eppad_u.o: FT_PAD = -DFT_PAD_NAME=ep_pad_u -DFT_PAD_TEXT=0 -DFT_PAD_RO=$(EP_PAD_U_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=$(EP_PAD_U_DATA)
 # (after menu.o: its strings grew in 2.43, the tables after it put back)
+# (2.44: after common's av.o, which grew, so text.o keeps its place)
+build/m68000/eppad_av.o: FT_PAD = -DFT_PAD_NAME=ep_pad_av -DFT_PAD_TEXT=$(EP_PAD_AV) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
+EP_PAD_AV ?= 246
 build/m68000/eppad_z.o: FT_PAD = -DFT_PAD_NAME=ep_pad_z -DFT_PAD_TEXT=0 -DFT_PAD_RO=$(EP_PAD_Z_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 build/m68000/eppad_y.o: FT_PAD = -DFT_PAD_NAME=ep_pad_y -DFT_PAD_TEXT=0 -DFT_PAD_RO=$(EP_PAD_Y_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 build/m68000/eppad_x.o: FT_PAD = -DFT_PAD_NAME=ep_pad_x -DFT_PAD_TEXT=$(EP_PAD_X) -DFT_PAD_RO=$(EP_PAD_X_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EP_PAD_X_BSS)
 EP_PAD_A ?= 108
-EP_PAD_A_RO ?= 94
+EP_PAD_A_RO ?= 56
 EP_PAD_A_DATA ?= 220
 EP_PAD_B ?= 180
 EP_PAD_C ?= 144
-EP_PAD_D ?= 388
+EP_PAD_D ?= 382
 EP_PAD_E ?= 62
 EP_PAD_E_DATA ?= 242
 EP_PAD_F ?= 214
@@ -766,8 +798,8 @@ EP_PAD_X_BSS ?= 218
 EP_PAD_Y_RO ?= 8
 EP_PAD_B_RO ?= 254
 EP_PAD_Z_RO ?= 232
-EP_PAD_U_RO ?= 202
-EP_PAD_U_DATA ?= 254
+EP_PAD_U_RO ?= 114
+EP_PAD_U_DATA ?= 230
 EP_PAD_B_BSS ?= 160
 EP_PAD_J_BSS ?= 252
 EP_PAD_M_BSS ?= 240
@@ -777,23 +809,26 @@ build/m68000/eppad_e.o build/m68000/eppad_f.o build/m68000/eppad_g.o build/m6800
 build/m68000/eppad_i.o build/m68000/eppad_j.o build/m68000/eppad_k.o build/m68000/eppad_l.o \
 build/m68000/eppad_m.o build/m68000/eppad_n.o build/m68000/eppad_o.o \
 build/m68000/eppad_p.o build/m68000/eppad_q.o build/m68000/eppad_r.o build/m68000/eppad_s.o \
-build/m68000/eppad_t.o build/m68000/eppad_v.o build/m68000/eppad_w.o build/m68000/eppad_x.o build/m68000/eppad_y.o build/m68000/eppad_z.o build/m68000/eppad_u.o: src/conv/ftpad.S Makefile | build/m68000
+build/m68000/eppad_t.o build/m68000/eppad_v.o build/m68000/eppad_w.o build/m68000/eppad_x.o build/m68000/eppad_y.o build/m68000/eppad_z.o build/m68000/eppad_u.o build/m68000/eppad_av.o: src/conv/ftpad.S Makefile | build/m68000
 	@mkdir -p $(dir $@)
 	$(XCC) -m68000 $(FT_PAD) -c -o $@ $<
-EP_KEEP = -Wl,-u,ep_pad_a -Wl,-u,ep_pad_a_data -Wl,-u,ep_pad_a_ro -Wl,-u,ep_pad_b -Wl,-u,ep_pad_c -Wl,-u,ep_pad_d -Wl,-u,ep_pad_e -Wl,-u,ep_pad_f -Wl,-u,ep_pad_g -Wl,-u,ep_pad_h -Wl,-u,ep_pad_h_ro -Wl,-u,ep_pad_i -Wl,-u,ep_pad_i_ro -Wl,-u,ep_pad_j -Wl,-u,ep_pad_k -Wl,-u,ep_pad_l -Wl,-u,ep_pad_l_data -Wl,-u,ep_pad_m -Wl,-u,ep_pad_n -Wl,-u,ep_pad_o -Wl,-u,ep_pad_p -Wl,-u,ep_pad_q -Wl,-u,ep_pad_r -Wl,-u,ep_pad_s -Wl,-u,ep_pad_t -Wl,-u,ep_pad_v -Wl,-u,ep_pad_w -Wl,-u,ep_pad_w_ro -Wl,-u,ep_pad_w_data -Wl,-u,ep_pad_e_data -Wl,-u,ep_pad_x -Wl,-u,ep_pad_x_ro -Wl,-u,ep_pad_r_ro -Wl,-u,ep_pad_y_ro -Wl,-u,ep_pad_m_bss -Wl,-u,ep_pad_m_ro -Wl,-u,ep_pad_x_bss -Wl,-u,ep_pad_b_ro -Wl,-u,ep_pad_z_ro -Wl,-u,ep_pad_u_ro -Wl,-u,ep_pad_u_data -Wl,-u,ep_pad_b_bss -Wl,-u,ep_pad_j_bss
+EP_KEEP = -Wl,-u,ep_pad_a -Wl,-u,ep_pad_a_data -Wl,-u,ep_pad_a_ro -Wl,-u,ep_pad_b -Wl,-u,ep_pad_c -Wl,-u,ep_pad_d -Wl,-u,ep_pad_e -Wl,-u,ep_pad_f -Wl,-u,ep_pad_g -Wl,-u,ep_pad_h -Wl,-u,ep_pad_h_ro -Wl,-u,ep_pad_i -Wl,-u,ep_pad_i_ro -Wl,-u,ep_pad_j -Wl,-u,ep_pad_k -Wl,-u,ep_pad_l -Wl,-u,ep_pad_l_data -Wl,-u,ep_pad_m -Wl,-u,ep_pad_n -Wl,-u,ep_pad_o -Wl,-u,ep_pad_p -Wl,-u,ep_pad_q -Wl,-u,ep_pad_r -Wl,-u,ep_pad_s -Wl,-u,ep_pad_t -Wl,-u,ep_pad_v -Wl,-u,ep_pad_w -Wl,-u,ep_pad_w_ro -Wl,-u,ep_pad_w_data -Wl,-u,ep_pad_e_data -Wl,-u,ep_pad_x -Wl,-u,ep_pad_x_ro -Wl,-u,ep_pad_r_ro -Wl,-u,ep_pad_y_ro -Wl,-u,ep_pad_m_bss -Wl,-u,ep_pad_m_ro -Wl,-u,ep_pad_x_bss -Wl,-u,ep_pad_b_ro -Wl,-u,ep_pad_z_ro -Wl,-u,ep_pad_u_ro -Wl,-u,ep_pad_u_data -Wl,-u,ep_pad_b_bss -Wl,-u,ep_pad_j_bss -Wl,-u,ep_pad_av
 # what came after 2.42 (printing: 2.43) linked last, so nothing that was
 # there moves off its cache places (text, its tables, its variables)
-EPDF_LAST = build/m68000/src/gem/prjob.o build/m68000/common/ui/print.o build/m68000/eppad_u.o
+EPDF_LAST = build/m68000/src/gem/prjob.o build/m68000/common/ui/print.o \
+  build/m68000/common/atari/cpucheck.o build/m68000/src/gem/fbalert.o build/m68000/eppad_u.o
 EPDF_ORDER0 = $(patsubst %/src/gem/epdf.o,%/src/gem/epdf.o build/m68000/eppad_b.o,$(patsubst %/common/src/conn.o,%/common/src/conn.o build/m68000/eppad_c.o,$(patsubst %/common/src/ovl.o,%/common/src/ovl.o build/m68000/eppad_d.o,$(EPDF_HOT) $(filter-out $(EPDF_HOT) $(EPDF_LAST),$(EPDF_OBJS)) $(EPDF_LAST))))
 EPDF_ORDER1 = $(patsubst %/src/gem/pics.o,%/src/gem/pics.o build/m68000/eppad_m.o,$(patsubst %/src/gem/doc.o,%/src/gem/doc.o build/m68000/eppad_j.o,$(patsubst %/src/pdfimg.o,%/src/pdfimg.o build/m68000/eppad_h.o,$(patsubst %/src/jpx.o,%/src/jpx.o build/m68000/eppad_i.o,$(EPDF_ORDER0)))))
 EPDF_ORDER2 = $(patsubst %/src/pigate.o,%/src/pigate.o build/m68000/eppad_x.o,$(patsubst %/common/ui/text.o,%/common/ui/text.o build/m68000/eppad_w.o,$(patsubst %/common/atari/gem.o,%/common/atari/gem.o build/m68000/eppad_n.o,$(patsubst %/common/ui/dialog.o,%/common/ui/dialog.o build/m68000/eppad_v.o,$(patsubst %/common/ui/textcells.o,%/common/ui/textcells.o build/m68000/eppad_o.o,$(patsubst %/common/atari/net_tos.o,%/common/atari/net_tos.o build/m68000/eppad_p.o,$(patsubst %/src/gem/font.o,%/src/gem/font.o build/m68000/eppad_q.o,$(EPDF_ORDER3))))))))
 EPDF_ORDER3 = $(patsubst %/src/gem/menu.o,%/src/gem/menu.o build/m68000/eppad_z.o,$(patsubst %/src/pdftext.o,%/src/pdftext.o build/m68000/eppad_y.o,$(patsubst %/common/ui/dlgbuild.o,%/common/ui/dlgbuild.o build/m68000/eppad_r.o,$(patsubst %/common/atari/libc.o,%/common/atari/libc.o build/m68000/eppad_t.o,$(patsubst %/common/atari/tos.o,%/common/atari/tos.o build/m68000/eppad_s.o,$(EPDF_ORDER1))))))
-EPDF_ORDER = $(patsubst %/common/atari/crash.o,%/common/atari/crash.o build/m68000/eppad_k.o,$(patsubst %/common/ui/progbar.o,%/common/ui/progbar.o build/m68000/eppad_l.o,$(patsubst %/common/src/pic.o,%/common/src/pic.o build/m68000/eppad_g.o,$(patsubst %/common/ui/aboutbox.o,%/common/ui/aboutbox.o build/m68000/eppad_e.o,$(patsubst %/common/atari/dspjpeg.o,%/common/atari/dspjpeg.o build/m68000/eppad_f.o,$(EPDF_ORDER2))))))
+EPDF_ORDER = $(patsubst %/common/ui/av.o,%/common/ui/av.o build/m68000/eppad_av.o,$(patsubst %/common/atari/crash.o,%/common/atari/crash.o build/m68000/eppad_k.o,$(patsubst %/common/ui/progbar.o,%/common/ui/progbar.o build/m68000/eppad_l.o,$(patsubst %/common/src/pic.o,%/common/src/pic.o build/m68000/eppad_g.o,$(patsubst %/common/ui/aboutbox.o,%/common/ui/aboutbox.o build/m68000/eppad_e.o,$(patsubst %/common/atari/dspjpeg.o,%/common/atari/dspjpeg.o build/m68000/eppad_f.o,$(EPDF_ORDER2)))))))
 binary/EPDF.PRG: $(EPDF_ORDER) build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/eppad_a.o build/m68000/crash_s.o build/m68000/coro.o common/atari/link.ld | binary
 	$(XCC) $(XCPU) -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections $(EP_KEEP) \
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -Wl,-Map,build/m68000/epdf.elf.map -o build/m68000/epdf.elf \
 	  build/m68000/crt0_epdf.o build/m68000/nf.o build/m68000/eppad_a.o build/m68000/crash_s.o build/m68000/coro.o $(filter-out %/crt0_epdf.o %/nf.o %/eppad_a.o %/crash_s.o %/coro.o %/link.ld,$(filter build/%,$^)) -lgcc
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/m68000/epdf.elf $@
+# the ELF by name, for common/tools/mkfirebee.py (make -n -B gives its link)
+build/m68000/epdf.elf: binary/EPDF.PRG ;
 
 # starts a program with a command line, for the rigs (atari/launch.c)
 binary/LAUNCH.PRG: build/m68000/atari/launch.o build/m68000/common/atari/gem.o build/m68000/common/atari/tos.o build/m68000/common/atari/libc.o build/m68000/crt0.o build/m68000/nf.o common/atari/link.ld | binary
@@ -833,15 +868,15 @@ binary/EPDF.HYP: docs/GUIDE.md tools/mkhelp.py VERSION docs/front.json docs/help
 # what a user needs, by name: the program, its guide, the licences and the icons.
 # Every file a release carries, and every folder in its zip, is named in
 # lowercase (guidelines 6.6: on MiNT's ext2 EPDF.INF and epdf.inf are two files)
-DIST  := binary/EPDF.PRG binary/render.ovl binary/EPDF.HYP binary/EPDF.REF NOTICES.TXT
+DIST  := binary/EPDF.PRG binary/EPDFFB.PRG binary/render.ovl binary/EPDF.HYP binary/EPDF.REF NOTICES.TXT
 ICONS := icons/EPDF.RSC icons/EPDFNV.RSC icons/EPDF.ICN icons/EPDFMK.ICN icons/EPDFDOC.RSC icons/EPDFDNV.RSC \
          icons/ECONVERT.RSC icons/ECONVNV.RSC icons/ECONVERT.ICN icons/ECONVMK.ICN
 lc = $(shell echo '$(notdir $(1))' | tr A-Z a-z)
 # EConvert (a 68030's): its program and the standard fonts it draws with
 # (third_party/liberation, the OFL's text beside them), in the zip's econvert folder
-EC_DIST    := binary/ECONVERT.PRG
+EC_DIST    := binary/ECONVERT.PRG binary/ECONVFB.PRG
 EC_FONTS   := $(wildcard third_party/liberation/fonts/*.ttf) third_party/liberation/OFL.txt
-dist: binary/EPDF.PRG binary/render.ovl binary/ECONVERT.PRG help
+dist: binary/EPDF.PRG binary/EPDFFB.PRG binary/render.ovl binary/ECONVERT.PRG binary/ECONVFB.PRG help
 	rm -rf dist
 	mkdir -p dist/zip/icons dist/zip/econvert/fonts
 	$(foreach f,$(DIST),cp $(f) dist/$(call lc,$(f)) && cp $(f) dist/zip/$(call lc,$(f)) &&) true
@@ -935,13 +970,13 @@ speed-test: build/aprof/EPDF.PRG binary/LAUNCH.PRG
 build/aprof/gem00ec.o: common/atari/gem.c $(HDRS) | build
 	mkdir -p build/aprof
 	$(XCC) $(XFLAGS) -m68000 -DDLG_CLICK -DAERA_NO_FLOAT -DAES_PROFILE=20 -c -o $@ $<
-build/aprof/econvert.elf: binary/ECONVERT.PRG build/aprof/gem00ec.o build/aprof/nfon.o common/tools/profpad.py common/atari/codepad.S
+build/aprof/econvert.elf: binary/ECONVERT.PRG $(EC_LAST) build/aprof/gem00ec.o build/aprof/nfon.o common/tools/profpad.py common/atari/codepad.S
 	python3 common/tools/profpad.py --ship build/m68030/econvert.elf --out $@ --cpu=-m68000 --dir build/aprof/padsec \
 	  --exclude build/m68000ec/common/atari/gem.o --exclude build/aprof/gem00ec.o --exclude build/aprof/nfon.o -- \
 	  $(XCC) -m68000 -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections $(FT_CV_KEEP) \
 	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments \
 	  build/m68000ec/crt0_ec.o build/m68000/nf.o build/m68000ec/crash_s.o build/m68000ec/coro.o \
-	  $(patsubst build/m68000ec/common/atari/gem.o,build/aprof/gem00ec.o,$(EC_OBJS)) \
+	  $(patsubst build/m68000ec/common/atari/gem.o,build/aprof/gem00ec.o,$(EC_OBJS)) $(EC_LAST) \
 	  build/aprof/nfon.o -lgcc
 build/aprof/ECONVERT.PRG: build/aprof/econvert.elf
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/aprof/econvert.elf $@

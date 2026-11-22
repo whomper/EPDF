@@ -415,6 +415,13 @@ static int maybe_rtl(const char *s, short n)
 
 	if (n <= 0)
 		return 0;
+#ifdef __mcoldfire__
+	(void)f;
+	while (n-- > 0)
+		if ((unsigned char)*s++ > 0xC1)
+			return 1;
+	return 0;
+#else
 	__asm__("subq.w #1,%1\n\t"
 		"moveq #-63,%%d1\n"		/* 0xC1 */
 		"1:\tcmp.b (%0)+,%%d1\n\t"
@@ -424,6 +431,7 @@ static int maybe_rtl(const char *s, short n)
 		:
 		: "d1", "cc");
 	return f != 0;
+#endif
 }
 
 static int row_visual(const char *s, long n, const char **vis, short *x)

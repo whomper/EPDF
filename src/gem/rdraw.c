@@ -13,7 +13,7 @@
 #include "ovl.h"
 #include "rdraw.h"
 
-char rdraw_path[200] = "render.ovl";
+char rdraw_path[200] = RDRAW_FILE;
 
 static const ROVL *ov;
 static void *image;
@@ -30,6 +30,9 @@ static long resv_size;
    page) */
 int rdraw_machine(void)
 {
+#ifdef __mcoldfire__
+	return 1;			/* EPDFFB.PRG: a FireBee, RENDERFB.OVL its ColdFire build */
+#endif
 	return get_cookie(0x5F435055L) >= 20	/* _CPU: 0, 10, 20, 30, 40, 60 */
 	       && !get_cookie(0x5F43465FL);	/* _CF_ */
 }
@@ -55,7 +58,7 @@ int rdraw_load(int (*turn)(void), char *err, int errlen)
 	image = resv ? ovl_load_into(rdraw_path, resv, resv_size, &taken, err, errlen) : ovl_load(rdraw_path, &taken, err, errlen);
 	if (!image) {
 		if (pf_size(rdraw_path) < 0)
-			snprintf(err, (size_t)errlen, "RENDER.OVL is missing: copy it from EPDF's release, beside EPDF.PRG");
+			snprintf(err, (size_t)errlen, RDRAW_NAME " is missing: copy it from EPDF's release, beside " RDRAW_PRG);
 		return 0;
 	}
 	ovl_flush();			/* its code was written as data */
@@ -66,12 +69,12 @@ int rdraw_load(int (*turn)(void), char *err, int errlen)
 	host.realloc = realloc;
 	host.free = free;
 	if (o->magic != ROVL_MAGIC || o->size < (short)sizeof(ROVL)) {
-		snprintf(err, (size_t)errlen, "RENDER.OVL is damaged: copy it again from EPDF's release");
+		snprintf(err, (size_t)errlen, RDRAW_NAME " is damaged: copy it again from EPDF's release");
 		rdraw_unload();
 		return 0;
 	}
 	if (o->major != ROVL_MAJOR || !o->init(&host)) {
-		snprintf(err, (size_t)errlen, "RENDER.OVL %.7s doesn't suit this EPDF: take the one from its release",
+		snprintf(err, (size_t)errlen, RDRAW_NAME " %.7s doesn't suit this EPDF: take the one from its release",
 			 o->version);
 		rdraw_unload();
 		return 0;

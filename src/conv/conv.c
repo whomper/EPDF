@@ -302,7 +302,7 @@ static int __attribute__((noinline)) grey_test(const uint16_t *px, long n, long 
 	VPAD(VPAD_G);
 	for (i0 = 0; i0 < n && all; i0 += GREY_PX) {
 		long e = n - i0 > GREY_PX ? i0 + GREY_PX : n;
-#if defined(__m68k__) || defined(__mc68000__)
+#if (defined(__m68k__) || defined(__mc68000__)) && !defined(__mcoldfire__)
 		/* 2.33's loop as its compiler made it, instruction for
 		   instruction (its store to the stack included): on a 68030
 		   it stays in the instruction cache where every loop compiled

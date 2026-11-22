@@ -2335,6 +2335,10 @@ static void crash_quit(const char *what)
 	appl_exit();
 }
 
+/* main to the compiler (its code as before), app_main to the linker: common's
+   cpucheck.c (cpucheck_cf.S in the FireBee's edition) is the program's main
+   and calls this after its check (fbalert.c's alerts) */
+int main(void) __asm__("app_main");
 int main(void)
 {
 	short work_out[57], msg[8], d, x, y, w, h;
@@ -2372,7 +2376,11 @@ int main(void)
 	   converter is built for the 68030: Makefile, build/m68030cv), and so
 	   does a FireBee (_CF_: FireTOS says _CPU 60 for a ColdFire, which
 	   runs no 68030 code; as EPDF's rdraw_machine, 15 Nov 2026) */
+#ifdef __mcoldfire__
+	has_030 = 1;		/* ECONVFB.PRG: the converter is ColdFire code too */
+#else
 	has_030 = get_cookie(0x5F435055L) >= 20 && !get_cookie(0x5F43465FL);
+#endif
 	if (!screen_check("EConvert", scr_w)) {
 		v_clsvwk(vdi_h);
 		appl_exit();

@@ -1609,6 +1609,10 @@ static int read_on(void)
 	return 1;
 }
 
+/* main to the compiler (its code as before), app_main to the linker: common's
+   cpucheck.c (cpucheck_cf.S in the FireBee's edition) is the program's main
+   and calls this after its check (fbalert.c's alerts) */
+int main(void) __asm__("app_main");
 int main(void)
 {
 	short work_out[57], msg[8], d, x = 0, y = 0, w = 0, h = 0;
@@ -1667,7 +1671,7 @@ int main(void)
 	gw_set_temp_dir(start_dir);
 	has_menu_states = menu_states;
 	/* stage 2: render.ovl and the standard fonts beside the program */
-	path_join(rdraw_path, sizeof rdraw_path, start_dir, "render.ovl");
+	path_join(rdraw_path, sizeof rdraw_path, start_dir, RDRAW_FILE);
 	path_join(doc_font_dir, sizeof doc_font_dir, start_dir, "fonts");
 	if (rdraw_machine()) {
 		/* (else EConvert's, as the release's zip carries them:

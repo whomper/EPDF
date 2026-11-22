@@ -2324,7 +2324,7 @@ static void ccls_init(void)
    a 68000, where the C's loop with its bound test was some 48 */
 static inline const unsigned char *run_of(const unsigned char *q, const unsigned char *tab)
 {
-#if defined(__mc68000__) || defined(__m68k__)
+#if (defined(__mc68000__) || defined(__m68k__)) && !defined(__mcoldfire__)
 	__asm__("moveq #0,%%d0\n"
 		"1:\tmove.b (%0)+,%%d0\n\t"
 		"tst.b 0(%1,%%d0.w)\n\t"
