@@ -190,6 +190,15 @@ void *malloc(size_t n)
 		b++;
 	if (b >= 31)
 		return NULL;
+	if (b >= 20) {			/* a megabyte or more: its own mapping, unmapped when freed */
+		long args[6] = { 0, (long)((size_t)1 << b), 3, 0x22, -1, 0 };	/* PROT_READ|WRITE, MAP_PRIVATE|ANON */
+		long r = sc(90, (long)args, 0, 0);	/* old_mmap: its arguments in a block */
+		if (r < 0 && r > -4096)
+			return NULL;
+		p = (long *)r;
+		p[0] = b;
+		return p + 2;
+	}
 	if (bins[b]) {
 		p = bins[b];
 		bins[b] = *(void **)p;
@@ -206,6 +215,10 @@ void free(void *ptr)
 	if (!ptr)
 		return;
 	p = (long *)ptr - 2;
+	if (p[0] >= 20) {
+		sc(91, (long)p, (long)((size_t)1 << p[0]), 0);	/* munmap */
+		return;
+	}
 	*(void **)p = bins[p[0]];
 	bins[p[0]] = p;
 }

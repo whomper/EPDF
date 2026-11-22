@@ -660,7 +660,7 @@ EC_LAST = build/m68000ec/common/atari/cpucheck.o build/m68000ec/src/econv/fbaler
 build/m68030/ecavpad.o: FT_PAD = -DFT_PAD_NAME=ec_av_pad -DFT_PAD_TEXT=$(EC_AV_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 EC_AV_PAD ?= 192
 build/m68030/eclastpad.o: FT_PAD = -DFT_PAD_NAME=ec_last_pad -DFT_PAD_TEXT=$(EC_LAST_PAD) -DFT_PAD_RO=$(EC_LAST_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=$(EC_LAST_PAD_DATA)
-EC_LAST_PAD ?= 220
+EC_LAST_PAD ?= 60
 EC_LAST_PAD_RO ?= 160
 EC_LAST_PAD_DATA ?= 232
 binary/ECONVERT.PRG: $(EC_OBJS) $(EC_LAST) build/m68000ec/crt0_ec.o build/m68000/nf.o build/m68000ec/crash_s.o build/m68000ec/coro.o common/atari/link.ld | binary
@@ -769,7 +769,7 @@ build/m68000/eppad_z.o: FT_PAD = -DFT_PAD_NAME=ep_pad_z -DFT_PAD_TEXT=0 -DFT_PAD
 build/m68000/eppad_y.o: FT_PAD = -DFT_PAD_NAME=ep_pad_y -DFT_PAD_TEXT=0 -DFT_PAD_RO=$(EP_PAD_Y_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 build/m68000/eppad_x.o: FT_PAD = -DFT_PAD_NAME=ep_pad_x -DFT_PAD_TEXT=$(EP_PAD_X) -DFT_PAD_RO=$(EP_PAD_X_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EP_PAD_X_BSS)
 EP_PAD_A ?= 108
-EP_PAD_A_RO ?= 56
+EP_PAD_A_RO ?= 154
 EP_PAD_A_DATA ?= 220
 EP_PAD_B ?= 180
 EP_PAD_C ?= 144
