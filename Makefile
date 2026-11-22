@@ -211,7 +211,7 @@ $(eval $(call ATARI_BUILD,m68000ec))
 OBJS = $(patsubst %.c,%.o,$(ATARI_SRC))
 # the reading's hot loops, linked first after the start-up code, so their
 # place in a 68030's cache doesn't move when other code grows (the
-# guidelines' Speed, link order: Erez, 13 Nov 2026). show_text and the
+# guidelines' Speed, link order: decided 13 Nov 2026). show_text and the
 # content loop, the parser, inflate.
 HOT_OBJS = src/pdftext.o src/pdfobj.o common/src/inflate.o
 binary:
@@ -570,7 +570,7 @@ binary/CONVTEST.PRG: $(CV_ATARI_OBJ) build/m68030cv/atari/convtest.o build/m6803
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/m68030/convtest.elf $@
 
 # ---------------------------------------------------------------- the FireBee's package
-# (Erez, 22 Nov 2026: "Make the other apps native on the FireBee too", then
+# (decided 22 Nov 2026: "Make the other apps native on the FireBee too", then
 # "two packages, one for FireBee and the other for standard ST ... Same
 # names"; the guidelines' 7.4): binary/fb/ holds EPDF.PRG, ECONVERT.PRG and
 # render.ovl, the same rules' commands made again for the ColdFire by
@@ -634,7 +634,7 @@ binary/ROVLTEST.PRG: $(ROVLT_OBJ) build/m68000/crt0.o build/m68000/nf.o common/a
 	python3 common/tools/elf2tos.py build/m68000/rovltest.elf $@
 
 # ---------------------------------------------------------------- ECONVERT.PRG (the converter's window)
-# One program for every machine (Erez, 7 Nov 2026: Gateway mode on an ST
+# One program for every machine (decided 7 Nov 2026: Gateway mode on an ST
 # too): its window, files and the Gateway's exchange built for the 68000
 # (build/m68000ec), the converter for the 68030 (build/m68030cv) as before,
 # so a Falcon's own conversions lose nothing (a 68000 converter: the test
@@ -896,7 +896,7 @@ EC_DIST    := binary/ECONVERT.PRG
 EC_FONTS   := $(wildcard third_party/liberation/fonts/*.ttf) third_party/liberation/OFL.txt
 # the FireBee's package (epdf-x.y-firebee.zip): the same files and folders,
 # its programs and render.ovl the ColdFire's (binary/fb/). A release is the
-# two zips only (Erez, 22 Nov 2026: "Remove all files from root and just
+# two zips only (decided 22 Nov 2026: "Remove all files from root and just
 # have two ZIP files, one for each platform")
 FB_OF = $(if $(filter binary/EPDF.PRG binary/render.ovl binary/ECONVERT.PRG,$(1)),binary/fb/$(notdir $(1)),$(1))
 dist: binary/EPDF.PRG binary/render.ovl binary/ECONVERT.PRG binary/fb/EPDF.PRG binary/fb/render.ovl binary/fb/ECONVERT.PRG help
@@ -916,7 +916,7 @@ dist: binary/EPDF.PRG binary/render.ovl binary/ECONVERT.PRG binary/fb/EPDF.PRG b
 gui-test: binary/EPDF.PRG binary/LAUNCH.PRG
 	python3 tests/hatari/gui.py ST:mono build/gui
 	python3 tests/hatari/fontdlg.py build/fontdlg ST:mono
-# Hebrew in a GDOS font (Erez, 17 Nov 2026: FreeMono's Hebrew wrong): FreeMono,
+# Hebrew in a GDOS font (decided 17 Nov 2026: FreeMono's Hebrew wrong): FreeMono,
 # Courier 10 Pitch and the system font under NVDI on Erez's configuration
 hebfont-test: binary/EPDF.PRG binary/LAUNCH.PRG
 	python3 tests/hatari/hebfont.py build/hebfont
@@ -925,7 +925,7 @@ hebfont-test: binary/EPDF.PRG binary/LAUNCH.PRG
 strip-test: binary/EPDF.PRG binary/LAUNCH.PRG build/econvert
 	python3 tests/hatari/strip.py build/strip
 .PHONY: strip-test
-# the log (6.5, D8; Erez, 22 Nov 2026): LOG=1 and Options > Write a log
+# the log (6.5, D8; decided 22 Nov 2026): LOG=1 and Options > Write a log
 log-test: binary/EPDF.PRG binary/LAUNCH.PRG
 	python3 tests/hatari/logfile.py build/logfile ST:mono
 .PHONY: log-test

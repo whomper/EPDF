@@ -5,7 +5,7 @@
  * (docs/CONVERTED-PDF.md) for EPDF, on a Falcon or a TT (a 68030; an ST
  * is told so).
  *
- * One window holds the batch (Erez, 31 Oct 2026): the files (Add files,
+ * One window holds the batch (decided 31 Oct 2026): the files (Add files,
  * Add folder, Clear), the folder they are written to, the batch's
  * settings (the whole pages: none, mono, mono and colour; the photos: 256
  * colours or JPEG), Convert; and, while it works, two bars, the file and
@@ -62,7 +62,7 @@ static char start_dir[160], inf_path[180], font_dir[180];
 static INF inf;
 static MBAR menu;
 
-/* the log (the guidelines' 6.5, D8; Erez, 22 Nov 2026): econvert.log
+/* the log (the guidelines' 6.5, D8; decided 22 Nov 2026): econvert.log
    beside ECONVERT.PRG through common's conn.c, as EPDF's */
 static int log_on;
 
@@ -118,10 +118,10 @@ static const char inf_head[] =
 	"; EConvert's settings. EConvert writes this file itself; a line it doesn't know is kept.\r\n\r\n";
 static int pages_set = CV_PAGES_MONO, photos_set = CV_PHOTOS_INDEXED;
 /* each page's preview (/Thumb, EPDF's page strip): Settings' "Page previews",
-   PREVIEWS= in the INF; off by default (Erez, 15 Nov 2026: 1.9 s a page on a
+   PREVIEWS= in the INF; off by default (decided 15 Nov 2026: 1.9 s a page on a
    4 MB Falcon, "a setting flag, off by default") */
 static short previews_set;
-/* Optimise for: Smaller files (0) or Faster display (1, the default: Erez,
+/* Optimise for: Smaller files (0) or Faster display (1, the default: decided
    17 Nov 2026), OPTIMISE= in the INF ("size", "display"): with Faster
    display each picture also gets a copy in this screen's pens at the size
    EPDF shows it (conv.h's pen_n, docs/CONVERTED-PDF.md) */
@@ -132,13 +132,13 @@ static short optimise_set = 1;
 static int scr_pen_n, scr_col, scr_aspect = 16;
 static unsigned char scr_rgb[256][3];
 static char out_dir[160], in_dir[160];
-/* Gateway mode (Erez, 7 Nov 2026): the PDFs converted by the Gateway
+/* Gateway mode (decided 7 Nov 2026): the PDFs converted by the Gateway
    (AERA-Gateway's pdfgate) instead of here. A Falcon or a TT converts here
    by default; an ST can only send (its converter needs a 68030) */
 static int has_030, on_gateway;
 static char gate_host[64];
 static unsigned short gate_port = GATE_PORT;
-/* Translate (Erez, 20 Nov 2026: "once you want to convert something, you
+/* Translate (decided 20 Nov 2026: "once you want to convert something, you
    already know if you want to translate it as well"): a pop-up in the
    window, Off when EConvert starts (his default; not kept in the INF), else
    the language each page's text is translated into by the Gateway's
@@ -149,7 +149,7 @@ static unsigned short tr_port = TR_PORT;
 static char tr_code[TR_LANG], tr_name[24];
 
 /* no Gateway of its own yet: EPDF's, from epdf.inf in the folder above
-   (the release's epdf\econvert\), or beside it (Erez, 8 Nov 2026: the
+   (the release's epdf\econvert\), or beside it (decided 8 Nov 2026: the
    converter takes the Gateway EPDF has) */
 static void epdf_gateway(void)
 {
@@ -203,7 +203,7 @@ static void settings_read(void)
 	} else
 		inf_parse(&inf, inf_head, (long)strlen(inf_head));
 	/* NatFeats only where the INF asks (NATFEATS=1: the test rigs; not in
-	   Settings), before the first log_event, as EPDF's (Erez, 15 Nov 2026) */
+	   Settings), before the first log_event, as EPDF's (decided 15 Nov 2026) */
 	if ((v = inf_get(&inf, "LOG")) != NULL)
 		log_on = v[0] == '1';	/* (the file named at the start: log_set) */
 	if ((v = inf_get(&inf, "NATFEATS")) != NULL && v[0] == '1')
@@ -259,7 +259,7 @@ static long mem_free(void)
 	return (long)Malloc(-1L);
 }
 
-/* the sizes this machine shows (Erez, 5 Nov 2026: "the 640 pixel
+/* the sizes this machine shows (decided 5 Nov 2026: "the 640 pixel
    limitation is based on the actual user's machine ... figure out
    available display area yourself and adapt to it"): the whole page's
    picture as wide as EPDF's text column in a window the desktop's size
@@ -294,7 +294,7 @@ static struct {
 	char why[120];
 } files[MAXF];
 static int nfiles;
-/* how the last batch went, under the bars until the list changes (Erez,
+/* how the last batch went, under the bars until the list changes (decided
    10 Nov 2026: the result in the window, not an alert; the list keeps every
    file with its mark until Clear) */
 static char s_result[80];
@@ -357,7 +357,7 @@ static int add_folder(const char *dir)
 
 /* ---------------------------------------------------------------- the window's tree */
 
-/* The window (Erez, 9 Nov 2026: "Go with B but use the list management
+/* The window (decided 9 Nov 2026: "Go with B but use the list management
    of A ... a visual separator just beneath that area ... the same
    separator as the one at the bottom"): a black band with the icon, the
    name and what the batch is; the files in a list, its buttons at the
@@ -386,7 +386,7 @@ static BITBLK icon_blk;
 static char s_band1[COLS + 1], s_band2[COLS + 1], s_file[COLS + 1], s_batch[COLS + 1];
 static char s_row[LROWS][NAME_W + 1], s_mark[LROWS][2], s_rest[LROWS][LTEXT + 1], s_u[4][28];
 
-/* the mock-up's colours (Erez's B2, 9 Nov 2026: "the color coding is not
+/* the mock-up's colours (the B2 mock-up, 9 Nov 2026: "the color coding is not
    like the mockup"), each the nearest of the first 16 pens as this
    screen has them (pen_nearest: the pens an object can name); on a mono
    screen black and white */
@@ -837,7 +837,7 @@ done_one:
 				log_event("converted", base_of(files[i].path), a);
 				{
 					/* the job's stack, deepest so far, in crash.log's "last
-					   status" (Erez's bombs left no record of it) */
+					   status" (the bombs reported left no record of it) */
 					static long most;
 
 					if (u > most) {
@@ -868,7 +868,7 @@ static GRECT work_area(void)
 	return r;
 }
 
-/* "45%, 2 min left" (the family's form: Erez, 9 Nov 2026, D35) from the share done (thousandths) and the time it took */
+/* "45%, 2 min left" (the family's form: decided 9 Nov 2026, D35) from the share done (thousandths) and the time it took */
 static void left(char *s, long n, long share, unsigned long since)
 {
 	unsigned long t = tos_ms() - since, rest;
@@ -1045,7 +1045,7 @@ static void progress_texts(void)
 	if (!working)
 		return;
 	left(a, sizeof a, share_file(), t_file);
-	/* the three phases (guideline 7.3, Erez 7 Nov 2026) */
+	/* the three phases (guideline 7.3, decided 7 Nov 2026) */
 	if (gate_phase == PG_SEND || gate_phase == PG_RECV) {
 		char p1[16], p2[16];	/* "12 KB of 3.4 MB" (D35) */
 
@@ -1421,7 +1421,7 @@ static void redraw_list_alone(void)
 /* the file's line and bar to the batch's, one rectangle drawn once
    (four objects drawn one by one were 80 ms of a Falcon's turn) */
 
-/* g drawn off the screen and shown in one copy (offdraw.h: Erez, 10 Nov
+/* g drawn off the screen and shown in one copy (offdraw.h: decided 10 Nov
    2026, "The converter UI statistics flicker every second"): the ground,
    the words and the bar of a row all come at once. Where TOS's own screen
    can't be borrowed (MiNT, MagiC, NVDI that won't follow it, a piece too
@@ -1829,7 +1829,7 @@ static void finish_progress(void)
 }
 
 /* its third: what came of it, said under the bars ("3 converted, 1 failed
-   in 4:12"; Erez, 10 Nov 2026: in the window, no alert), every file left in
+   in 4:12"; decided 10 Nov 2026: in the window, no alert), every file left in
    the list with its mark. Only a Gateway that doesn't answer is an alert:
    the user has something to do */
 static void finished(void)
@@ -2211,7 +2211,7 @@ static void click(short mx, short my)
 	   common's dlg_win_button) */
 	if (o == B_GO && working) {
 		/* Stop in a job: on the press, not tracked to the release (D33,
-		   Erez 9 Nov 2026: the job stops the moment it is asked to) */
+		   decided 9 Nov 2026: the job stops the moment it is asked to) */
 		command(CMD_GO);
 		return;
 	}
@@ -2548,7 +2548,7 @@ int main(void)
 			}
 			if (fresh == 3) {
 				/* the batch's end in three steps, a turn each: the button,
-				   the progress, then the list (Erez, 14 Nov 2026: in place
+				   the progress, then the list (decided 14 Nov 2026: in place
 				   of one piece, 170 ms on a Falcon, each under 50) */
 				fresh = 4;
 				finish_button();

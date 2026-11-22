@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
 """Each package's programs name the other package on the wrong machine (the
-guidelines' 7.4, Erez 22 Nov 2026: "two packages, one for FireBee and the
+guidelines' 7.4, decided 22 Nov 2026: "two packages, one for FireBee and the
 other for standard ST ... Same names").
 
     fbalert.py [OUTDIR]

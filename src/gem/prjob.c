@@ -2,7 +2,7 @@
  * Copyright (C) 2026 AERA | Erez Yaary */
 /*
  * prjob.c - File > Print... (^P): the document through the GDOS (NVDI)
- * to any printer it drives (Erez, 21 Nov 2026: "it should be generic for
+ * to any printer it drives (decided 21 Nov 2026: "it should be generic for
  * other users to enjoy"; common's ui/print.c).
  *
  * On a Falcon or TT each page is drawn by render.ovl at the printer's
@@ -12,7 +12,7 @@
  * mask of the band's pixels in that pen, vrt_cpyfm transparent in it: no
  * guess at the driver's own plane order). On an ST, or without render.ovl,
  * the page's text as the text view has it, set with v_gtext in the
- * printer's system font, text only (Erez, 21 Nov 2026).
+ * printer's system font, text only (decided 21 Nov 2026).
  *
  * The job runs on a stack of its own, a band (or some lines) a turn of
  * the event loop; render.ovl's turns are the job's while it prints, and
@@ -43,12 +43,12 @@ static int on, stop_req, finished, failed;
 static int drawn_mode;
 /* a short machine (under 2 MB free once the printer is open): render.ovl's
    document closed after every page, its fonts, caches and canvas let go,
-   so the next page has all the room (Erez, 21 Nov 2026: "each page
+   so the next page has all the room (decided 21 Nov 2026: "each page
    processed independently ... removed from memory and the next page is
    loaded"); with room it stays open (no fonts read again a page) */
 static int page_alone;
 /* a picture left out for memory on a page printed (the end's words say so:
-   Erez, 21 Nov 2026) */
+   decided 21 Nov 2026) */
 static int left_out;
 static CORO pr_co, pr_main;
 static char *stack;
@@ -58,7 +58,7 @@ static unsigned long t_page;
 static int page_permille;
 static void *rdoc;
 static char why[120];
-/* what went to the printer on the page (the log's "print-bands": Erez, 22
+/* what went to the printer on the page (the log's "print-bands": decided 22
    Nov 2026, EPDF 2.43 printed nothing on his printer where EMail does) */
 static long k_bands, k_ink;
 

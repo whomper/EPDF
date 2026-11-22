@@ -64,13 +64,13 @@ static char start_dir[160];		/* EPDF.PRG's folder: EPDF.INF, CRASH.LOG, EPDF.TXC
 static char inf_path[180], cache_path[180];
 static INF inf;
 static int lines_mode;
-/* Options > Open on the Gateway (Erez, 7 Nov 2026): a PDF that isn't
+/* Options > Open on the Gateway (decided 7 Nov 2026): a PDF that isn't
    converted is converted by the Gateway while it is shown (gwopen.c) */
 static int gw_on;
 static unsigned short tr_port = TR_PORT;	/* translategate's */
 static char gate_host[64];
 static unsigned short gate_port = GATE_PORT;
-/* Settings' Gateway page (Erez, 20 Nov 2026: by default as before it) */
+/* Settings' Gateway page (decided 20 Nov 2026: by default as before it) */
 static GWCONV gwc = { GWP_AUTO, 0, 1, GWV_STRIP };
 static char open_dir[160] = "";		/* where Open looks first (FOLDER=) */
 static int find_dir;			/* a search runs: 1 forwards, -1 back; 0 none */
@@ -85,7 +85,7 @@ static int job_running(void);	/* a copy, a search or the Gateway's conversion (D
 #endif
 
 /* the log (the guidelines' 6.5, D8: Options > Write a log and Settings'
-   tick, LOG= off at first; Erez, 22 Nov 2026: "When I want to debug
+   tick, LOG= off at first; decided 22 Nov 2026: "When I want to debug
    something, a log file is very helpful"): epdf.log beside EPDF.PRG,
    through common's conn.c (each line written at once, the file closed a
    second after, 256 KB rolling to epdf.old) */
@@ -156,7 +156,7 @@ static void settings_read(void)
 	/* NatFeats (the emulator's console, the rigs' log) only where the INF
 	   asks: NATFEATS=1, which only the test rigs write; not in Settings.
 	   Read before the first log_event: a probe made with nf_on 0 is
-	   never made again (Erez, 15 Nov 2026: "make it a .INF setting so
+	   never made again (decided 15 Nov 2026: "make it a .INF setting so
 	   that it can be added in our testing but have no bearing outside";
 	   a Vampire V4SA hung on the probe's illegal instruction) */
 	if ((v = inf_get(&inf, "NATFEATS")) != NULL && v[0] == '1')
@@ -175,7 +175,7 @@ static void settings_read(void)
 		strcpy(gate_host, v);
 	if ((v = inf_get(&inf, "GATEPORT")) != NULL && atol(v) > 0 && atol(v) < 65536)
 		gate_port = (unsigned short)atol(v);
-	/* Settings' Gateway page (Erez, 20 Nov 2026) */
+	/* Settings' Gateway page (decided 20 Nov 2026) */
 	if ((v = inf_get(&inf, "GWPAGES")) != NULL)
 		gwc.pages = !strcmp(v, "none") ? GWP_NONE : !strcmp(v, "mono") ? GWP_MONO : !strcmp(v, "colour") ? GWP_COLOUR :
 			    !strcmp(v, "both") ? GWP_BOTH : GWP_AUTO;
@@ -186,7 +186,7 @@ static void settings_read(void)
 	if ((v = inf_get(&inf, "GWPREVIEWS")) != NULL)
 		gwc.previews = !strcmp(v, "on") ? GWV_ON : !strcmp(v, "off") ? GWV_OFF : GWV_STRIP;
 	{
-		/* View > Translate and the language (Erez, 8 Nov 2026) */
+		/* View > Translate and the language (decided 8 Nov 2026) */
 		int t = (v = inf_get(&inf, "TRANSLATE")) != NULL && v[0] == '1';
 		const char *to = inf_get(&inf, "TRANSLATETO");
 
@@ -383,7 +383,7 @@ static void open_dialog(void)
 	open_doc(full);
 }
 
-/* File > Save Optimised... (Erez, 8 Nov 2026): the converted PDF open (an
+/* File > Save Optimised... (decided 8 Nov 2026): the converted PDF open (an
    "Optimised" one: the Gateway's copy, or EConvert's file) written where
    the user says, as it is: nothing converted again. Under the PDF's own
    name by default, in its folder; written to a temporary name and renamed
@@ -468,7 +468,7 @@ static void menu_states(void)
 	signed char now[10], z;
 	/* a job the user started (a copy, a search, the Gateway's conversion):
 	   the commands that would start another are greyed till it ends (D19,
-	   Erez 9 Nov 2026) */
+	   decided 9 Nov 2026) */
 	int job = job_running();
 	int i;
 
@@ -799,7 +799,7 @@ static void click(short mx, short my, short kstate, int dbl)
 			return;		/* (its bar, or a press let go elsewhere) */
 	}
 	if (win_zoomed()) {
-		/* held and moved: the page dragged under the mouse (Erez, 8 Nov
+		/* held and moved: the page dragged under the mouse (decided 8 Nov
 		   2026); a click alone gives the text back */
 		if (press_track(&anywhere, mx, my, 0, held_msg, 0, 0) != PRESS_DRAG) {
 			win_zoom_end();
@@ -896,7 +896,7 @@ static void select_word(short mx, short my)
  * the selection. Only the menu bar's commands, with their keys; Copy
  * first, as a double-click is a selection's.
  */
-/* the right-click menu's Translate... (Erez, 8 Nov 2026): the words
+/* the right-click menu's Translate... (decided 8 Nov 2026): the words
    selected (their first 2 KB) sent to translategate as one short request,
    the answer shown in a box over the window, which nothing else changes */
 static void translate_selection(void)
@@ -1055,7 +1055,7 @@ static void command(int c)
 	case CMD_SAVEOPT:
 		save_optimised();
 		break;
-	case CMD_PRINT:				/* File > Print... (Erez, 21 Nov 2026) */
+	case CMD_PRINT:				/* File > Print... (decided 21 Nov 2026) */
 		if (prjob_begin())
 			menus_due = 1;
 		break;
@@ -1170,7 +1170,7 @@ static void command(int c)
 		strip_refresh();	/* (the cells' pages drawn, or their first lines again) */
 		break;
 	case CMD_STRIP:
-		/* the pages' column at the window's left (Erez, 15 Nov 2026) */
+		/* the pages' column at the window's left (decided 15 Nov 2026) */
 		strip_set(!strip_on());
 		if (has_menu)
 			menu_icheck(menu.tree, mbar_object(&menu, CMD_STRIP), strip_on());
@@ -1485,12 +1485,12 @@ static void key(short kstate, short k)
 		case 0x10: command(CMD_QUIT); return;		/* ^Q */
 		case 0x2e: command(CMD_COPY); return;		/* ^C */
 		case 0x1e: command(CMD_SELALL); return;		/* ^A */
-		case 0x21:			/* ^F (Font... has no key: Erez, 9 Nov 2026) */
+		case 0x21:			/* ^F (Font... has no key: decided 9 Nov 2026) */
 			if (!shift(kstate))
 				command(CMD_FIND);
 			return;
 		/* View > Pages' zoom, EWeb's keys: ^+ (^= and the keypad's), ^-,
-		   ^0 (Erez, 9 Nov 2026) */
+		   ^0 (decided 9 Nov 2026) */
 		case 0x0d: case 0x4e: if (doc_pages_mode()) command(CMD_ZOOMIN); return;
 		case 0x0c: case 0x4a: if (doc_pages_mode()) command(CMD_ZOOMOUT); return;
 		case 0x0b: case 0x70: if (doc_pages_mode()) command(CMD_ZOOMACTUAL); return;
@@ -1574,7 +1574,7 @@ static void message(const short *msg)
 	}
 }
 
-/* the progress row's job (Erez, 2 Nov 2026: the one the user waits on):
+/* the progress row's job (decided 2 Nov 2026: the one the user waits on):
    a copy, a search, the document being opened, a page in the window being
    read (within a slow page too), a picture being made, the rest of the
    pages being read */
@@ -1590,7 +1590,7 @@ static void progress(void)
 	if (prjob_on()) {
 		long d, t;
 
-		prjob_progress(w, (int)sizeof w, &d, &t);	/* "Printing page 3 of 12" (Erez, 21 Nov 2026) */
+		prjob_progress(w, (int)sizeof w, &d, &t);	/* "Printing page 3 of 12" (decided 21 Nov 2026) */
 		win_progress(9, w, d, t);
 	} else if (cp.on) {
 		snprintf(w, sizeof w, "Copying page %ld of %ld", cp.p - cp.p0 + 1 > cp.p1 - cp.p0 + 1 ? cp.p1 - cp.p0 + 1 : cp.p - cp.p0 + 1,
@@ -1803,7 +1803,7 @@ int main(void)
 		menu_states();
 	}
 	/* the arrow: the desktop leaves the busy bee it showed while EPDF
-	   loaded (Erez's TOS, 2 Nov 2026: the bee stayed the whole time) */
+	   loaded (TOS 4.04, 2 Nov 2026: the bee stayed the whole time) */
 	graf_mouse(ARROW, 0);
 	if (win_open(x, y, w, h) != 0) {
 		alert(1, "[3][No window is free.|Close one and start EPDF again.][ OK ]");
@@ -1922,7 +1922,7 @@ int main(void)
 				   !(doc_pending() && doc_pic_ahead_only()) &&
 				   ((pic_turn ^= 1) || !doc_pending() || pics_focus_busy())) {
 				/* (the page in focus's picture: every turn, the reading
-				   and the rest after it: Erez, 8 Nov 2026) */
+				   and the rest after it: decided 8 Nov 2026) */
 				long obj = -1;
 
 				doc_pic_drop_ahead();	/* (one shown waits: the one ahead gives way) */

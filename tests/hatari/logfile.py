@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
-"""The log file (the guidelines' 6.5, D8; Erez, 22 Nov 2026: "When I want
+"""The log file (the guidelines' 6.5, D8; decided 22 Nov 2026: "When I want
 to debug something, a log file is very helpful"), on common's speed rig:
 
     logfile.py WORK [MACHINE...]        (default: ST:mono)

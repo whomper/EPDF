@@ -71,7 +71,7 @@ static void langs_act(SETTINGS *s, void *user)
 }
 
 /* the log's tick, last on General (the guidelines' 6.5, D8: "Write a
-   log" in Options and in Settings; Erez, 22 Nov 2026): the program sets
+   log" in Options and in Settings; decided 22 Nov 2026): the program sets
    it before Settings and takes it after OK */
 short settings_log;
 
@@ -89,8 +89,8 @@ static void page_general(SETTINGS *s, short x, short y, void *user)
 	set_tick(s, x, set_y(s, 9), "Write a log", &settings_log);
 }
 
-/* EConvert's General: Optimise for (Faster display the default: Erez, 17
-   Nov 2026) and the pages' previews (off by default: Erez, 15 Nov 2026) */
+/* EConvert's General: Optimise for (Faster display the default: decided 17
+   Nov 2026) and the pages' previews (off by default: decided 15 Nov 2026) */
 static short previews_edit, optimise_edit;
 
 static void page_conv(SETTINGS *s, short x, short y, void *user)
@@ -110,7 +110,7 @@ static void page_conv(SETTINGS *s, short x, short y, void *user)
 	set_tick(s, x, set_y(s, 8), "Write a log", &settings_log);
 }
 
-/* EPDF's Gateway page: how Open on the Gateway has a PDF converted (Erez,
+/* EPDF's Gateway page: how Open on the Gateway has a PDF converted (decided
    20 Nov 2026: EConvert's choices; by default as before: Automatic, 256
    colours, Faster display, previews with the page strip) */
 static GWCONV gw_edit;
@@ -177,7 +177,7 @@ static void drawn(OBJECT *tree, short band)
 }
 
 /* OK: a port outside 1 to 65535 is refused with what to type, the field
-   kept as typed and the text cursor in it (D30, Erez 9 Nov 2026: nothing
+   kept as typed and the text cursor in it (D30, decided 9 Nov 2026: nothing
    changed silently) */
 static int check(SETTINGS *s, void *user)
 {

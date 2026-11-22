@@ -4,7 +4,7 @@
 #ifndef GATEDLG_H
 #define GATEDLG_H
 
-#define GATE_PORT 8380			/* pdfgate's (Erez's OK, 7 Nov 2026) */
+#define GATE_PORT 8380			/* pdfgate's (agreed 7 Nov 2026) */
 
 /* EConvert's: the Gateway's address (host, hostcap bytes) and port, as they
    are shown and as the user leaves them, and its General page's "Page
@@ -14,7 +14,7 @@ int gate_dialog_conv(char *host, int hostcap, unsigned short *port, short *previ
    shows to_name and calls pick with its place, x and y: the popup over
    it; pick may change to and the name) and
    "Languages..." (languages: the family's dialog, common's langs.c) */
-/* EPDF's Gateway page (Erez, 20 Nov 2026: EConvert's choices for a PDF
+/* EPDF's Gateway page (decided 20 Nov 2026: EConvert's choices for a PDF
    opened on the Gateway, "today's" behaviour by default): each its pop-up's
    row */
 enum { GWP_AUTO, GWP_NONE, GWP_MONO, GWP_COLOUR, GWP_BOTH };	/* Whole pages; Automatic: Colour on 16
