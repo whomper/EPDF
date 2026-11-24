@@ -10,8 +10,8 @@
  * Fixed shares of the bar (a tenth for sending, eight tenths for the
  * Gateway's work, a tenth for receiving) left it near 20 % while the Atari
  * sent and received, which is most of the time, and jumped to 90 % in the
- * second or two the Pi took (decided 24 Nov 2026: "The progress should
- * reflect the fast processing of the gateway"). Here the share is the time
+ * second or two the Pi took (decided 24 Nov 2026: the bar to follow the
+ * Gateway's quick work as it is). Here the share is the time
  * gone over the time gone and the time still to come, each part's time to
  * come from what has been measured:
  * - sending: the bytes still to send at the rate they have gone so far;
