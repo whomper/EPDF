@@ -34,8 +34,9 @@ typedef struct {
 	const unsigned char (*pen_rgb)[3];
 } PGOPT;
 
-/* where the job is, for the progress bar */
-enum { PG_SEND, PG_WORK, PG_RECV };
+/* where the job is, for the progress bar (PG_SEND, PG_WORK, PG_RECV), and
+   how far it is by time (pg_share) */
+#include "pgshare.h"
 
 /* progress: called between pieces with the phase and how far it is (done
    of total; bytes, or for PG_WORK thousandths of the file's pages); 1
@@ -51,6 +52,10 @@ int pg_convert(const char *host, unsigned short port, const PGOPT *o, const char
 
 /* the query for o and the PDF's name (its own, for the result's AERA
    entry: characters pdfgate doesn't take become '_'), into q; its length */
+/* the share of the exchange gone by time, in thousandths (pgshare.c),
+   as of the progress call being made: what the bar shows */
+long pg_share(void);
+
 int pg_query(const PGOPT *o, const char *name, char *q, int qlen);
 
 #endif

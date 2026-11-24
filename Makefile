@@ -76,6 +76,10 @@ build/test_trpara: tests/test_trpara.c src/view/trpara.c src/view/trpara.h commo
 build/test_pens: tests/test_pens.c src/rovl/pens.c src/rovl/pens.h | build
 	$(CC) $(HCFLAGS) -Isrc/rovl -fsanitize=address,undefined -o $@ tests/test_pens.c src/rovl/pens.c
 
+# the Gateway's progress by time (src/pgshare.c, pigate.c's) on made-up exchanges
+build/test_pgshare: tests/pgshare.c src/pgshare.c src/pgshare.h | build
+	$(CC) $(HCFLAGS) -Isrc -fsanitize=address,undefined -o $@ tests/pgshare.c src/pgshare.c
+
 build/test_ccitt: tests/test_ccitt.c src/ccitt.c src/ccitt.h src/ccitt_tab.h | build
 	$(CC) $(HCFLAGS) -fsanitize=address,undefined -o $@ tests/test_ccitt.c src/ccitt.c
 
@@ -122,8 +126,9 @@ fuzz: build/fuzz_jpx build/fuzz_jbig2
 build/jb2dec: tools/jb2dec.c src/jbig2.c src/mq.c src/ccitt.c src/jbig2.h src/mq.h src/ccitt.h | build
 	$(CC) $(HCFLAGS) -fsanitize=address,undefined -o $@ tools/jb2dec.c src/jbig2.c src/mq.c src/ccitt.c
 
-test: build/pdftext_oom build/test_xe build/test_ccitt build/test_textview build/test_inf build/test_tstore build/test_docview build/test_search build/pdftext build/econvert build/test_pens build/test_trpara build/jb2dec build/jpxdec build/imgshow
+test: build/pdftext_oom build/test_pgshare build/test_xe build/test_ccitt build/test_textview build/test_inf build/test_tstore build/test_docview build/test_search build/pdftext build/econvert build/test_pens build/test_trpara build/jb2dec build/jpxdec build/imgshow
 	build/test_xe
+	build/test_pgshare
 	build/test_pens
 	build/test_trpara
 	python3 tests/convtext.py
@@ -312,14 +317,14 @@ EC_CV_PAD_BSS ?= 0
 # the heap zones), so gem.o and crash.o, and tos.o on, keep their places
 build/m68030/ececpad.o: FT_PAD = -DFT_PAD_NAME=ec_ec_pad -DFT_PAD_TEXT=$(EC_EC_PAD) -DFT_PAD_RO=$(EC_EC_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=$(EC_EC_PAD_DATA) -DFT_PAD_BSS=$(EC_EC_PAD_BSS)
 build/m68030/eclcpad.o: FT_PAD = -DFT_PAD_NAME=ec_lc_pad -DFT_PAD_TEXT=$(EC_LC_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EC_LC_PAD_BSS)
-EC_EC_PAD ?= 222
+EC_EC_PAD ?= 170
 EC_EC_PAD_RO ?= 94
 EC_EC_PAD_DATA ?= 248
-EC_EC_PAD_BSS ?= 172
+EC_EC_PAD_BSS ?= 164
 EC_LC_PAD ?= 214
 EC_LC_PAD_BSS ?= 0
 build/m68030/ecpgpad.o: FT_PAD = -DFT_PAD_NAME=ec_pg_pad -DFT_PAD_TEXT=$(EC_PG_PAD) -DFT_PAD_RO=$(EC_PG_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EC_PG_PAD_BSS)
-EC_PG_PAD ?= 202
+EC_PG_PAD ?= 56
 EC_PG_PAD_RO ?= 239
 EC_PG_PAD_BSS ?= 0
 # EConvert's own after pic.o and before inflate_fast.o (it has no dspjpeg.o
@@ -346,7 +351,7 @@ CS_PAD ?= 178
 build/m68030/ecpad.o: FT_PAD = -DFT_PAD_NAME=ec_cv_pad -DFT_PAD_TEXT=$(EC_PAD) -DFT_PAD_RO=$(EC_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EC_PAD_BSS)
 EC_PAD ?= 48
 EC_PAD_RO ?= 130
-EC_PAD_BSS ?= 240
+EC_PAD_BSS ?= 180
 # CONVTEST.PRG's own, after common's nf.o: its converter code where 2.30 had it
 build/m68030/ctpad.o: FT_PAD = -DFT_PAD_NAME=ct_cv_pad -DFT_PAD_TEXT=$(CT_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 CT_PAD ?= 106
@@ -787,7 +792,7 @@ EP_PAD_C ?= 176
 EP_PAD_D ?= 382
 EP_PAD_E ?= 62
 EP_PAD_E_DATA ?= 242
-EP_PAD_F ?= 160
+EP_PAD_F ?= 36
 EP_PAD_G ?= 212
 EP_PAD_H ?= 372
 EP_PAD_H_RO ?= 238
@@ -812,13 +817,13 @@ EP_PAD_W_RO ?= 116
 EP_PAD_W_DATA ?= 0
 EP_PAD_X ?= 254
 EP_PAD_X_RO ?= 152
-EP_PAD_X_BSS ?= 216
+EP_PAD_X_BSS ?= 152
 EP_PAD_Y_RO ?= 72
 EP_PAD_B_RO ?= 254
 EP_PAD_Z_RO ?= 220
 EP_PAD_U_RO ?= 98
 EP_PAD_U_DATA ?= 230
-EP_PAD_B_BSS ?= 156
+EP_PAD_B_BSS ?= 148
 EP_PAD_J_BSS ?= 252
 EP_PAD_M_BSS ?= 240
 EP_PAD_M_RO ?= 244

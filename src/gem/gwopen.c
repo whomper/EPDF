@@ -36,7 +36,7 @@ void log_event(const char *what, const char *a, const char *b);	/* (epdf.c's, th
 
 static CORO main_co, job_co;
 static char *stack;
-static int started, busy, finished, rc, waiting, net_ready, phase;
+static int started, busy, finished, rc, waiting, net_ready, phase, told;	/* (told: the exchange has called progress) */
 static long done, total, part, whole;	/* (part, whole: the phase's bytes) */
 static unsigned long slice_end;
 static char in_path[256], out_path[256], host[64], err[120];
@@ -80,12 +80,13 @@ static int progress(void *u, int ph, long d, long t)
 		t = 1;
 	waiting = ph == PG_WORK && d == 0;
 	phase = ph;
+	told = 1;
 	if (ph != PG_WORK) {
 		part = d;
 		whole = t;
 	}
 	total = 1000;
-	done = ph == PG_SEND ? d * 100 / t : ph == PG_WORK ? 100 + d * 800 / t : 900 + d * 100 / t;
+	done = pg_share();	/* (by time: the Gateway's work is quick, the sending and receiving slow) */
 	idle();
 	return 0;
 }
@@ -252,7 +253,7 @@ int gw_start(const char *pdf, const char *open_now, const char *h, unsigned shor
 	strncpy(host, h, sizeof host - 1);
 	port = p;
 	busy = 1;
-	finished = waiting = 0;
+	finished = waiting = told = 0;
 	phase = PG_SEND;
 	part = whole = 0;
 	done = 0;
@@ -285,7 +286,7 @@ void gw_stop(void)
 
 int gw_progress(long *d, long *t)
 {
-	*d = done;
+	*d = busy && !finished && told ? pg_share() : done;	/* (moved on with the time between the exchange's calls) */
 	*t = total;
 	return waiting;
 }

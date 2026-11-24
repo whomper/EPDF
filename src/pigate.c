@@ -14,11 +14,28 @@
 #include "pdf.h"
 #include "conv/cvio.h"
 #include "pigate.h"
+#include "plat.h"
+#include "pgshare.c"	/* (in this object: the programs' layout) */
 
 #define PIECE 8192
 /* the Pi converts for up to 600 s (pdfgate's --time) and says how far it
    is when it moves on: this long with no word from it is too long */
 #define WORK_MS 660000L
+
+/* how far the exchange is by time */
+static PGSHARE share_s;
+
+long pg_share(void)
+{
+	return pgs_now(&share_s, pf_ms());
+}
+
+/* the progress call, the share brought up to date first */
+static int tell(pg_progress progress, void *u, int phase, long done, long total)
+{
+	pgs_share(&share_s, phase, done, total, pf_ms());
+	return progress && progress(u, phase, done, total);
+}
 
 static void say(char *err, int errlen, const char *what)
 {
@@ -142,6 +159,7 @@ static int convert(const char *host, unsigned short port, const PGOPT *o, const 
 
 	sb_init(&b);
 	err[0] = 0;
+	pgs_start(&share_s, pf_ms());
 	q = malloc(QLEN);
 	line = malloc(LLEN);
 	if (!q || !line) {
@@ -188,7 +206,7 @@ static int convert(const char *host, unsigned short port, const PGOPT *o, const 
 		}
 		if (!conn_write(c, piece, n))
 			goto lost;
-		if (progress && progress(u, PG_SEND, off + n, size)) {
+		if (tell(progress, u, PG_SEND, off + n, size)) {
 			conn_stop = 1;
 			goto lost;
 		}
@@ -206,7 +224,7 @@ static int convert(const char *host, unsigned short port, const PGOPT *o, const 
 			goto lost;
 		if (status != 102)
 			break;
-		if (progress && progress(u, PG_WORK, done, total)) {
+		if (tell(progress, u, PG_WORK, done, total)) {
 			conn_stop = 1;
 			goto lost;
 		}
@@ -254,7 +272,7 @@ static int convert(const char *host, unsigned short port, const PGOPT *o, const 
 			goto done;
 		}
 		off += k;
-		if (progress && progress(u, PG_RECV, off, length)) {
+		if (tell(progress, u, PG_RECV, off, length)) {
 			conn_stop = 1;
 			goto lost;
 		}

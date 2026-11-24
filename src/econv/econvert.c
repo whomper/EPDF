@@ -667,8 +667,9 @@ static void out_path(const char *in, char *out, long n)
 }
 
 /* ---- Gateway mode: the file sent, the Gateway's progress as the file's
-   (sending its first tenth, the Gateway's work the next eight, the
-   converted PDF the last), conn.c's waits a turn each (pf_idle) */
+   (by time, pigate.c's pg_share: the sending, the Gateway's work and the
+   converted PDF each as long as they take), conn.c's waits a turn each
+   (pf_idle) */
 static int gate_waiting;		/* the Gateway hasn't begun this one yet */
 static int gate_phase = -1;		/* PG_SEND, PG_WORK, PG_RECV; -1 none */
 static long gate_part, gate_whole;		/* the bytes of the phase so far, and in all */
@@ -692,8 +693,7 @@ static int gate_progress(void *u, int phase, long done, long total)
 		gate_whole = total;
 	}
 	cur_total = 1000;
-	cur_done = phase == PG_SEND ? done * 100 / total : phase == PG_WORK ? 100 + done * 800 / total :
-		   900 + done * 100 / total;
+	cur_done = pg_share();	/* (by time: the Gateway's work is quick, the sending and receiving slow) */
 	return turn(NULL);
 }
 
@@ -887,6 +887,8 @@ static void left(char *s, long n, long share, unsigned long since)
 
 static long share_file(void)
 {
+	if (gate_phase >= 0)
+		return pg_share();	/* (moved on with the time between the exchange's calls) */
 	return cur_total > 0 ? cur_done * 1000L / cur_total : 0;
 }
 
