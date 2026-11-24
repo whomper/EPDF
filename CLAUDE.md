@@ -348,8 +348,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   part, off the screen through common's offdraw; draw() notes what a redraw drew (note_drawn); at
   the end only the rows that changed. Falcon-4 (EmuTOS): the job's turns 135 -> 85 (the first tick,
   the list's), Stop 140 -> 175 (the end drawn in the window, not an alert). Whole pages: Colour
-  (CV_PAGES_COLOUR_ONLY, INF "colouronly", --pages colouronly; the owner: "What if I just want color
-  pages"): a page with colour gets /Colour only, one without its /Mono; EPDF on a mono screen
+  (CV_PAGES_COLOUR_ONLY, INF "colouronly", --pages colouronly; decided 10 Nov 2026: colour pages alone): a page with colour gets /Colour only, one without its /Mono; EPDF on a mono screen
   shows /Colour dithered. Through the Gateway pages=colouronly (AERA-Gateway 1.42, EPDF 2.9;
   gateway.py with GW_PAGES=colouronly).
   The page strip (decided 15 Nov 2026; EPDF 2.33): View > Page strip
@@ -364,8 +363,8 @@ at first. This section is kept up to date: the build, the tests, what a release 
   moved, pb_moved with pb_vdi); a layout that changes nothing leaves it be. Its 6x6 font is set on the
   VDI only (told to text.c, the text view lost its CPU path after each cell: Select all on an ST 40 ->
   80 ms). With the strip off it asks no AES (strip_width before pb_width, the menu ticked only when on).
-  The /Thumb only when asked (decided 15 Nov 2026: the cost accepted, "make it a setting flag, off by
-  default"): EConvert's Options > Settings... > General > Page previews (PREVIEWS=1; gatedlg.c's
+  The /Thumb only when asked (decided 15 Nov 2026: the cost accepted, a setting, off by
+  default): EConvert's Options > Settings... > General > Page previews (PREVIEWS=1; gatedlg.c's
   gate_dialog_conv), CVOPT.thumbs, econvert's --thumbs, the Gateway's thumbs=1 (AERA-Gateway 1.48 on: an
   older pdfgate refuses it); EPDF's Open on the Gateway asks for it while the strip is shown
   (gw_set_thumbs). Rigs: tests/hatari/econv_settings.py (the tick, OK, Esc), econv.py (none by default;
@@ -374,8 +373,8 @@ at first. This section is kept up to date: the build, the tests, what a release 
   NVDI lost its page 3 to memory). It costs CONVTEST about 1.9 s a page on Falcon-4:256 (the canvas read
   again from ST-RAM); CONVTEST's "thumbs" pairs it. Rig: tests/hatari/strip.py (`make strip-test`);
   speed.py's EPDF_STRIP=1.
-  2.34: pages passed over aren't drawn (#96, decided 14 Nov 2026: moving away from the page read "kicks off
-  various rendering activities"): a move within 400 ms of another holds the pictures till the view has
+  2.34: pages passed over aren't drawn (#96, decided 14 Nov 2026: moving away from the page read started
+  drawing pages passed over): a move within 400 ms of another holds the pictures till the view has
   been still 400 ms (doc.c's doc_view_moved, checked in doc_pic_start; main() as it was), a move on its
   own draws at once, and the pictures asked for on pages left and not begun are forgotten
   (pics_unwant_outside); rig tests/hatari/passing.py ("page-start" lines, "ahead" for those drawn ahead).
@@ -591,8 +590,8 @@ at first. This section is kept up to date: the build, the tests, what a release 
   on a Falcon (the loop past the 68030's 256-byte cache): no change (the hub, 20 Nov 2026), build()
   left as it is. Not in 2.41: a 256-colour whole page and its double (a new 8-bit dither, pages about
   twice the size). Next: common's about_prepare (the hub: in the next release).
-  2.42 (21 Nov 2026; v2.42 on 04473ea20, the hub's go on b8efdf1c9): the owner's 2.41 fault, "the precise
-  zoomed in image is not presented": a copy EConvert made zoomed from its own stored page. The
+  2.42 (21 Nov 2026; v2.42 on 04473ea20, the hub's go on b8efdf1c9): a 2.41 fault, the sharp zoomed
+  page not shown: a copy EConvert made zoomed from its own stored page. The
   converter writes /Source /Path (EConvert on the Atari only: CVOPT.source_path, econvert
   --source-path; aerapdf's files unchanged); doc.c's find_original takes it, else /Name in the copy's
   folder's parent, each only when its size is /Bytes (a 68020+; "original path|parent|none"), and

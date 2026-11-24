@@ -119,7 +119,7 @@ static const char inf_head[] =
 static int pages_set = CV_PAGES_MONO, photos_set = CV_PHOTOS_INDEXED;
 /* each page's preview (/Thumb, EPDF's page strip): Settings' "Page previews",
    PREVIEWS= in the INF; off by default (decided 15 Nov 2026: 1.9 s a page on a
-   4 MB Falcon, "a setting flag, off by default") */
+   4 MB Falcon: a setting, off by default) */
 static short previews_set;
 /* Optimise for: Smaller files (0) or Faster display (1, the default: decided
    17 Nov 2026), OPTIMISE= in the INF ("size", "display"): with Faster

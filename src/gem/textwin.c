@@ -1177,8 +1177,8 @@ void win_progress_draw(void)
 
 /* the window's rectangles over area, each drawn */
 /*
- * A picture whole (decided 5 Nov 2026: clicked, "it expands to full
- * glory"): in the one window (3.2), the picture alone at its own pixels,
+ * A picture whole (decided 5 Nov 2026: clicked, it shows at its
+ * full size): in the one window (3.2), the picture alone at its own pixels,
  * at most the text column's width, made like any other (pics.c, its rows
  * as they come); Up, Down and the page keys move it, Esc, Backspace,
  * Return or a click give the text back as it was.
