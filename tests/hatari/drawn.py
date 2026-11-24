@@ -4,7 +4,7 @@
 """View > Pages for any PDF (stage 2): the page as printed, drawn by
 render.ovl beside EPDF.PRG on a Falcon or TT, on common's speed rig:
 
-    drawn.py WORK [MACHINE...]        (default: Erez's configuration, erz.py, and ST:mono)
+    drawn.py WORK [MACHINE...]        (default: the reference configuration, erz.py, and ST:mono)
 
 The showcase (showcase.py: text, fonts, a table, a chart, photos, a scan),
 with render.ovl and the standard fonts (fonts\\) beside EPDF.PRG, opened

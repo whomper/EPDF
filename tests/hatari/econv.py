@@ -4,7 +4,7 @@
 """EConvert's window in Hatari, on common's speed rig (common/tests/speed/
 speed.py, its Rig on an X display):
 
-    econv.py WORK [MACHINE] [FILE.pdf]     (default Erez's configuration, erz.py; the showcase's cut made here)
+    econv.py WORK [MACHINE] [FILE.pdf]     (default the reference configuration, erz.py; the showcase's cut made here)
 
 ECONVERT.PRG is started through LAUNCH.PRG with the PDF (it comes into the
 batch), writes to C:\\OUT (econvert.inf), Return converts. Checked: the
@@ -102,7 +102,7 @@ def run(work, machine, src):
         r.still()
         r.shot("before")
         if machine.startswith("ST"):
-            # (an ST converts only through the Gateway, Erez 7 Nov 2026: it
+            # (an ST converts only through the Gateway, decided 7 Nov 2026: it
             # starts, This Atari greyed, Gateway chosen: tests/hatari/gateway.py)
             ok = "ECONVERT started" in r.console()
             print("%s: %s" % (r.describe(), "started, Gateway only (shot)" if ok else "DIDN'T START ON AN ST"))
@@ -133,7 +133,7 @@ def run(work, machine, src):
             if os.environ.get("ECONV_KEEP"):
                 shutil.copy(out, os.environ["ECONV_KEEP"])     # (the converted file, for another rig)
             # each page's preview only with Settings' Page previews (PREVIEWS=1;
-            # Erez, 15 Nov 2026: "a setting flag, off by default")
+            # decided 15 Nov 2026)
             data = open(out, "rb").read()
             pages = len(re.findall(rb"/Type\s*/Page[^s]", data))
             thumbs = len(re.findall(rb"/Thumb \d+ 0 R", data))
@@ -145,7 +145,7 @@ def run(work, machine, src):
         for l in con.splitlines():
             if "ECONVERT converted" in l:
                 print("  " + l.strip())
-        # the batch's end in the window, no alert (Erez, 10 Nov 2026): the result
+        # the batch's end in the window, no alert (decided 10 Nov 2026): the result
         # line under the bars, IN.PDF still in the list with its tick
         if "ECONVERT result Stopped: 1 converted" not in con:
             bad.append("no result line: %s" % [l for l in con.splitlines() if "ECONVERT result" in l])

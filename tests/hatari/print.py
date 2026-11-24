@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
-"""File > Print... (Erez, 21 Nov 2026: printing through NVDI, generic for
+"""File > Print... (decided 21 Nov 2026: printing through NVDI, generic for
 every printer it drives; common's ui/print.c), on common's speed rig with
-Erez's NVDI (and WDIALOG where it is here):
+NVDI (and WDIALOG where it is here):
 
-    print.py WORK [MACHINE...]         (default Erez's configuration and ST:mono)
+    print.py WORK [MACHINE...]         (default the reference configuration and ST:mono)
 
 NVDI's printer drivers don't open in Hatari (the hub: WDIALOG swaps the
 metafile driver in, PCL gives up, ESC/P2 hangs), so the picture driver (91)
@@ -24,7 +24,7 @@ ASSIGN.SYS only, C:\\GEMFILE.GEM read back.
 On Falcon-4 pages 2 and 3 have pictures left out for memory (page 3 also
 alone: its progressive JPEG),
 the end's words "Printed without some pictures: not enough memory."
-(Erez, 21 Nov 2026).
+(decided 21 Nov 2026).
 On a Falcon each page is drawn by render.ovl (the showcase: pictures,
 drawings, fonts); on an ST the text view's text, text only.
 """
@@ -106,7 +106,7 @@ def run(work, machine, stop, nowd=False):
             pages = 4
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
         if os.path.exists(wd) and not nowd:
-            r.put(wd, "AUTO")               # (Erez's copy: removed below, never left in a kept hd)
+            r.put(wd, "AUTO")               # (the WDIALOG copy: removed below, never left in a kept hd)
         first, last = (1, pages) if stop else tuple(int(x) for x in os.environ.get("PRINT_RANGE", "2 4").split())
         if nowd:
             # TOS's AES alone (the hub, 21 Nov 2026: common 726554d): no dialog,
@@ -204,7 +204,7 @@ def run(work, machine, stop, nowd=False):
             for l in r.console().splitlines():
                 if l.startswith("EPDF printed-page") or l.startswith("EPDF print-scaled"):
                     print("  " + l.strip())
-            # the end's words (Erez, 21 Nov 2026): a picture left out for memory said so
+            # the end's words (decided 21 Nov 2026): a picture left out for memory said so
             said = re.findall(r"EPDF print-said (.*)", r.console())
             want = "Printed without some pictures: not enough memory." if os.environ.get("PRINT_LEFT_OUT") \
                 else "Printed."

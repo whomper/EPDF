@@ -18,7 +18,7 @@ book through LAUNCH.PRG (make binary/LAUNCH.PRG). When the pages are read,
 each action is profiled from bg_tick_at (the first function EPDF calls when
 an event comes) until EPDF is back at its event call (evnt_multi_), so
 TOS's share is the action's alone. The machine is common/tools/machines.py's,
-on Erez's TOS where ~/.aera/tos has it, else EmuTOS: the report's first
+on real TOS where ~/.aera/tos has it, else EmuTOS: the report's first
 line names it. GEMPROF_DEBUG adds debugger commands at each break.
 """
 import importlib.util
@@ -41,7 +41,7 @@ gemprof = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(gemprof)
 
 # AERA_WITH_NVDI=1 (as speed.py takes it): the profiled machine with NVDI,
-# Erez's configuration (common's Profiler makes its Rig without it)
+# the reference configuration (common's Profiler makes its Rig without it)
 if os.environ.get("AERA_WITH_NVDI") == "1":
     _BaseRig = gemprof.speed.Rig
 

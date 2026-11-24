@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
 """The FireBee editions' code against the shipped one's, under QEMU
-(Erez, 21-22 Nov 2026: EPDF native on the FireBee; the hub: "qemu-m68k -cpu
+(decided 21-22 Nov 2026: EPDF native on the FireBee; the hub: "qemu-m68k -cpu
 cfv4e byte for byte").
 
     run.py [WORK] [--files PDF...] [--pages N]

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
-"""The page strip (View > Page strip, Erez 15 Nov 2026), on each machine:
+"""The page strip (View > Page strip, decided 15 Nov 2026), on each machine:
 
     strip.py WORK [MACHINE...]        (default ST:mono, Falcon:16)
 

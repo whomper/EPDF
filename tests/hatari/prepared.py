@@ -4,7 +4,7 @@
 """A converted PDF (EConvert's, docs/CONVERTED-PDF.md) in EPDF, on common's
 speed rig (common/tests/speed/speed.py, its Rig on an X display):
 
-    prepared.py WORK [MACHINE...]        (default: ST:mono and Erez's configuration, erz.py)
+    prepared.py WORK [MACHINE...]        (default: ST:mono and the reference configuration, erz.py)
 
 A book with a chart is made (pdfgen.py), converted by build/econvert (mono
 and colour pages; PAGES=colouronly: colour only, which a mono screen shows

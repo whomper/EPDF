@@ -3,7 +3,7 @@
 # Copyright (C) 2026 AERA | Erez Yaary
 # pigate.c against the Gateway's protocol on this computer: the stand-in
 # tests/pigate/fakegate.py with this build's converter (build/econvert); no
-# other AERA program (guidelines 1.2, Erez 8 Nov 2026). A PDF converted
+# other AERA program (guidelines 1.2, decided 8 Nov 2026). A PDF converted
 # through it is the same, byte for byte, as build/econvert writes on its own;
 # a stop half-way leaves no file; a refusal comes back in its words.
 #

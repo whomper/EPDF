@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
-"""EConvert's Translate pop-up (Erez, 20 Nov 2026: "once you want to convert
-something, you already know if you want to translate it as well"; a pop-up
+"""EConvert's Translate pop-up (decided 20 Nov 2026; a pop-up
 in the window, Off when EConvert starts), on common's speed rig:
 
-    econv_translate.py WORK [MACHINE]       (default Erez's configuration, erz.py)
+    econv_translate.py WORK [MACHINE]       (default the reference configuration, erz.py)
 
 translategate.py (its stand-in engine: "de: " and capitals) and pdfgate.py
 from gateway/ on the build machine, as translate_view.py has them. Twice,

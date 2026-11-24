@@ -117,7 +117,7 @@ static int rv_page(void *doc, long n, int width, int y0, ROVL_PAGE *out)
 	pic_dsp = dsp_on && dspjpeg_present() ? &dspjpeg_port_jpeg : NULL;
 	x->r.mono_glyphs = H->size >= (long)sizeof(ROVL_HOST) && H->crisp ? 2 : 0;
 	rc = render_page_from(&x->r, n, width, y0);
-	/* no room for its canvas (a page drawn bigger: View > Zoom in, Erez
+	/* no room for its canvas (a page drawn bigger: View > Zoom in, decided
 	   8 Nov 2026): in smaller bands, each reading the page again, down to
 	   16 rows; slower, but drawn */
 	while (rc && !x->r.c.px && !stopped && !x->d.stopping && (long)width * 2 * 16 < (x->r.canvas_max > 0 ?

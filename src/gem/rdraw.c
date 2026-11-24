@@ -110,7 +110,7 @@ void rdraw_unload(void)
  * by luck: 100 bytes more and View > Pages drew nothing; the rig's
  * drawn.py, 16 Nov 2026). Only where it must: a machine that draws pages,
  * render.ovl beside the program, no TT RAM, and less than RDRAW_ROOMY
- * free in one piece (a 4 MB machine: Erez's Falcon had 2.3 MB at the
+ * free in one piece (a 4 MB machine: a Falcon had 2.3 MB at the
  * document's opening and split it later). 1 when set aside
  */
 #define RDRAW_ROOMY (4096L * 1024)

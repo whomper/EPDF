@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
-"""Hebrew in a GDOS vector font (Erez, 17 Nov 2026: "selecting Freemono
-font, just like the one I am using in Email, Hebrew text is not properly
-represented, whether right to left or the characters themselves"):
+"""Hebrew in a GDOS vector font (decided 17 Nov 2026):
     hebfont.py WORK [PDF]          (build/pdfs/gen-hebrew.pdf)
-On Erez's configuration (erz.py: NVDI, whose fonts have FreeMono and
+On the reference configuration (erz.py: NVDI, whose fonts have FreeMono and
 Courier 10 Pitch), EPDF opens a Hebrew PDF three times: FONT=FreeMono,14
 (a TrueType font with Hebrew letters: drawn by its index), FONT=Courier
 10 Pitch,14 (Speedo, no Hebrew: the system font's letters in its cells)

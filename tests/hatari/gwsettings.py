@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
-"""EPDF's Options > Settings... > Gateway (Erez, 20 Nov 2026: EConvert's
+"""EPDF's Options > Settings... > Gateway (decided 20 Nov 2026: EConvert's
 choices for a PDF opened on the Gateway, by default as before), on common's
 speed rig:
 
-    gwsettings.py WORK [MACHINE...]        (default Erez's configuration and ST:mono)
+    gwsettings.py WORK [MACHINE...]        (default the reference configuration and ST:mono)
 
 EPDF with a book; Settings opened from the menu, the Gateway page chosen in
 the list (a shot), Whole pages' pop-up opened (a shot) and Mono and colour

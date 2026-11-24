@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
-"""EConvert's Settings, General page: Optimise for (Erez, 17 Nov 2026: Faster
-display the default) and Page previews (Erez, 15 Nov 2026: "a setting flag,
-off by default"), on each machine:
+"""EConvert's Settings, General page: Optimise for (decided 17 Nov 2026: Faster
+display the default) and Page previews (decided 15 Nov 2026), on each machine:
 
     econv_settings.py WORK [MACHINE...]        (default Falcon:16, ST:mono)
 

@@ -3,7 +3,7 @@
 # Copyright (C) 2026 AERA | Erez Yaary
 """A stand-in for the Gateway's PDF service, for EPDF's own tests: EPDF's
 protocol (docs/PI-GATEWAY.md) answered on this computer with this build's
-converter, build/econvert. No AERA program but EPDF's own is used (Erez,
+converter, build/econvert. No AERA program but EPDF's own is used (decided
 8 Nov 2026, guidelines 1.2: an app tests itself alone); AERA-Gateway's
 pdfgate is tested in its own repository.
 

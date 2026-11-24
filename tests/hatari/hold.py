@@ -65,7 +65,7 @@ def held(r, key, tag):
     r.still()
     a = shutil.copy(r.shot("still"), os.path.join(r.shots, "%s-held.png" % tag))
     n = r.console().count("EPDF dialog font")
-    r.menu(OPTIONS_X, 44)               # Options > Font... (no key since 9 Nov 2026: Erez's D6)
+    r.menu(OPTIONS_X, 44)               # Options > Font... (no key since 9 Nov 2026: D6)
     if not wait_for(r, "EPDF dialog font", n + 1):
         return -1
     time.sleep(4)

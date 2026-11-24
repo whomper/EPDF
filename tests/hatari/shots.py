@@ -9,7 +9,7 @@ the standard 16 colours) from a book made here (pdfgen.py):
 OUTDIR/window.png, the screen, is made into docs/help/WINDOW.IMG, the
 guide's front page picture with its numbered parts (common/tools/
 helpfront.py thumb), and copied to docs/screenshot.png for the README.
-EConvert's window while a batch runs, from econv.py on Erez's
+EConvert's window while a batch runs, from econv.py on the reference
 configuration (256 colours: the navy band, the file under way's row in
 light blue), cut to the window: docs/econvert.png. Commit them when a
 window changes.

@@ -2,8 +2,7 @@
  * Copyright (C) 2026 AERA | Erez Yaary */
 /*
  * prjob.c - File > Print... (^P): the document through the GDOS (NVDI)
- * to any printer it drives (decided 21 Nov 2026: "it should be generic for
- * other users to enjoy"; common's ui/print.c).
+ * to any printer it drives (decided 21 Nov 2026; common's ui/print.c).
  *
  * On a Falcon or TT each page is drawn by render.ovl at the printer's
  * width (a converted copy's from its original where EPDF knows it), in
@@ -43,9 +42,7 @@ static int on, stop_req, finished, failed;
 static int drawn_mode;
 /* a short machine (under 2 MB free once the printer is open): render.ovl's
    document closed after every page, its fonts, caches and canvas let go,
-   so the next page has all the room (decided 21 Nov 2026: "each page
-   processed independently ... removed from memory and the next page is
-   loaded"); with room it stays open (no fonts read again a page) */
+   so the next page has all the room (decided 21 Nov 2026); with room it stays open (no fonts read again a page) */
 static int page_alone;
 /* a picture left out for memory on a page printed (the end's words say so:
    decided 21 Nov 2026) */

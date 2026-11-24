@@ -2,7 +2,7 @@
  * Copyright (C) 2026 AERA | Erez Yaary */
 /*
  * textgold - every page of a PDF as the reader gives it, for the speed
- * work's "same output" check (Erez, 13 Nov 2026: optimising must not break
+ * work's "same output" check (decided 13 Nov 2026: optimising must not break
  * anything):
  *
  *     textgold FILE.pdf [FIRST [COUNT]] > OUT

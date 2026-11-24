@@ -2,14 +2,14 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
 """The extractor on a page set a glyph at a time, as Calamus SL's PDFs are
-(Erez's EDOS_01.PDF, 1 Nov 2026): each glyph placed alone by Tm, the font's
+(1 Nov 2026; the page made here from scratch): each glyph placed alone by Tm, the font's
 /Widths far narrower than the glyphs are set (its ink), the spaces drawn as
 characters, a heading set so tight that each space stands right of the
 next letter's start, and two ragged columns whose baselines are more than
 half a line apart (no line has both). The words must come out whole, the
 heading in order, and the left column before the right.
 
-A second page as EDOS_01.PDF's first (Erez's photo, 2 Nov 2026): the
+A second page laid out as such a PDF's first page can be (2 Nov 2026): the
 columns' baselines 3 points apart (the lines beside each other taken as
 one), the left column starting with a big initial a line deep, the right
 column starting higher and running out above a picture, the left going on
@@ -25,13 +25,13 @@ import tempfile
 
 TOP = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-LEFT = ("Decide where your program lives and assemble from one file because the addresses get baked "
-        "into the code and a program must be told what address it will run from before anything else "
-        "can happen on a machine like this one")
-RIGHT = ("The processor uses this pile itself every time a subroutine is called and quietly pushes the "
-         "address it came from onto the stack before jumping so that the return knows where to go back "
-         "to when the routine is done")
-HEAD = "The EDOS Project"
+LEFT = ("Gather the lamps from the shed before the tide turns because the boats come in at dusk "
+        "and the harbour wall must be lit along its length before the first of them rounds the point "
+        "and looks for the way between the rocks")
+RIGHT = ("The keeper climbs the tower every evening and winds the clockwork that turns the great lens "
+         "so that the beam sweeps the water once in every twelve seconds and the sailors can count it "
+         "and know which coast they are on")
+HEAD = "The Harbour Notes"
 
 
 def wrap(text, width):
@@ -69,14 +69,14 @@ def page():
     return "\n".join(ops).encode("latin-1")
 
 
-LEFT2 = ("started writing a replacement in the year it all began when I was young in a school notebook during "
-         "lessons I should have been paying attention to and I had decided that the one that came with the "
-         "machine could be better than it was and the confidence of a young person is a wonderful thing "
-         "to have and to keep for as long as one can manage it through school and the years of work that came "
-         "after it with other machines and other languages and then back again")
-RIGHT2 = ("acting on it the second part goes a level lower to where the program talks to the disk drive and the "
-          "memory hardware directly and every piece of code comes from the program itself")
-EDGE = "SOFTWARE"
+LEFT2 = ("quiet morning settled over the valley while the baker lit the ovens and the first carts rolled "
+         "down the lane towards the market square where the stalls were already going up and the smell of "
+         "bread drifted between the houses and over the river to the mill where the wheel was turning slowly "
+         "in the shallow water that the dry summer had left behind it after the long weeks without rain "
+         "and the miller watched it from the bank")
+RIGHT2 = ("brought from the hills the sheep came down the road in a long grey line and the dogs ran beside "
+          "them keeping the stragglers close while the shepherd walked behind with his stick and his hat")
+EDGE = "VILLAGE"
 
 
 def page1():
@@ -84,7 +84,7 @@ def page1():
     ops += glyphs(50, 760, 24, HEAD, 0.5)
     left = wrap(LEFT2, 30)
     # the initial: twice the text's size, its baseline on the second line's
-    ops += ["/F1 20 Tf"] + glyphs(50, 688, 20, "I", 0.5)
+    ops += ["/F1 20 Tf"] + glyphs(50, 688, 20, "A", 0.5)
     ops.append("/F1 10 Tf")
     for k, line in enumerate(left):
         x = 62 if k < 2 else 50
@@ -149,12 +149,12 @@ def main():
     if not bad and not text.index(HEAD) < text.index(LEFT) < text.index(RIGHT):
         print("glyphwise: FAIL not heading, left, right in order: %s" % text[:300])
         bad += 1
-    bad += edos_page1(exe)
+    bad += page1_order(exe)
     print("glyphwise: FAILED" if bad else "glyphwise: ok")
     return 1 if bad else 0
 
 
-def edos_page1(exe):
+def page1_order(exe):
     with tempfile.TemporaryDirectory() as d:
         path = os.path.join(d, "page1.pdf")
         with open(path, "wb") as f:
@@ -162,7 +162,7 @@ def edos_page1(exe):
         r = subprocess.run([exe, path, "1"], capture_output=True, text=True)
     text = " ".join(r.stdout.split())
     bad = 0
-    want = ("I " + LEFT2, RIGHT2)
+    want = ("A " + LEFT2, RIGHT2)
     for what, w in (("the left column with its initial", want[0]), ("the right column", want[1])):
         if w not in text:
             print("glyphwise: FAIL page 1: %s not whole in: %s" % (what, text[:400]))

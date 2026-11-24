@@ -15,7 +15,7 @@ questions still open about how EPDF is built.
   (68060.PRG) runs them through its ISP, slowly; one without it stops, as the
   hub's 68060 FireBee stand-in did (EmuTOS, exception 61, on the first page).
   A `-m68060` or `-m68020-60` build of render.ovl would avoid both, as EWeb
-  has EWEB60.PRG. Raised with Erez only if a 68060 user reports it (the hub,
+  has EWEB60.PRG. Raised with the owner only if a 68060 user reports it (the hub,
   15 Nov 2026). A FireBee doesn't load render.ovl at all (`_CF_`:
   src/gem/rdraw.c's rdraw_machine), and EConvert converts there only through
   the Gateway.

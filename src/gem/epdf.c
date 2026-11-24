@@ -85,8 +85,7 @@ static int job_running(void);	/* a copy, a search or the Gateway's conversion (D
 #endif
 
 /* the log (the guidelines' 6.5, D8: Options > Write a log and Settings'
-   tick, LOG= off at first; decided 22 Nov 2026: "When I want to debug
-   something, a log file is very helpful"): epdf.log beside EPDF.PRG,
+   tick, LOG= off at first; decided 22 Nov 2026): epdf.log beside EPDF.PRG,
    through common's conn.c (each line written at once, the file closed a
    second after, 256 KB rolling to epdf.old) */
 static int log_on;
@@ -156,8 +155,7 @@ static void settings_read(void)
 	/* NatFeats (the emulator's console, the rigs' log) only where the INF
 	   asks: NATFEATS=1, which only the test rigs write; not in Settings.
 	   Read before the first log_event: a probe made with nf_on 0 is
-	   never made again (decided 15 Nov 2026: "make it a .INF setting so
-	   that it can be added in our testing but have no bearing outside";
+	   never made again (decided 15 Nov 2026;
 	   a Vampire V4SA hung on the probe's illegal instruction) */
 	if ((v = inf_get(&inf, "NATFEATS")) != NULL && v[0] == '1')
 		nf_on = 1;

@@ -1,8 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
-"""The rigs' realistic document, made here (Erez, 7 Nov 2026: "a PDF with
-more than text ... nicely laid out, with pictures and graphic objects,
-but not too large, so that it fits the testing times"). Ours, so freely
+"""The rigs' realistic document, made here (decided 7 Nov 2026). Ours, so freely
 redistributable; nothing of anyone else's in it but the Liberation Sans
 glyphs EPDF already ships (OFL 1.1), subset.
 

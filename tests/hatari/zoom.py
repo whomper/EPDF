@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
-"""View > Zoom In (Erez, 14 Nov 2026: two sizes, Normal and Zoom, the item
+"""View > Zoom In (decided 14 Nov 2026: two sizes, Normal and Zoom, the item
 ticked while zoomed; the keypad's + and -, EWeb's ^+ ^- ^0; a zoomed page
 moved by a drag, by the window's sliders and its arrows), on common's
 speed rig:
 
     zoom.py WORK [MACHINE...]        (default: Falcon:16 ST:mono)
 
-On a Falcon (Erez's, 14 MB: a stock 4 MB Falcon has room for 150 % of
+On a Falcon (one with more memory: a stock 4 MB Falcon has room for 150 % of
 the showcase's first page at most): the showcase (showcase.py) with
 render.ovl and the standard fonts, View > Pages, then keypad + (200 %:
 "zoom 200", the enlarged page at once, then the one render.ovl draws twice
@@ -87,7 +87,7 @@ def run(work, machine, converted):
         showcase.make(src)
         doc = "C:\\SHOW.PDF"
         if converted == "path":
-            # EConvert's own: the original's path in /Source (Erez, 20 Nov
+            # EConvert's own: the original's path in /Source (decided 20 Nov
             # 2026: a copy EConvert made was zoomed from its stored page)
             os.makedirs(os.path.join(r.hd, "DOCS"))
             os.makedirs(os.path.join(r.hd, "OUT"))
@@ -142,12 +142,12 @@ def run(work, machine, converted):
             if "EPDF zoom 300" in r.console() or "EPDF zoom 400" in r.console():
                 bad.append("ST: zoomed past the double page")
         else:
-            # two sizes, Normal and Zoom (Erez, 14 Nov 2026): keypad + gives
+            # two sizes, Normal and Zoom (decided 14 Nov 2026): keypad + gives
             # 200 % at once, + again nothing more
             if not wait(r, "EPDF zoom 200", 1, 30):
                 if "EPDF zoom-refused memory" in r.console():
                     # (a 4 MB Falcon in 256 colours: no room for the bitmap;
-                    # the status bar says so, Erez 21 Nov 2026)
+                    # the status bar says so, decided 21 Nov 2026)
                     time.sleep(2)
                     r.shot("refused")
                     print("  zoom refused for memory, said in the status bar (shot)")
@@ -155,7 +155,7 @@ def run(work, machine, converted):
                 bad.append("keypad +: no 200 %%: %s" % [l for l in r.console().splitlines() if "zoom" in l])
                 raise RuntimeError
             # the page's picture enlarged at once, before the sharp one is drawn
-            # (Erez, 8 Nov 2026: "tens of seconds of wait time")
+            # (decided 8 Nov 2026)
             time.sleep(2)
             quick = r.shot("enlarged")
             if "EPDF zoom-enlarged" not in r.console():
@@ -192,7 +192,7 @@ def run(work, machine, converted):
                 bad.append("the drag didn't move the page (%d pixels)" % differ(z200, dragged))
             if "EPDF pages 0" in r.console():
                 bad.append("the drag left View > Pages")
-            # the window's sliders and arrows move the zoomed page (Erez, 14
+            # the window's sliders and arrows move the zoomed page (decided 14
             # Nov 2026: the right slider gave the page as it was back)
             prev = dragged
             for what, x, y, least in (("the right bar below its slider", VBAR_X, VBAR_Y, 2000),
@@ -215,7 +215,7 @@ def run(work, machine, converted):
             back = r.shot("back")
             if differ(pages, back) > 2000:
                 bad.append("keypad -: not View > Pages as it was (%d pixels differ)" % differ(pages, back))
-            # EWeb's keys (Erez, 9 Nov 2026): ^+ zoomed, ^0 the page as it was
+            # EWeb's keys (decided 9 Nov 2026): ^+ zoomed, ^0 the page as it was
             n200 = r.console().count("EPDF zoom 200")
             r.key("ctrl+plus")
             if not wait(r, "EPDF zoom 200", n200 + 1, 30):
@@ -248,7 +248,7 @@ def main(argv):
         sys.exit(__doc__)
     bad = []
     if erz.MACHINE in argv[1:]:
-        erz.setup()             # (Erez's configuration: NVDI where this computer has it)
+        erz.setup()             # (the reference configuration: NVDI where this computer has it)
     for m in argv[1:] or ["Falcon:16", "ST:mono"]:
         if not m.startswith("ST"):
             bad += run(argv[0], m, False)

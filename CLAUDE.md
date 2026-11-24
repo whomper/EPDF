@@ -19,7 +19,7 @@ These come from AERA-Atari's repo template and are the same in every app's CLAUD
   When a change touches one of these, do it the guideline's way, even if the old code here did it
   differently.
 - **Speed is set by the stock machines** (decided 26 Oct 2026; the guidelines' "Speed"): an 8 MHz ST
-  and a stock Falcon (`ST`, `ST-1`, `Falcon-4`), not the DFB1. Design and code for them: draw only
+  and a stock Falcon (`ST`, `ST-1`, `Falcon-4`), not an accelerated one. Design and code for them: draw only
   what changed, keep the 68000's slow operations out of inner loops, do work once. A change to
   drawing, a loop over the data or the start gives its `AESGAP` stretches on `ST` and `Falcon-4`,
   before and after, in its commit message. A GEM release passes the speed rig within the
@@ -42,9 +42,7 @@ These come from AERA-Atari's repo template and are the same in every app's CLAUD
   Work lands on `main`; to try a fix on real hardware, release it. If a release doesn't work, fix
   forward: a new release with the next number, before any other work; never a rollback (decided 7 Nov 2026).
 - **Releases go out without asking the owner** (his decision, 23 Oct 2026; guidelines 1.2), through **the
-  regression gate** (decided 17 Nov 2026: "we need to be extra careful with regression issues as there are
-  users of our software. This means testing across all configurations" and "make sure we don't loose
-  performance"; AERA-Atari a22574e, guidelines 1.2 and standards/TEST-MATRIX.md's gate table). Every code
+  regression gate** (decided 17 Nov 2026; AERA-Atari a22574e, guidelines 1.2 and standards/TEST-MATRIX.md's gate table). Every code
   candidate, in this order:
   1. this repo's checks;
   2. the rigs on every row of the gate table EPDF runs on, on real TOS images and NVDI (EmuTOS is no
@@ -123,8 +121,7 @@ A PDF viewer: full pages on the Falcon and TT (the stock 4 MB Falcon, `Falcon-4`
 text view (reflowed text, search, copy, pictures) that also runs on a 68000 ST. A program (PRG) only,
 at first. This section is kept up to date: the build, the tests, what a release carries, the decisions.
 
-- **Where it stands (1 Nov 2026):** stage 1, the text view, approved by the owner ("time stage 1 work to
-  then", 29 Oct) and under way; stage 2 (page rendering) is not started and waits for his answer. Done:
+- **Where it stands (1 Nov 2026):** stage 1, the text view, approved (29 Oct) and under way; stage 2 (page rendering) is not started and waits for his answer. Done:
   the window with every page one after another (`src/view/docview.c`), reflow (the extractor's soft
   break, `PTEXT.soft`), reading in slices on a second stack (`src/gem/coro.S`), the text store with
   `EPDF.TXC` (`src/view/tstore.c`), Find/^G/Shift+^G, selection (XOR), Copy, Select all, the context
@@ -136,7 +133,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   the same day (v0.2 on bcd2adc): text, scroll and selection drawn into TOS's screen through
   common's text_plain, scr_rows and scr_xor; the Falcon within every time but Select all (55); on
   TOS 1.04 a line 80, a page 145, next page 310, Select all 85, released so by the owner's choice
-  ("option 3 now, then option 1"). Option 1 is on main since: rows wholly selected shown to the
+  (option 3 now, then option 1). Option 1 is on main since: rows wholly selected shown to the
   text's right edge, inverted as one box (win_sel_change: only rows whose shape changed are drawn).
   0.3, big documents on ST-1 (started 31 Oct), is on main as 8db7191b: content and scans read in
   pieces, pictures made a row at a time into the screen's bitmap (common's pic_dither_row), the
@@ -145,9 +142,9 @@ at first. This section is kept up to date: the build, the tests, what a release 
   corpus's 25 pass; the 3 fail on JPEGs too big for a 68000 (0.4). The hub cleared cc798ec3 on the owner's
   TOS (gui and acc_all; ST 1.04: a line 80, next page 320, Select all 60, About 250) and 0.3 went out
   (v0.3 on b58255c5, 31 Oct); the hub's big.py on ST-1 with TOS 1.04 was still running (a loss there:
-  0.3.x). Phase report sent through the hub. 0.4, pictures, started 1 Nov ("start 0.4"), went out
+  0.3.x). Phase report sent through the hub. 0.4, pictures, started 1 Nov, went out
   the same day (v0.4 on 2a4abf21, cleared on c96aaef7): a JPEG streamed and made a row at a time (common's pic_jpeg_rows), every picture made a
-  row at a time shown from the top down as its rows come (the owner: "rows top to bottom"; the plan's 1/8
+  row at a time shown from the top down as its rows come (the owner; the plan's 1/8
   preview didn't pay on a 68000, 197 s against 257 s), the DSP on a Falcon through pic.c's own
   baseline header reader (PIC_TJPGD_DSP, dspjpeg_port_jpeg: novel 100 -> 37 s, scan-stinternals 219
   -> 47 s on Falcon-4), scr_fill where scr_cpu_wins(), -DDLG_CPU; then 5.8's one click (click.c:
@@ -166,18 +163,18 @@ at first. This section is kept up to date: the build, the tests, what a release 
   85d8f4d2, cleared on bd825652): the menu bar built with the AES's cell (gl_wchar/gl_hchar), not the
   document font's (with a GDOS font its titles spread and its menus didn't open, 0.3 and 0.4; the
   speed rig compares a FONT= run's menu bar with the system font's), and text set a glyph at a time
-  (the owner's EDOS_01.PDF from Calamus SL: the fonts' widths their ink; a gap is a space only from 0.8 em
+  (a PDF from Calamus SL: the fonts' widths their ink; a gap is a space only from 0.8 em
   on such lines, a tight heading's spaces sorted before the next letter, the gutter found by every
   bin a gap covers or a strip few lines cross; `tests/glyphwise.py`). Resident 442,088. A release
   that fixed was X.Y.Z (0.4.1 to 0.5.4); from 0.6 the versions are X.Y only, as every other app's
   (decided 3 Nov 2026: 0.5.5 was never released, its work went out in 0.6).
-  0.5 ("start 0.5", 1 Nov) under way. 0.4.2 went out the same day (v0.4.2 on 5dc88c76, cleared on
+  0.5 (started 1 Nov) under way. 0.4.2 went out the same day (v0.4.2 on 5dc88c76, cleared on
   447635df): common's inflate fix (0.4 and 0.4.1 could read a damaged stream wrongly), the ST's next
   page, a page while reading and Select all within their times (TOS 1.04: 195, 110, 45), five-place
   fractions read right, AES-256 opened in the reader's turns. Resident 449,236. Over on TOS 1.04: a
   line 80 (TOS's own drawing, the hub thinks), View > The page's lines 305, About 230 (200 with the
   hub's e9f041d). 0.5 went out on 2 Nov (v0.5 on d29ef93b, cleared on 6408af58): the reading
-  stretches (EDOS_01.PDF held an ST 17 s at a time; now about 0.2 s: font heads, the chunks'
+  stretches (a Calamus SL PDF held an ST 17 s at a time; now about 0.2 s: font heads, the chunks'
   merge sort, inflate's turns, two file windows; MEASURE's gap_ms, tools/gapat.py), the sliders
   set only when they move a pixel, a line in two turns and what a scroll owes drawn in bands of
   about 60 ms (textwin.c's owe_r0/owe_r1; tests/hatari/hold.py checks a held key against a whole
@@ -190,7 +187,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   libc's doubling; known: ST-1's big.py has memory refused, and recovered, in manual-compendium
   and scan-stinternals (none lost), to be looked at again with the hub's task #98 (the family's
   first heap block). Still to look at: ST:med's page third band (120 ms on TOS 1.04). Then
-  the owner's photos of 0.5 (2 Nov): EDOS_01.PDF's first page lost its first word into the next line
+  a report on 0.5 (2 Nov): a Calamus SL page lost its first word into the next line
   (a drop cap, its baseline a line down: taken into the line its text starts) and read its two
   columns across each other (the right one 3 points higher, beside a picture: the gutter found as a
   strip of the body's lines without ink, `clear_strip`, kept off tables, contents pages and
@@ -206,8 +203,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   (with the KB free) and "quit" logged for the rigs. The guidelines name no reserve yet (the hub's
   #132: ClaudeST failed at about 54 KB). The hub cleared 5ae99e168 (acc_all under NVDI "free-kb
   18 2 1") and 0.5.1 went out on 2 Nov (v0.5.1 on 5573c536); known in its notes: ST high under NVDI
-  with a 14-point GDOS font, a new page about a third of a second. The progress row (decided 2 Nov: "a progress bar
-  at the top ... an idea how long it will take"; his choices: a row shown only while EPDF works, the
+  with a 14-point GDOS font, a new page about a third of a second. The progress row (decided 2 Nov; his choices: a row shown only while EPDF works, the
   job the user waits on): textwin.c's win_progress (bar_h, whole/work), epdf.c's progress() each
   turn: Copy, a search, opening, the pages read (PDOC.page_prog within a page: its content streams'
   stored bytes read), a picture (PICE.made rows); shown after 0.5 s of a job, gone after 0.3 s of
@@ -224,10 +220,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   PIC_NO_GIF/PIC_NO_PNG (AERA-Atari 6588b07, this session's patch: resident 424,504, "free-kb 29"
   under NVDI with four accessories). The hub cleared ca99f40e5 and 0.5.2 went out on 2 Nov (v0.5.2
   on a002695e). Next: Select all on ST:mono at its 50, a longer document for speed.py's shot of the
-  row, About against Rig.about, the maps' speed on an ST. Then the owner (2 Nov): "The status bar should be
-  placed at the bottom of the page, just like EWeb does ... says viewing page x / y and then if
-  there is activity going on ... it is stated after that text. Progress is marked with a thin line
-  at the bottom of that text area that is filled from left to right": the window has no info line
+  row, About against Rig.about, the maps' speed on an ST. Then the owner (2 Nov): the window has no info line
   (as EWeb's); textwin.c's status bar at the foot, always there, ch + 5 high (+ 7 in a tall font):
   a line along its top, "Viewing page 3 / 8" then the status (found on page ..., copied) and the
   job's words, and along its foot a line 2 pixels high (3) that fills; white ground (EWeb's grey
@@ -250,7 +243,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   as it is, 40-45 of its 50: box_op, the window's rows inverted, 19 ms, is the 68000's floor) and,
   after EUpdate 1.28, 0.5.4 went out on 2 Nov (v0.5.4 on 1fec4feb). Resident 421,768. Next: the
   bar's separator 0xFA, the middle dot (0xF9 draws high in TOS 1.04's font, the hub). Then, for
-  the owner's "work on speed first" (3 Nov): a map's numbers read only when an operator wants them
+  the owner's (3 Nov): a map's numbers read only when an operator wants them
   (pdftext.c's num_val: OP.s/.n kept in the window, read before a refill moves it; nums_run, numbers
   and white space in a loop of their own on register copies; run_of's 3-instruction scan to the
   window's sentinel CSENT; ccls, the characters' classes; the stop hook every 8 operators; the window
@@ -271,7 +264,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   1.0 went out on 3 Nov (v1.0 on 6033667ab; resident 427,332): the content loop's numbers on
   register copies inside BT…ET (nums_run), CC_PATH/CC_PAINT's fast path, ST:med's band; on ST
   map-europe 40.7 -> 36.0 s, map-timezones 116 -> 102, map-physical-world 210 -> 181.
-  1.1 ("Complete work to bring it to 1.1 with converter", 3 Nov) under way: EPDF reads a converted
+  1.1 (with the converter, started 3 Nov) under way: EPDF reads a converted
   PDF (`docs/CONVERTED-PDF.md`; pdf_prepared_page, PDOC.prepared) with the Optimised badge
   (v_rfbox, pen 3, black in mono) and View > Pages (a menu toggle, the owner's choice; CMD_PAGES,
   doc_set_pages: the page's picture lines in the store); pics.c's direct pen path, raw rows and
@@ -286,8 +279,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   page drawn by EPDF on a Falcon/TT, EConvert's renderer) as his decision after 1.1; his answer is
   pending. The hub cleared 78bb278d1 (acc_all, speed.py, econv.py, econv_speed.py: start 145, the
   job's turns 40, Stop 45; prepared.py; deflate.c's host warning silenced in the bump) and 1.1 went
-  out on 3 Nov (v1.1 on 78bb278d1). EConvert carries EPDF's icon in 1.1 (the owner, "For your questions,
-  yes"): `make icons` draws icons/ECONV* and src/econv/icon*.h from common/icons/ECONVERT.txt once
+  out on 3 Nov (v1.1 on 78bb278d1). EConvert carries EPDF's icon in 1.1 (the owner): `make icons` draws icons/ECONV* and src/econv/icon*.h from common/icons/ECONVERT.txt once
   the hub has drawn the one the owner picks (its three sketches), for 1.2. Its fonts sit in `fonts`
   beside econvert.prg. Later: JPX (OpenJPEG) and JBIG2, gateway mode with AERA-Gateway.
   Hub's rules from the measurement report: keep `-msoft-float` on every `-m68030` build (`make test`
@@ -311,7 +303,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   press_update_begin). render.ovl draws in smaller bands when its canvas can't be had. Rig:
   tests/hatari/zoom.py (Falcon:16 ST:mono; a stock Falcon-4 has room for 150 % at most). Gateway
   copies are EPDF's own, gate1.pdf/gate2.pdf beside EPDF.PRG, deleted when not open (decided 8 Nov
-  2026: "no pre-save", no folder atari); File > Save Optimised... writes the open converted PDF
+  2026, no folder atari); File > Save Optimised... writes the open converted PDF
   where the user says. Translation (EPDF 2.0, decided 8 Nov 2026; AERA-Atari standards/TRANSLATION-SERVICE.md):
   View > Translate (TRANSLATE=, TRANSLATETO=; TRPORT= for the rigs), src/gem/trview.c (direct: trpara.c's
   paragraphs to translategate through common's translate.c on a stack of its own, the page in view
@@ -319,7 +311,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   /Translation (pdfgate's translate=CODE with Open on the Gateway: nothing asked by EPDF), Settings'
   Translate into and Languages... (gatedlg.c's gate_dialog_tr, common's langs.c), the right-click
   Translate...; Off runs nothing of it. Rig: tests/hatari/translate_view.py (gateway/'s translategate.py
-  stand-in and pdfgate.py; EPDF_PRG=build/aprof/EPDF.PRG for the turns). Then speed. The family's UI (decided 9 Nov 2026: "make sure EPDF UI aligns with the family"; the hub's
+  stand-in and pdfgate.py; EPDF_PRG=build/aprof/EPDF.PRG for the turns). Then speed. The family's UI (decided 9 Nov 2026; the hub's
   review): Options (Settings... ^, , Font... ⇧^F, a line, Open on the Gateway), Help (EPDF help,
   Keys...); Settings is common's settings_run() (AERA-Atari 07c5ab1; src/gem/gatedlg.c gives its pages:
   General: Translate into, a set_value button whose act opens the Gateway's languages over it,
@@ -329,7 +321,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   Error); translate_view.py's direct mode checks it (TRV_DELAY: slowgate.py). EConvert's window is
   the owner's B2 (band, list with panebar and buttons at its right, lines, pop-up buttons, two bars),
   iconifiable. The owner's answers (9 Nov 2026; AERA-Atari standards/ui/DECISIONS-2026-11-09.md and, through the
-  hub, "Release it" and "Change EPDF to align with EWeb"): Font... in Options with no key (D6); View >
+  hub: release, and EPDF aligned with EWeb): Font... in Options with no key (D6); View >
   Larger text ^+, Smaller text ^-, Actual size ^0, the keypad's + and - too (EWeb's; since 14 Nov 2026
   one item, View > Zoom In ^+, ticked while zoomed: two sizes, Normal and Zoom at 200 %, the owner; the
   window's sliders and arrows move a zoomed page; the horizontal bar only while zoomed, decided 14 Nov:
@@ -337,21 +329,21 @@ at first. This section is kept up to date: the build, the tests, what a release 
   guide's first page (D12); jobs say "45%", "12 KB of 3.4 MB", "2 min left" (D35); "Copied to the
   clipboard." / "Couldn't write the clipboard." (D50); the Find dialog on common's dlgbuild (band,
   Cancel then Find, 10 wide); every GEM object built -DDLG_CLICK (C16); EConvert keeps B2 (D34).
-  tests/hatari/fontdlg.py opens Font... from the menu (gui.py types keys only). The owner's photos of 2.4 (9 Nov): a page in 16 colours
+  tests/hatari/fontdlg.py opens Font... from the menu (gui.py types keys only). A report on 2.4 (9 Nov): a page in 16 colours
   takes a colour near a pen as that pen, its error dropped (src/rovl/pens.c snap_pen: flat fills and grey
   text were dithered into specks); a zoom stops another size's page drawing at once
   (doc_pic_stop_page_unless: 62 -> 29 s to the sharp page on Falcon:16); EConvert's window in the B2
-  mock-up's colours, each the nearest of the 16 pens (pen_nearest; mono black and white). The owner's machine is 256 colours (10 Nov):
+  mock-up's colours, each the nearest of the 16 pens (pen_nearest; mono black and white). A screen of 256 colours (10 Nov):
   render.ovl's pens (snap and Floyd-Steinberg) take 2 to 256 pens and 1 to 8 planes (pens.c's tables of
   shorts, 128 KB; pack() a plane at a time past 4), so a page in 256 colours no longer goes through
-  common's dither (EDOS page 1 on Falcon:256: shown 22.5 -> 8.1 s, at 150 % 48.5 -> 16.6 s). The UI's
+  common's dither (a Calamus SL page on Falcon:256: shown 22.5 -> 8.1 s, at 150 % 48.5 -> 16.6 s). The UI's
   colours stay within pens 0-15 (pen_nearest's rule): EConvert's navy band and light-blue row in 256 colours are pens 250
   and 251 set to the mock-up's colours while it runs and given back at its end and in crash_quit
   (pens_take/pens_give; guidelines 5.2's own-theme pens, the hub 10 Nov), painted over the tree (paint256). A page in bands re-reads the page once a band (18
   bands: 4 to 15 times slower): draw it whole where memory allows.
   EConvert 2.8 (decided 10 Nov 2026): the batch's end said in the window (the batch's line: "Stopped: 1
   converted in 0:34"), tips on its buttons (common's tooltip), WM_BOTTOMED; the progress drawn flicker
-  free and fast ("The converter UI statistics flicker every second"): only the letters that changed
+  free and fast (decided 10 Nov 2026): only the letters that changed
   (span/cells, text.c's text_n: TOS's VDI is slow with a clip tight round text) and the bar's new
   part, off the screen through common's offdraw; draw() notes what a redraw drew (note_drawn); at
   the end only the rows that changed. Falcon-4 (EmuTOS): the job's turns 135 -> 85 (the first tick,
@@ -360,7 +352,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   pages"): a page with colour gets /Colour only, one without its /Mono; EPDF on a mono screen
   shows /Colour dithered. Through the Gateway pages=colouronly (AERA-Gateway 1.42, EPDF 2.9;
   gateway.py with GW_PAGES=colouronly).
-  The page strip (decided 15 Nov 2026: "complete the functionality"; EPDF 2.33): View > Page strip
+  The page strip (decided 15 Nov 2026; EPDF 2.33): View > Page strip
   (PAGESTRIP=, off by default: the owner), a column of 112 pixels at the window's left, src/gem/strip.c (a column of cells shaped to
   move to common: common's panebar for its slider, press_track for its clicks), each cell an A4 box with
   its number: the page's /Thumb (a converted PDF's from EConvert or the Gateway, docs/CONVERTED-PDF.md),
@@ -402,7 +394,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   again. render.ovl built with PIC_NO_GIF (9 KB; its own pads RV_PIC_PAD, RV_GIF_PAD/_RO/_STR).
   Rigs: drawn.py with EPDF_BIN (a variant's: the luck test with a 100-byte log line), big.py --bin
   --rovl --erz (the corpus in the text view with render.ovl installed, against a release).
-  #48, JPX and JBIG2 pictures (decided 16 Nov 2026, through the hub: "Approve your recommendations"; the
+  #48, JPX and JBIG2 pictures (decided 16 Nov 2026, through the hub: the recommendations approved; the
   hub's conditions: both EPDF's own, not in common/ till another app asks; T.88 and T.800 only, never
   jbig2dec's source; OpenJPEG and poppler host oracles only; make fuzz; every stretch under 50 ms on
   Falcon-4; each decoder's size against render.ovl's reservation). JBIG2: src/jbig2.c + src/mq.c
@@ -513,7 +505,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   18 Nov 2026 (v2.38 on 406f07b64, the hub's go on a46bb0b17 after its acc_all with four
   accessories under NVDI, two boots). Next (2.39): common's 796e05e/2fa3aa7 (Settings in turns),
   profpad.py, pic.c's grey nearest pens, ST-1's fail-fast with the hub's #98.
-  2.39 (decided 18 Nov 2026: "Make 1-4 and the two deferred items to be 2.39 and start working"): (1) common
+  2.39 (decided 18 Nov 2026): (1) common
   2fa3aa7 (Settings in turns), EP_PAD_V/R refitted, EConvert's new EC_DL_PAD/EC_ST_PAD (10083092b; the
   reference is a clean v2.38 build, byte for byte the release: a working tree's stale objects misled once);
   (2) profpad.py: three gaps found (a section's start, an archive's member, the merged strings), sent to
@@ -565,7 +557,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   places, no row moved). The hub's family check (ECal, EContact, EHypView, EMail check under NVDI,
   two boots) and go on 13992c199; 2.39 went out on 19 Nov 2026 (v2.39 on 8acef7368; the Release
   workflow's first attempt hung in Tools, cancelled before anything was published, the re-run went
-  through). 2.40 (the hub, 19 Nov 2026, the owner's "Release all now"): the FireBee fault fix alone, common
+  through). 2.40 (the hub, 19 Nov 2026, the owner's): the FireBee fault fix alone, common
   synced at exactly f553f9336 (a 68000 program's Line-A 0xa000 is the ColdFire's EMAC macw: text.c,
   offdraw.c, aboutbox.c and badge.c take the VDI's way where _CF_ is set; Hatari's FireBee has no EMAC,
   so unconfirmed on a real one). Pads refitted against a clean v2.39 build by the link maps
@@ -605,8 +597,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   --source-path; aerapdf's files unchanged); doc.c's find_original takes it, else /Name in the copy's
   folder's parent, each only when its size is /Bytes (a 68020+; "original path|parent|none"), and
   View > Pages draws such pages sharp too. zoom.py's two converted cases (the folder above, /Path)
-  check the zoomed page's glyphs: 2.40's build fails them, 2.42 passes on Falcon:256 and, as the owner's
-  real 14 MB + TT RAM, Falcon:256 under NVDI (decided 21 Nov 2026: "I have both 14MB and tt ram"; the
+  check the zoomed page's glyphs: 2.40's build fails them, 2.42 passes on Falcon:256 and Falcon:256 under NVDI with TT RAM (21 Nov 2026; the
   hub keeps Falcon-4:256 the floor for the pairs). Where no zoom fits (Falcon-4:256: 200 % is 2 MB
   of bitmap) the status bar says "Not enough memory to zoom" (the owner). EConvert's Translate (decided 20
   Nov 2026: a pop-up in the window, Off at the start, not kept): the Gateway's languages asked when
@@ -622,43 +613,40 @@ at first. This section is kept up to date: the build, the tests, what a release 
   work to 0.1 ms). Next: 2.43, printing (branch print243: File > Print... ^P through NVDI, the owner's
   words of 21 Nov 2026), then common's about_prepare.
   2.43 (22 Nov 2026; v2.43 on cadca7570's programs, 1b51bd8b5, the hub's go): File > Print... ^P through
-  NVDI or another GDOS (src/gem/prjob.c on common's print.c, 523d378), the owner's words of 21 Nov 2026: the
+  NVDI or another GDOS (src/gem/prjob.c on common's print.c, 523d378), decided 21 Nov 2026: the
   two alerts (as EMail's), "Printing page 3 of 12" with the family's bar, "Printed." / "Printing
   stopped.", a picture left out for memory "Printed without some pictures: not enough memory." (the
   shorter wording, his choice). An ST prints the text view's text; a 68020+ with render.ovl draws each
-  page (on under 2 MB free render.ovl's document closed after each page: the owner's "each page processed
-  independently"), the pictures paused first (doc_pics_pause, doc_print_room). Without WDIALOG print.c
+  page (on under 2 MB free render.ovl's document closed after each page: the owner's), the pictures paused first (doc_pics_pause, doc_print_room). Without WDIALOG print.c
   opens device 21 itself; a paperless device (META.SYS, 0..32767) is held to A4. prjob.o and print.o
   linked last; pads refitted against v2.42 (new eppad_z, eppad_u, bss pads on b and j). Rig
   tests/hatari/print.py (the reference configuration, ST:mono, Falcon:256 14 MB; pages 2-4, Esc, no WDIALOG,
   page 3 alone on Falcon-4: its pictures left out and said so). A page with pictures takes 5-8 min on
   a 4 MB Falcon, about 2 with 14 MB; an ST's text page 35 s. Next: FireBee native (#131), about_prepare.
   2.44 (22 Nov 2026; the hub's go on 1069b2325): two packages, epdf-x.y.zip and epdf-x.y-firebee.zip
-  (decided 22 Nov 2026: "two packages ... Same names"; the guidelines' 7.4): binary/fb/ holds the ColdFire's
+  (decided 22 Nov 2026; the guidelines' 7.4): binary/fb/ holds the ColdFire's
   EPDF.PRG, ECONVERT.PRG and render.ovl (common/tools/mkfirebee.py), each package's program names the other
   on the wrong machine (tests/hatari/fbalert.py); the release publishes only the two zips, the FireBee's
   first and the standard last (the release check reads the API's asset order). The log (6.5, D8): Options >
   Write a log, its last item, and Settings' General page (EConvert both too), LOG= off at first, through
   common's conn.c conn_log to epdf.log/epdf.old and econvert.log beside the program; log_event's lines and
   the print steps (print-open's driver and device from PRN_SETTINGS, "print-bands N copies B ink W" a
-  page); tests/hatari/logfile.py (`make log-test`). Printing fails on the owner's Falcon (PCL.SYS, device
-  21) while EMail prints there: Hatari can't open PCL.SYS, so 2.44's notes ask for epdf.log after printing
-  a page; the fix in the release after. Pads refitted against v2.43 (EPDF at its places but print.o, cold
+  page); tests/hatari/logfile.py (`make log-test`). Printing was reported failing where EMail prints (a printer driver Hatari can't open), so 2.44's notes
+  ask for epdf.log after printing a page; the fix in the release after. Pads refitted against v2.43 (EPDF at its places but print.o, cold
   and last). The pairs: View > The page's lines on the reference configuration 155 -> 165 (medians of six),
   cleared by the hub on gemprof (the same work to 0.1 ms). Known (the hub's family check): ST-1 on TOS 1.04
   with ECal, EContact or EHypView loaded, the Desk menu doesn't open in the first round and EPDF's quit
   doesn't bring the desktop back, as in 2.43: EPDF's 1 MB limit beside the bigger accessories, for after
   the 1.0s, with the free memory from the log. Next: the print fix from the log, soft picture colours
   (#132), about_prepare.
-  Next, after 2.36 (decided 17 Nov 2026: "go with Faster display as default and lets see that the UI is
-  real enough"): the converter prepares pictures and whole pages in the screen's own colours, so EPDF
+  Next, after 2.36 (decided 17 Nov 2026): the converter prepares pictures and whole pages in the screen's own colours, so EPDF
   only unpacks and copies (the rigs' logs: on Falcon-4:256 a photo 1.2 s decoding, 6.7 s fitting to
   the screen's colours). EConvert's Settings > General "Optimise for: Smaller files / Faster display",
   Faster display the default, for the converting machine's screen; the Gateway the same from EPDF's
   Open on the Gateway, for the screen EPDF runs on; a 256-colour whole page and its double; a file so
   made opens anywhere, at today's speed where the screen differs. Measure on the showcase first; show
   the owner the Settings page as the rig shoots it.
-  2.11 (the owner's photos and choices, 10 Nov 2026: "Both", "Band on the page"): a converted copy's
+  2.11 (decided 10 Nov 2026: both fixes, a band on the page): a converted copy's
   View > Pages on a Falcon/TT in colour is drawn sharp from its original by render.ovl over the stored
   page (doc.c's sharp_pages, pdbl.stand, doc_stand_in; the stored one decoded first, pics_next),
   where memory holds both and the canvas whole (a 4 MB Falcon keeps the stored page); "Drawing a
@@ -670,12 +658,10 @@ at first. This section is kept up to date: the build, the tests, what a release 
   - **1.0 is the text view, complete:** 0.2 speed on an 8 MHz ST (the guidelines' times), 0.3 big
     documents on ST-1 (streamed content, pictures' memory), 0.4 pictures (DSP JPEG on the Falcon, the
     1/8 preview on a 68000), 0.5 the rest (GDOS font on hardware, AES-256 on a 68000), then 1.0.
-    ("Reports" stood here too: this session's shorthand for its own 0.5 line of 31 Oct, "anything
-    0.1-0.4 turn up from you", the owner's findings on the releases before it (his EDOS_01.PDF: 0.4.1 and
-    0.5); he was sent the text, 2 Nov. The GDOS font: ST users run NVDI (decided 2 Nov), covered by the
+    (Reports stood here too: faults found in the releases before 0.5, fixed in 0.4.1 and 0.5. The GDOS font: ST users run NVDI (decided 2 Nov), covered by the
     speed rig under NVDI with a GDOS font on ST:mono, ST:med and Falcon-4, AERA-Atari c32220c. The
     About box on an 8 MHz ST in low or medium within 200 ms, 150 elsewhere: the owner's (a), AERA-Atari
-    69da4d6, speed.py's Rig.about. Maps on an ST: "work on speed first" (decided 2 Nov): the
+    69da4d6, speed.py's Rig.about. Maps on an ST: speed first (decided 2 Nov): the
     interpreter's cost on a 68000 before the question is put again.)
     Full pages drawn by the Falcon itself (stage 2) are not part of it.
   - **EConvert** (`ECONVERT.PRG`), the AERA PDF converter, after 1.0, for the Falcon and TT (68030;
@@ -738,8 +724,7 @@ at first. This section is kept up to date: the build, the tests, what a release 
   Claude-Session lines. No model name in a commit or a file.
 - **Hatari rigs** boot the machines through `common/tools/machines.py` (ST, ST-1, TT, Falcon,
   Falcon-4), on real TOS 1.04 and 4.04 where present (`~/.aera/tos`), else EmuTOS. EPDF and
-  EConvert log through NatFeats only when their INF has `NATFEATS=1` (decided 15 Nov 2026: "make it a
-  .INF setting so that it can be added in our testing but have no bearing outside"; a Vampire V4SA
+  EConvert log through NatFeats only when their INF has `NATFEATS=1` (decided 15 Nov 2026; a Vampire V4SA
   hung on the probe): every rig calls `tests/hatari/natfeats.py`'s `on(hd)` before it starts them,
   the test programs (`atari/*.c`) set `nf_on = 1`, and the rigs' builds (build/aprof, build/times)
   link `atari/nfon.c`. Not in Settings. A FireBee (FireTOS's `_CF_`, which also says `_CPU 60`) loads

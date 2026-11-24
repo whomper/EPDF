@@ -7,7 +7,7 @@
  *
  * Reads the page with the reader, records every glyph it shows (font program, character,
  * place on the page, size) and writes OUTDIR/TAG.GLJ and the font programs it uses as
- * OUTDIR/F<object>.FNT (decoded; a standard font becomes Liberation, Erez's choice of metric
+ * OUTDIR/F<object>.FNT (decoded; a standard font becomes Liberation, the choice of metric
  * compatible free fonts to be confirmed). Prints one JSON line.
  *
  * The GLJ file, big-endian: "EPGJ", u16 version 1, u16 fonts, u32 glyphs, s32 page width,

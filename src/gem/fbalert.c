@@ -2,7 +2,7 @@
  * Copyright (C) 2026 AERA | Erez Yaary */
 /*
  * fbalert.c - EPDF's two packages name each other (the guidelines' 7.4,
- * Erez 22 Nov 2026: the standard package and the FireBee's, the same names):
+ * decided 22 Nov 2026: the standard package and the FireBee's, the same names):
  * common's cpucheck.c (EPDF.PRG, any 68000 and up) shows cpu_cf_alert on a
  * FireBee, cpucheck_cf.S (the FireBee package's build, common's mkfirebee.py)
  * cpu_alert on a machine without the _CF_ cookie. Linked last, so nothing that was

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
-"""Erez's configuration for the rigs (the hub, 10 Nov 2026): a Falcon with
+"""the reference configuration for the rigs (the hub, 10 Nov 2026): a Falcon with
 TOS 4.04, 4 MB and NVDI in 256 colours, common's machines.ERZ_MACHINE. It
 takes the place of one Falcon run in each rig that ran two (zoom.py keeps
 its Falcon:16 and Falcon:256: their palettes give different pages). Where

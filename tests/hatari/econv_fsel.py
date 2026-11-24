@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
-"""EConvert's window by the mouse, the way a user goes (Erez, 5 Nov 2026:
-"when selecting a file to convert, and then selecting the target, it
-forgets the file and says there are 0 files to convert"):
+"""EConvert's window by the mouse, the way a user goes (decided 5 Nov 2026):
 
-    econv_fsel.py WORK [MACHINE...]        (default: Erez's configuration, erz.py)
+    econv_fsel.py WORK [MACHINE...]        (default: the reference configuration, erz.py)
 
 EConvert started with no files; Add files..., a PDF double-clicked in the
 file selector; Write to..., up to the drive, OUT opened, OK; then

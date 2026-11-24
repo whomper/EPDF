@@ -11,7 +11,7 @@
 #include "rovl.h"
 
 /* where render.ovl is (set by the program: beside it); in the FireBee's
-   package (Erez, 22 Nov 2026: the same names) it is the ColdFire's build */
+   package (decided 22 Nov 2026: the same names) it is the ColdFire's build */
 extern char rdraw_path[200];
 #define RDRAW_FILE "render.ovl"
 #define RDRAW_NAME "RENDER.OVL"

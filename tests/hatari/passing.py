@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
-"""View > Pages, a key held: the pages passed over are not drawn (#96, Erez
+"""View > Pages, a key held: the pages passed over are not drawn (#96, decided
 14 Nov 2026: moving away from the page read "kicks off various rendering
 activities and it is not what I wanted").
 
@@ -15,7 +15,7 @@ while the key is held at most one page starts (the first press, a move on
 its own, or the page it rests on when the key runs to the end), and once
 the view rests the page it stopped on is drawn, and no page between. The
 pages started come from EPDF's "page-start" events; those drawn ahead of the
-view in the background (Erez, 4 Nov 2026) say "ahead" and are left aside.
+view in the background (decided 4 Nov 2026) say "ahead" and are left aside.
 """
 import os
 import re
@@ -84,7 +84,7 @@ def run(work, machine):
         r.still()
         r.shot("rested")
         after = r.console()[t_up:]
-        # (the pages drawn ahead of the view in the background, Erez's of
+        # (the pages drawn ahead of the view in the background, decided
         # 4 Nov 2026, aside: "page-start N ahead")
         during = [int(p) for p in re.findall(r"EPDF page-start (\d+) *$", held, re.M)]
         rested = [int(p) for p in re.findall(r"EPDF page-start (\d+) *$", after, re.M)]

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
-"""The speed work's "same output" check (Erez, 13 Nov 2026; the guidelines'
+"""The speed work's "same output" check (decided 13 Nov 2026; the guidelines'
 Speed, "Optimising must not break anything"): every page of the corpus as
 the reader gives it (build/textgold: the text, every glyph's place and every
 picture), against a baseline made before the change.

@@ -156,7 +156,7 @@ def run(work, machine):
         d = con.find("EPDF drawn", o if o >= 0 else s)
         if s >= 0 and d >= 0:
             r.start_end = len(con[:d].encode("utf-8", "replace"))
-        # the progress row (Erez, 2 Nov 2026) as the book begins to be read
+        # the progress row (decided 2 Nov 2026) as the book begins to be read
         # (half a second after it opens): a shot of it as soon as it shows,
         # for the eye (under NVDI, a GDOS font: the hub's)
         for _ in range(30):

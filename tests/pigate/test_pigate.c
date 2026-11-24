@@ -141,7 +141,7 @@ int main(int argc, char **argv)
 		printf("FAIL the query: %s\n", q);
 		fails++;
 	}
-	/* thumbs=1 only when asked (Erez, 15 Nov 2026: the previews off by default) */
+	/* thumbs=1 only when asked (decided 15 Nov 2026: the previews off by default) */
 	o.thumbs = 1;
 	pg_query(&o, "A.PDF", q, sizeof q);
 	o.thumbs = 0;

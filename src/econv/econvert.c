@@ -138,8 +138,7 @@ static char out_dir[160], in_dir[160];
 static int has_030, on_gateway;
 static char gate_host[64];
 static unsigned short gate_port = GATE_PORT;
-/* Translate (decided 20 Nov 2026: "once you want to convert something, you
-   already know if you want to translate it as well"): a pop-up in the
+/* Translate (decided 20 Nov 2026): a pop-up in the
    window, Off when EConvert starts (his default; not kept in the INF), else
    the language each page's text is translated into by the Gateway's
    translation service, in both modes (on This Atari the text alone goes
@@ -259,9 +258,7 @@ static long mem_free(void)
 	return (long)Malloc(-1L);
 }
 
-/* the sizes this machine shows (decided 5 Nov 2026: "the 640 pixel
-   limitation is based on the actual user's machine ... figure out
-   available display area yourself and adapt to it"): the whole page's
+/* the sizes this machine shows (decided 5 Nov 2026): the whole page's
    picture as wide as EPDF's text column in a window the desktop's size
    (its kind and margins: textwin.c's WKIND and MARGIN), and a picture at
    most that window's inside (common's scr_work_size) */
@@ -357,9 +354,7 @@ static int add_folder(const char *dir)
 
 /* ---------------------------------------------------------------- the window's tree */
 
-/* The window (decided 9 Nov 2026: "Go with B but use the list management
-   of A ... a visual separator just beneath that area ... the same
-   separator as the one at the bottom"): a black band with the icon, the
+/* The window (decided 9 Nov 2026): a black band with the icon, the
    name and what the batch is; the files in a list, its buttons at the
    right; a line; the settings as pop-up buttons (the family's, 5.7: over
    the button, the choice ticked); a line; the file's and the batch's
@@ -1425,7 +1420,7 @@ static void redraw_list_alone(void)
    (four objects drawn one by one were 80 ms of a Falcon's turn) */
 
 /* g drawn off the screen and shown in one copy (offdraw.h: decided 10 Nov
-   2026, "The converter UI statistics flicker every second"): the ground,
+   2026): the ground,
    the words and the bar of a row all come at once. Where TOS's own screen
    can't be borrowed (MiNT, MagiC, NVDI that won't follow it, a piece too
    tall) it is drawn on the screen as before */

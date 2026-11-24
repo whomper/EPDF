@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
-"""Options > Font... (no key: Erez, 9 Nov 2026), on common's speed rig, which
+"""Options > Font... (no key: decided 9 Nov 2026), on common's speed rig, which
 clicks the menu (gui.py types keys only):
 
     fontdlg.py WORK [MACHINE...]        (default: ST:mono)

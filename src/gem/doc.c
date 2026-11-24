@@ -103,7 +103,7 @@ static char (*firsts)[FIRST_LINE];
 static SBUF rtrans;			/* and its /Translation, when it has one (rprep.trans) */
 static int rtrans_ok;
 
-/* View > Translate (Erez, 8 Nov 2026; AERA-Atari standards/TRANSLATION-
+/* View > Translate (decided 8 Nov 2026; AERA-Atari standards/TRANSLATION-
    SERVICE.md): each page's translation in a store of its own, in memory
    only (never on the Atari's disk), over the pages as read (trstore.under:
    a page not translated yet shows as it is). The view shows it while
@@ -146,7 +146,7 @@ static struct {
 } *pdbl;
 
 /* a converted copy's pages drawn sharp on a Falcon or TT in colour, from
-   its original by render.ovl, over the stored page (Erez, 10 Nov 2026: the
+   its original by render.ovl, over the stored page (decided 10 Nov 2026: the
    Pages view's stored 16 colours looked worse than the text view's
    pictures): -1 not known yet for this document */
 static int sharp = -1;
@@ -315,7 +315,7 @@ static void pages_drawn_note(long n)
 		   so a page reached by the reader keeps its height (most do) and
 		   what is below it stays where it was. Before, an unread page was
 		   its head alone and grew when read: a held key scrolling the
-		   pages saw them jump (Erez's EDOS_01.PDF, 14 Nov 2026) */
+		   pages saw them jump (a Calamus SL PDF, 14 Nov 2026) */
 		long m;
 
 		drawn = 2;
@@ -808,7 +808,7 @@ static int page_rows(long n, int w, int h, void (*row)(void *u, long y, const un
 		/* its canvas a page whole where it can (bands read the page again
 		   for each: 4 to 15 times slower) */
 		/* a converted copy's pages drawn bigger from its original
-		   (Erez, 8 Nov 2026: zoomed in colour), where it is still there;
+		   (decided 8 Nov 2026: zoomed in colour), where it is still there;
 		   else from the copy itself */
 		const char *from = orig[0] && pf_size(orig) > 0 ? orig : opath;
 
@@ -929,9 +929,7 @@ static void page_pic_stop(void)
 }
 
 /* a page being drawn that isn't obj at w x h stopped at once, its slot let
-   go: a zoom wants its own page now (Erez, 9 Nov 2026: "as soon as the
-   user zooms in, the current image viewing process need to stop and the
-   zoomed in image viewing must start"); it is drawn again when it is
+   go: a zoom wants its own page now (decided 9 Nov 2026); it is drawn again when it is
    wanted again */
 void doc_pic_stop_page_unless(long obj, int w, int h)
 {
@@ -1142,7 +1140,7 @@ int doc_pic_start(void)
 		   starts again on a bigger one */
 		/* (any document whose pages render.ovl draws: a converted
 		   copy's zoomed page too, since 1.10. That one ran on the
-		   pictures' 12 KB and overran it: Erez's EDOS copy, a page
+		   pictures' 12 KB and overran it: a big converted copy, a page
 		   clicked in View > Pages, 4 bombs past the stack's top, 8 Nov) */
 		long need = drawn || (e->obj >= PICS_PAGE) || doc_page_drawable() ? DRAW_STACK : PIC_STACK;
 
@@ -1374,7 +1372,7 @@ void doc_print_room(void)
 void doc_pic_drop_ahead(void)
 {
 	/* one ahead of the view gives way to one it shows; one the window
-	   shows but not on the page in focus gives way to that page's (Erez,
+	   shows but not on the page in focus gives way to that page's (decided
 	   8 Nov 2026: the page in focus first) */
 	if (!rpic || !((rpic->ahead && pics_shown_waiting()) ||
 		       (!rpic->ahead && pics_focus >= 0 && rpic->page != pics_focus && pics_focus_busy())))
@@ -1382,7 +1380,7 @@ void doc_pic_drop_ahead(void)
 	pic_give_way("ahead-stopped");
 }
 
-/* the progress row's (Erez, 2 Nov 2026) */
+/* the progress row's (decided 2 Nov 2026) */
 long doc_reading(int *prog)
 {
 	if (!doc || done >= npages)
@@ -1457,7 +1455,7 @@ const char *doc_name(void)
 	return name;
 }
 
-/* a converted copy's original (Erez, 20 Nov 2026: a copy EConvert made was
+/* a converted copy's original (decided 20 Nov 2026: a copy EConvert made was
    zoomed from its own stored page, never sharp): where /Source's /Path says
    (EConvert on this Atari), else by its /Name in the copy's folder's parent
    (EConvert's "Write to" a folder inside the PDFs' own); taken only when
@@ -1852,7 +1850,7 @@ const char *doc_status(void)
 	return s;
 }
 
-/* the window scrolled (Erez, 14 Nov 2026: a page
+/* the window scrolled (decided 14 Nov 2026: a page
    only passed over is no work for the machine). A move that follows another
    within 400 ms (a held key, the arrows held, a page key pressed again and
    again) holds the pictures till the view has been still 400 ms; one on its

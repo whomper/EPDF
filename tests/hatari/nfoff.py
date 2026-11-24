@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
 """One boot with NatFeats off (the regression gate's row 12, guidelines
-1.2, Erez 17 Nov 2026): EPDF as a user has it, no NATFEATS= in its INF,
+1.2, decided 17 Nov 2026): EPDF as a user has it, no NATFEATS= in its INF,
 so it never looks for the emulator's console and logs nothing:
-    nfoff.py WORK [MACHINE]        (default: Erez's configuration, erz.py)
+    nfoff.py WORK [MACHINE]        (default: the reference configuration, erz.py)
 LAUNCH.PRG starts EPDF.PRG on a two-page PDF with a picture (as gui.py's);
 the screen is taken while it runs and again after ^Q. Checked: EPDF said
 nothing through NatFeats; its window was there (the running shot differs

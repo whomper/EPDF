@@ -33,7 +33,7 @@ typedef struct {
 	   rows): it may hand the machine back for a while; 1 stops the page */
 	int (*turn)(void);
 	/* 1: a screen of 16 colours or fewer, whose pens make a small glyph's
-	   grey edges a faint dither (Erez's Falcon in 16 colours, 14 Nov
+	   grey edges a faint dither (a Falcon in 16 colours, 14 Nov
 	   2026): its glyphs under 20 pixels a bit a pixel (render.c's
 	   mono_glyphs 2). An older program's ROVL_HOST ends before it */
 	int crisp;

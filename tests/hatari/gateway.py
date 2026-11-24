@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
 """EConvert's Gateway mode on an emulated Atari against the Gateway's
-protocol on this computer (Erez, 7 Nov 2026):
+protocol on this computer (decided 7 Nov 2026):
 
     [PDFGATE=FOLDER|none] gateway.py WORK [MACHINE...]   (ST:mono)
 
@@ -12,8 +12,8 @@ tests/pigate/fakegate.py, with this build's converter (build/econvert), at
 127.0.0.1, when there is no pdfgate.py to run (PDFGATE=none). By default
 the Gateway is pdfgate.py itself from EPDF's read-only gateway/ copy
 (tools/sync-gateway.sh; PDFGATE=FOLDER for another): pdfgate is EPDF's
-protocol and EPDF tests every change to it (guidelines 1.2, Erez 8 Nov
-2026: "Gateway code of an app must be tested by the app"). EConvert
+protocol and EPDF tests every change to it (guidelines 1.2, decided 8 Nov
+2026). EConvert
 starts with CONVERT=gateway and two PDFs; Return converts. Checked:
 - both come back, and each is byte for byte what build/econvert writes on
   its own with the sizes EConvert sent ("gateway-sizes" in its log), then
@@ -27,12 +27,12 @@ starts with CONVERT=gateway and two PDFs; Return converts. Checked:
   every page of the copies carries its /Thumb, byte for byte econvert's
   own with --thumbs;
 - a Gateway that isn't there: the alert, and the files stay in the list.
-GW_EPDF="GWPAGES=both GWPHOTOS=jpeg" (EPDF's Settings > Gateway, Erez 20 Nov
+GW_EPDF="GWPAGES=both GWPHOTOS=jpeg" (EPDF's Settings > Gateway, decided 20 Nov
 2026, in its INF): EPDF's copy is econvert's own with those.
 Then EPDF with Open on the Gateway ticked (GATEWAY=1): a book opened is
 shown, converted by the Gateway meanwhile into EPDF's own copy beside the
 program (gate1.pdf: byte for byte the direct conversion with EPDF's sizes;
-no folder atari beside the PDF, Erez 8 Nov 2026) and opened in its place
+no folder atari beside the PDF, decided 8 Nov 2026) and opened in its place
 (the Optimised badge: a shot); no Gateway: the alert, the book stays
 shown.
 """
@@ -192,7 +192,7 @@ def direct_same(src, sizes, got, work, pages="mono", photos="indexed"):
 PAGES = os.environ.get("GW_PAGES", "mono")    # EConvert's whole pages (colouronly: Gateway 1.42)
 THUMBS = os.environ.get("GW_PREVIEWS") == "1"   # Page previews and the page strip on (thumbs=1: Gateway 1.48)
 RATE = int(os.environ.get("GW_RATE", "0")) or None    # bytes a second on the serial line: the phases' shots
-# EPDF's Settings > Gateway (Erez, 20 Nov 2026) in its INF, e.g. GW_EPDF="GWPAGES=both GWPHOTOS=jpeg":
+# EPDF's Settings > Gateway (decided 20 Nov 2026) in its INF, e.g. GW_EPDF="GWPAGES=both GWPHOTOS=jpeg":
 # the copy byte for byte econvert's with those
 GW_EPDF = dict(kv.split("=", 1) for kv in os.environ.get("GW_EPDF", "").split())
 
@@ -237,7 +237,7 @@ def run_epdf(work, machine, port, there=True):
                 bad.append("no sizes logged")
             else:
                 # the copy is EPDF's own, beside the program (gate1.pdf or
-                # gate2.pdf), never beside the PDF (Erez, 8 Nov 2026: no
+                # gate2.pdf), never beside the PDF (decided 8 Nov 2026: no
                 # pre-save; File > Save Optimised... keeps it)
                 ed = os.path.join(r.hd, "EPDF")
                 copies = [os.path.join(ed, f) for f in os.listdir(ed) if re.fullmatch(r"(?i)gate[12]\.pdf", f)]

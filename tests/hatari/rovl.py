@@ -4,7 +4,7 @@
 """render.ovl, the page as printed drawn on a Falcon or TT (stage 2), as
 EPDF.PRG loads it (ROVLTEST.PRG: src/gem/rdraw.c built for the 68000):
 
-    rovl.py WORK [MACHINE...]        (Erez's configuration, erz.py, and ST:mono)
+    rovl.py WORK [MACHINE...]        (the reference configuration, erz.py, and ST:mono)
 
 The showcase (showcase.py: text, fonts, a table, a chart, photos baseline,
 progressive and CMYK, a PNG with alpha, a scan) drawn 600 wide:

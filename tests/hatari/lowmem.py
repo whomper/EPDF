@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
 """EPDF on a 1 MB ST running short of memory, with pictures and drawings,
-in minutes (the hub and Erez, 7 Nov 2026: no heavy file in a test; this
+in minutes (the hub and decided 7 Nov 2026: no heavy file in a test; this
 keeps what big.py's 40-minute corpus run alone covered):
 
     lowmem.py WORK [--seconds 90] [--machine ST-1]

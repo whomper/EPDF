@@ -48,7 +48,7 @@ def main(argv):
         f.write("C:\\EPDF.PRG\r\nC:\\TWO.PDF\r\n")
     m = machines.Machine(spec, hd)
     if os.environ.get("EPDF_NVDI") and not m.nvdi():
-        # (Erez's NVDI on any machine, the TT's and the ST's too: the
+        # (NVDI on any machine, the TT's and the ST's too: the
         # regression gate's rows, guidelines 1.2, 17 Nov 2026)
         sys.exit("gui.py: EPDF_NVDI, but no NVDI here")
     natfeats.on(hd)
@@ -173,7 +173,7 @@ def main(argv):
         key(A, [CTRL])
         key(C, [CTRL])
         wait("EPDF copied")
-        # (the Font dialog: Options > Font..., no key since 9 Nov 2026, Erez:
+        # (the Font dialog: Options > Font..., no key since 9 Nov 2026:
         # tests/hatari/fontdlg.py clicks the menu)
         # Insert: the context menu; Esc closes it with nothing chosen
         key(INSERT)

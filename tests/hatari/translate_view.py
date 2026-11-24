@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
-"""View > Translate (Erez, 8 Nov 2026; AERA-Atari standards/
+"""View > Translate (decided 8 Nov 2026; AERA-Atari standards/
 TRANSLATION-SERVICE.md), on common's speed rig, against gateway/'s own
 translategate.py (its stand-in engine: "de: " and capitals) and pdfgate.py
 with translateclient.py, on 127.0.0.1:
 
-    translate_view.py WORK [MACHINE...]        (default: ST:mono and Erez's configuration, erz.py)
+    translate_view.py WORK [MACHINE...]        (default: ST:mono and the reference configuration, erz.py)
 
 - Off (TRANSLATE=0): a book read whole; no "translate-piece", no
   "translated", nothing asked of translategate (its log: no request), the

@@ -1,8 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright (C) 2026 AERA | Erez Yaary */
 /*
- * The page strip (Erez, 15 Nov 2026: "start the page strip ... and complete
- * the functionality"; his #95: a column of page miniatures at the window's
+ * The page strip (decided 15 Nov 2026; his #95: a column of page miniatures at the window's
  * left, View > Page strip, kept in the INF): a cell a page, the page's own
  * preview where it has one (its /Thumb: EConvert's and the Gateway's
  * converted copies carry one for every page, #97; on a Falcon or TT with

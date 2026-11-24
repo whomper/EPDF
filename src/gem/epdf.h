@@ -142,7 +142,7 @@ void win_sliders(void);
 void win_where(short *x, short *y, short *w, short *h);
 int win_message(const short *msg);
 void win_status(const char *s);		/* after the info line's page, until cleared (NULL) */
-/* the progress row (Erez, 2 Nov 2026): the job running now, kind > 0, its
+/* the progress row (decided 2 Nov 2026): the job running now, kind > 0, its
    words and how far (done of total; total 0: not known), or kind 0
    none; called every turn. The row shows once a job has run half a
    second and goes when none has for a third; it is drawn in a turn of

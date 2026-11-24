@@ -575,9 +575,7 @@ binary/CONVTEST.PRG: $(CV_ATARI_OBJ) build/m68030cv/atari/convtest.o build/m6803
 	PRGFLAGS=7 python3 common/tools/elf2tos.py build/m68030/convtest.elf $@
 
 # ---------------------------------------------------------------- the FireBee's package
-# (decided 22 Nov 2026: "Make the other apps native on the FireBee too", then
-# "two packages, one for FireBee and the other for standard ST ... Same
-# names"; the guidelines' 7.4): binary/fb/ holds EPDF.PRG, ECONVERT.PRG and
+# (decided 22 Nov 2026; the guidelines' 7.4): binary/fb/ holds EPDF.PRG, ECONVERT.PRG and
 # render.ovl, the same rules' commands made again for the ColdFire by
 # common/tools/mkfirebee.py (-mcpu=5475, cpucheck_cf.S as main, no EMAC, no
 # pads). Each package's program names the other package on the wrong machine
@@ -901,8 +899,7 @@ EC_DIST    := binary/ECONVERT.PRG
 EC_FONTS   := $(wildcard third_party/liberation/fonts/*.ttf) third_party/liberation/OFL.txt
 # the FireBee's package (epdf-x.y-firebee.zip): the same files and folders,
 # its programs and render.ovl the ColdFire's (binary/fb/). A release is the
-# two zips only (decided 22 Nov 2026: "Remove all files from root and just
-# have two ZIP files, one for each platform")
+# two zips only (decided 22 Nov 2026)
 FB_OF = $(if $(filter binary/EPDF.PRG binary/render.ovl binary/ECONVERT.PRG,$(1)),binary/fb/$(notdir $(1)),$(1))
 dist: binary/EPDF.PRG binary/render.ovl binary/ECONVERT.PRG binary/fb/EPDF.PRG binary/fb/render.ovl binary/fb/ECONVERT.PRG help
 	rm -rf dist

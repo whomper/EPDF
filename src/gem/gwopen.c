@@ -1,12 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright (C) 2026 AERA | Erez Yaary */
 /*
- * gwopen.c - Options > Open on the Gateway (Erez, 7 Nov 2026): a PDF that
+ * gwopen.c - Options > Open on the Gateway (decided 7 Nov 2026): a PDF that
  * isn't converted is shown as it is (the text view) while the Gateway
  * converts it; the converted copy comes into a file of EPDF's own beside
  * the program (gate1.pdf or gate2.pdf, the one not open) and EPDF takes it
- * up when it has come. Nothing is kept beside the PDF (Erez, 8 Nov 2026:
- * "no pre-save"): File > Save Optimised... keeps the copy where the user
+ * up when it has come. Nothing is kept beside the PDF (decided 8 Nov 2026): File > Save Optimised... keeps the copy where the user
  * says.
  *
  * The exchange is src/pigate.c on a small stack of its own: conn.c's
@@ -49,7 +48,7 @@ void gw_set_translate(const char *to)
 
 static int gw_thumbs;
 
-/* Settings' Gateway page (Erez, 20 Nov 2026): GWP_*, photos (1 JPEG),
+/* Settings' Gateway page (decided 20 Nov 2026): GWP_*, photos (1 JPEG),
    optimise (0 Smaller files), GWV_* */
 static int gw_pages, gw_photos, gw_optimise = 1, gw_previews;
 
@@ -141,7 +140,7 @@ static void job(void)
 		memset(&o, 0, sizeof o);
 		/* on a screen of 16 colours or more only the pages in colour
 		   ("colouronly": a page with colour gets its /Colour, one without
-		   its /Mono; nothing made twice, AERA-Gateway 1.42 on; Erez, 13
+		   its /Mono; nothing made twice, AERA-Gateway 1.42 on; decided 13
 		   Nov 2026); a mono screen asks for the mono pages (7 Nov 2026) */
 		{
 			static const char *const pg[] = { NULL, "none", "mono", "colouronly", "colour" };
@@ -291,12 +290,12 @@ int gw_progress(long *d, long *t)
 	return waiting;
 }
 
-/* the status line's words for where it is (guideline 7.3, Erez 7 Nov
+/* the status line's words for where it is (guideline 7.3, decided 7 Nov
    2026: the three phases): "Sending to the Gateway... 12 KB of 3.4 MB",
    "The Gateway is converting...", "Receiving from the Gateway... 40 KB of
    80 KB"; the
    bytes of the phase in *d of *t (0 of 0 while it converts) */
-/* "820 KB", "3.4 MB" (the family's sizes in a job: Erez, 9 Nov 2026, D35) */
+/* "820 KB", "3.4 MB" (the family's sizes in a job: decided 9 Nov 2026, D35) */
 static void size_words(char *s, size_t n, long bytes)
 {
 	if (bytes >= 1024L * 1024L)

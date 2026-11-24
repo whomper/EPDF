@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 AERA | Erez Yaary
 """EPDF under FreeMiNT and XaAES (the regression gate's rows 5 and 6,
-guidelines 1.2, Erez 17 Nov 2026), on common's tests/xaaes/run.py:
+guidelines 1.2, decided 17 Nov 2026), on common's tests/xaaes/run.py:
     mint.py WORK [falcon|tt|ct60|ext2 ...]        (default: all four)
 falcon: a Falcon with NVDI; tt: a TT on its 1280x960 screen with NVDI;
 ct60: a CT60's stand-in (a 68040 that says _CPU 60) with NVDI; ext2: the

@@ -44,8 +44,7 @@ static const MBAR_ITEM view_items[] = {
 	{ "Page strip", NULL, CMD_STRIP },	/* a tick: the pages' column at the left (decided 15 Nov 2026) */
 	{ "Translate", NULL, CMD_TRANSLATE },	/* a tick: the text view translated (decided 8 Nov 2026) */
 	/* a tick while View > Pages' page is zoomed: two sizes, Normal and
-	   Zoom (decided 14 Nov 2026: "just one menu option called Zoom In with a
-	   check mark"); ^+ and the keypad's + zoom in, ^-, the keypad's - and
+	   Zoom (decided 14 Nov 2026); ^+ and the keypad's + zoom in, ^-, the keypad's - and
 	   ^0 back (EWeb's keys, 9 Nov 2026) */
 	{ "Zoom In", "^+", CMD_ZOOMTOGGLE },
 	{ NULL, NULL, CMD_NONE }
