@@ -16,7 +16,9 @@ protocol and EPDF tests every change to it (guidelines 1.2, Erez 8 Nov
 2026: "Gateway code of an app must be tested by the app"). EConvert
 starts with CONVERT=gateway and two PDFs; Return converts. Checked:
 - both come back, and each is byte for byte what build/econvert writes on
-  its own with the sizes EConvert sent ("gateway-sizes" in its log);
+  its own with the sizes EConvert sent ("gateway-sizes" in its log), then
+  an update naming the original (/Source /Path: EPDF draws its pages from
+  it);
 - an ST shows This Atari disabled (shot), and converts nothing itself;
 - the Gateway's log names no file;
 - GW_PAGES=colouronly: EConvert's Colour pages reach the converter as such;
@@ -146,8 +148,17 @@ def run(work, machine, port, there=True):
                                 "--photos", "indexed", "--pictures", "screen", "--page-width", sizes[0][0],
                                 "--picture-width", sizes[0][1]] + (["--thumbs"] if THUMBS else []) +
                                [os.path.join(r.hd, n), want], check=True, stdout=subprocess.DEVNULL)
-                if not os.path.exists(got) or open(got, "rb").read() != open(want, "rb").read():
+                # the copy: the direct conversion as the Gateway sent it, then
+                # the update that names the original (the catalog's /Source
+                # /Path, as EConvert's own conversion writes it: EPDF draws
+                # the pages from it, decided 24 Nov 2026)
+                data = open(got, "rb").read() if os.path.exists(got) else b""
+                direct = open(want, "rb").read()
+                path = ("C:\\" + n).replace("\\", "\\\\").encode()
+                if not data.startswith(direct):
                     bad.append("%s differs from the direct conversion" % n)
+                elif b"/Path (" + path + b")" not in data[len(direct):] or b"/Prev " not in data[len(direct):]:
+                    bad.append("%s: no update naming the original after it: %r" % (n, data[len(direct):][:200]))
                 else:
                     bad += thumbs_ok(got)
         print("%s%s: %s  (%s)" % (r.describe(), "" if there else ", no Gateway", "ok" if not bad else "; ".join(bad),

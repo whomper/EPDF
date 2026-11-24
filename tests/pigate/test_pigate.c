@@ -123,7 +123,7 @@ static int progress(void *u, int phase, long done, long total)
 
 int main(int argc, char **argv)
 {
-	PGOPT o = { "mono", NULL, "screen", 640, 640, 1, NULL, 0, 0, 0, 0, NULL };
+	PGOPT o = { "mono", NULL, "screen", 640, 640, 1, NULL, 0, 0, 0, 0, NULL, NULL };
 	char err[200], q[1800];
 	unsigned char pens[16][3];
 	int i;
@@ -166,6 +166,7 @@ int main(int argc, char **argv)
 		printf("FAIL the query with pens: %s\n", q);
 		fails++;
 	}
+	o.source_path = getenv("SOURCE_PATH");	/* (the original's path added: run.sh) */
 	o.pen_n = getenv("PENS") ? 16 : 0;	/* (the conversion with them: run.sh) */
 	o.pen_aspect = 16;
 	pg_query(NULL, ".hidden", q, sizeof q);

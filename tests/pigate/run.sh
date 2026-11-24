@@ -56,6 +56,18 @@ if { [ -z "$PDFGATE" ] || grep -q '"pens"' "$PDFGATE/pdfgate.py"; }; then
 else
 	cmp "$w/pens.pdf" "$w/direct.pdf" && echo "ok   pens= refused by this pdfgate: asked again without, the PDF as before"
 fi
+# the original's path (EConvert's Gateway mode): the Pi's PDF as it came,
+# then an update whose catalog's /Source has /Path, read so by EPDF's reader
+# and by qpdf
+SOURCE_PATH='C:\DOCS\MY (1).PDF' "$w/test_pigate" "$port" "$in" "$w/path.pdf"
+make -s build/pdftext
+if python3 -c 'import sys; a = open(sys.argv[1], "rb").read(); b = open(sys.argv[2], "rb").read(); sys.exit(not (len(b) > len(a) and b.startswith(a)))' "$w/pi.pdf" "$w/path.pdf" &&
+   PDFTEXT_SOURCE=1 build/pdftext "$w/path.pdf" 1 2>&1 >/dev/null | grep -qF 'path "C:\DOCS\MY (1).PDF" bytes '"$(stat -c %s "$in")" &&
+   { ! command -v qpdf > /dev/null || qpdf --check "$w/path.pdf" > /dev/null; }; then
+	echo "ok   the original's path: added at the copy's end, read back"
+else
+	echo "FAIL the original's path"; PDFTEXT_SOURCE=1 build/pdftext "$w/path.pdf" 1 2>&1 >/dev/null | head -3
+fi
 "$w/test_pigate" "$port" "$in" "$w/stopped.pdf" 30 && echo "ok   a stop at 30%: nothing left"
 printf 'GIF89a not a pdf' > "$w/x.pdf"
 "$w/test_pigate" "$port" "$w/x.pdf" "$w/y.pdf" | grep -q 'err "pdfgate: not a PDF"' && \

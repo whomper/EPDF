@@ -717,6 +717,7 @@ static int on_the_gateway(const char *in, const char *out, char *err, int errlen
 	po.page_double = -1;
 	po.thumbs = previews_set;		/* (thumbs=1: AERA-Gateway 1.48 on) */
 	po.translate = tr_code[0] ? tr_code : NULL;
+	po.source_path = in;	/* (added to the copy as it comes: EPDF draws its pages from the original) */
 	if (optimise_set && scr_pen_n >= 2) {
 		/* Faster display: this screen's pens (pens=: a Gateway without
 		   them is asked again without, pigate.c) */

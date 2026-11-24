@@ -317,14 +317,14 @@ EC_CV_PAD_BSS ?= 0
 # the heap zones), so gem.o and crash.o, and tos.o on, keep their places
 build/m68030/ececpad.o: FT_PAD = -DFT_PAD_NAME=ec_ec_pad -DFT_PAD_TEXT=$(EC_EC_PAD) -DFT_PAD_RO=$(EC_EC_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=$(EC_EC_PAD_DATA) -DFT_PAD_BSS=$(EC_EC_PAD_BSS)
 build/m68030/eclcpad.o: FT_PAD = -DFT_PAD_NAME=ec_lc_pad -DFT_PAD_TEXT=$(EC_LC_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EC_LC_PAD_BSS)
-EC_EC_PAD ?= 170
-EC_EC_PAD_RO ?= 94
+EC_EC_PAD ?= 166
+EC_EC_PAD_RO ?= 160
 EC_EC_PAD_DATA ?= 248
 EC_EC_PAD_BSS ?= 164
 EC_LC_PAD ?= 214
 EC_LC_PAD_BSS ?= 0
 build/m68030/ecpgpad.o: FT_PAD = -DFT_PAD_NAME=ec_pg_pad -DFT_PAD_TEXT=$(EC_PG_PAD) -DFT_PAD_RO=$(EC_PG_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EC_PG_PAD_BSS)
-EC_PG_PAD ?= 56
+EC_PG_PAD ?= 28
 EC_PG_PAD_RO ?= 239
 EC_PG_PAD_BSS ?= 0
 # EConvert's own after pic.o and before inflate_fast.o (it has no dspjpeg.o
@@ -792,7 +792,7 @@ EP_PAD_C ?= 176
 EP_PAD_D ?= 382
 EP_PAD_E ?= 62
 EP_PAD_E_DATA ?= 242
-EP_PAD_F ?= 36
+EP_PAD_F ?= 8
 EP_PAD_G ?= 212
 EP_PAD_H ?= 372
 EP_PAD_H_RO ?= 238
@@ -818,7 +818,7 @@ EP_PAD_W_DATA ?= 0
 EP_PAD_X ?= 254
 EP_PAD_X_RO ?= 152
 EP_PAD_X_BSS ?= 152
-EP_PAD_Y_RO ?= 72
+EP_PAD_Y_RO ?= 132
 EP_PAD_B_RO ?= 254
 EP_PAD_Z_RO ?= 220
 EP_PAD_U_RO ?= 98

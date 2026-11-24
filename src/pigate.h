@@ -32,6 +32,11 @@ typedef struct {
 	   older one refuses them, "no option pens"); pen_n 0: not asked */
 	int pen_n, pen_col, pen_aspect;
 	const unsigned char (*pen_rgb)[3];
+	/* the original's path as this Atari names it: added to the copy as it
+	   comes (an update at its end: the catalog's /Source /Path, as
+	   EConvert's own conversion writes it, docs/CONVERTED-PDF.md), so EPDF
+	   draws its pages from the original; never sent. NULL: none */
+	const char *source_path;
 } PGOPT;
 
 /* where the job is, for the progress bar (PG_SEND, PG_WORK, PG_RECV), and

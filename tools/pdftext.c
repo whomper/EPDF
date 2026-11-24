@@ -28,6 +28,9 @@ int main(int argc, char **argv)
 		fprintf(stderr, "pdftext: %s\n", d.err);
 		return 1;
 	}
+	if (getenv("PDFTEXT_SOURCE"))	/* (a converted PDF's /Source as EPDF reads it: tests/pigate/run.sh) */
+		fprintf(stderr, "source prepared %d name \"%s\" path \"%s\" bytes %ld\n", d.prepared, d.src_name, d.src_path,
+			d.src_bytes);
 	n = atol(argv[2]) - 1;
 	ptext_init(&t);
 	t.soft = 1;
