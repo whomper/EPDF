@@ -99,6 +99,11 @@ These come from AERA-Atari's repo template and are the same in every app's CLAUD
   - real addresses from the owner's network: use `192.168.1.x`, `PI_IP`, `ATARI_IP`
   - passwords, session keys, `.KEY` / `.INF` files from a test run
   - photos that still carry EXIF/GPS data
+  - anything the owner provides (decided 24 Nov 2026; AERA-Atari standards/GITHUB-IDENTITY.md, Commits,
+    2f6101e): his files (PDFs, archives, pictures, photos of the screen), logs (epdf.log), share links
+    or file IDs, his messages and words, his machine's settings; on no branch, and no commit message,
+    test name or note quotes them. A fault he reports becomes a case made from scratch that shows the
+    same thing. His epdf.log is read on the build machine, never committed.
 - **README:** keep the section order from the template (Highlights, Getting started, How it reaches the
   servers, Building, Source, Tests, Licence, family footer). Use British English.
 
