@@ -11,7 +11,10 @@
 - View > Page strip from the menu takes it away ("pagestrip 0"), the INF
   says PAGESTRIP=0, and the column is the text's again;
 - the showcase converted by build/econvert --thumbs (every page its /Thumb): with
-  colours, the strip's cells are the pages' previews in colour.
+  colours, the strip's cells are the pages' previews in colour;
+- a Hebrew PDF (the corpus's gen-hebrew.pdf, its first line one word): the
+  first box's words right to left, set at the box's right (decided 24
+  Nov 2026), its ink in the box's right half.
 """
 import os
 import shutil
@@ -47,6 +50,33 @@ def column(png, x0, x1, y0, y1):
                 if max(p) - min(p) > 60:
                     col += 1
     return ink, col
+
+
+def words_halves(png):
+    """the first box's words (inside its frame, above its number): the ink
+    in its left half and its right half"""
+    from PIL import Image
+    im = Image.open(png).convert("L")
+    w, h = im.size
+    px = im.load()
+    # the first box's frame: the first row below the title bar with a long
+    # dark run in the strip's column, then its left and right sides
+    top = next(y for y in range(40, 200) if sum(1 for x in range(10, STRIP_W) if px[x, y] < 128) > STRIP_W // 2)
+    xs = [x for x in range(10, STRIP_W) if px[x, top] < 128]
+    x0, x1 = xs[0] + 2, xs[-1] - 2
+    mid = (x0 + x1) // 2
+    # (the frame's sides, a double line where the page is the view's: dark
+    # in most rows of the box, never words)
+    frame = {x for x in range(x0, x1) if sum(1 for y in range(top + 2, top + 60) if px[x, y] < 128) > 40}
+    left = right = 0
+    for y in range(top + 2, top + 30):
+        for x in range(x0, x1):
+            if px[x, y] < 128 and x not in frame:
+                if x < mid:
+                    left += 1
+                else:
+                    right += 1
+    return left, right
 
 
 def separator(png):
@@ -116,6 +146,28 @@ def run(work, machine, conv):
         print("  %s: on %d ink in the column" % (machine, ink))
     finally:
         r.stop()
+    heb = os.path.join(TOP, "build", "pdfs", "gen-hebrew.pdf")
+    if os.path.exists(heb):
+        r = speed.Rig(os.path.join(work, machine.replace(":", "_") + "-heb"), machine,
+                      display=os.environ.get("XDISPLAY", ":92"))
+        try:
+            os.makedirs(os.path.join(r.hd, "EPDF"), exist_ok=True)
+            shutil.copy(os.path.join(TOP, "binary", "EPDF.PRG"), os.path.join(r.hd, "EPDF", "EPDF.PRG"))
+            r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
+            shutil.copy(heb, os.path.join(r.hd, "HEB.PDF"))
+            r.write("EPDF/EPDF.INF", "PAGESTRIP=1\n")
+            r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\HEB.PDF\n")
+            natfeats.on(r.hd)
+            r.start("C:\\LAUNCH.PRG", ready="EPDF started")
+            wait_for(r, "EPDF page 2", 240)
+            time.sleep(4)
+            shot = r.shot("hebrew")
+            left, right = words_halves(shot)
+            if right < 2 * max(left, 1):
+                bad.append("a Hebrew first line not at the box's right (ink %d left, %d right)" % (left, right))
+            print("  %s Hebrew: the first box's words %d left, %d right" % (machine, left, right))
+        finally:
+            r.stop()
     if not machine.startswith("ST"):
         # a converted PDF's previews: in colour in the strip
         r = speed.Rig(os.path.join(work, machine.replace(":", "_") + "-conv"), machine,
