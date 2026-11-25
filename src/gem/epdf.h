@@ -18,6 +18,7 @@ int settings_lines(void);		/* View > The page's lines: 1, else paragraphs joined
 
 /* about.c */
 void about_box(void);
+void about_ready(void);	/* (the About box made ready: the first timer event) */
 /* an iconified window drawn as the icon, status under it */
 void app_icon_redraw(short h, const GRECT *area, const char *status);
 
