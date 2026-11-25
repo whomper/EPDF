@@ -34,6 +34,7 @@ int gate_dialog_tr(char *host, int hostcap, unsigned short *port, char *to, int 
 const char *gate_dialog_host(void);
 /* Settings' "Write a log" tick (General): set before, taken after OK */
 extern short settings_log;
+extern short settings_fsel;	/* (EPDF: "Use the system file selector") */
 /* Help > Keys... (EPDF) */
 void keys_dialog(void);
 

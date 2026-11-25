@@ -49,6 +49,7 @@
 #include "langs.h"
 #include "popup.h"
 #include "gatedlg.h"
+#include "filepick.h"
 #include "conn.h"
 #include "prjob.h"
 
@@ -168,7 +169,9 @@ static void settings_read(void)
 	if ((v = inf_get(&inf, "GATEWAY")) != NULL)
 		gw_on = v[0] == '1';
 	if ((v = inf_get(&inf, "LOG")) != NULL)
-		log_on = v[0] == '1';	/* (the file named at the start: log_set) */
+		log_on = v[0] == '1';
+	if ((v = inf_get(&inf, "SYSFSEL")) != NULL)
+		filepick_system = v[0] == '1';	/* (the file named at the start: log_set) */
 	if ((v = inf_get(&inf, "GATE")) != NULL && strlen(v) < sizeof gate_host)
 		strcpy(gate_host, v);
 	if ((v = inf_get(&inf, "GATEPORT")) != NULL && atol(v) > 0 && atol(v) < 65536)
@@ -390,35 +393,40 @@ int pf_wopen(const char *path);
 long pf_wwrite(int h, const void *data, long len);
 int pf_wclose(int h, const char *path, int keep);
 
+/* the family's save dialog (guidelines 5.12, decided 25 Nov 2026), or the
+   AES's selector with Settings' "Use the system file selector" */
+static const DL_TYPE save_types[] = { { "PDF files", "PDF" }, { "All files", "" } };
+static const FP_SPEC save_spec = { "Save the optimised PDF", "Save", "No folder saved to yet", "EPDF", save_types, 2 };
+
 static void save_optimised(void)
 {
-	static char name[16];
-	char dir[200], full[256], *s;
+	static char name[FP_NAMEW];
+	char dir[FP_PATH], full[256], *s, (*recent)[FP_PATH];
 	const char *o = doc_original();
-	short button;
-	int in, out, ok = 1;
+	int in, out, ok = 1, r;
 	char *buf;
 	long n;
 
 	if (!doc_is_open() || !doc_prepared())
 		return;
-	snprintf(name, sizeof name, "%.12s", doc_name());
+	snprintf(name, sizeof name, "%s", doc_name());
 	s = strrchr(o, '\\');
-	if (s)
-		snprintf(dir, sizeof dir, "%.*s\\*.PDF", (int)(s - o), o);
+	if (s && s - o < FP_PATH - 1)
+		snprintf(dir, sizeof dir, "%.*s", (int)(s - o + 1), o);
 	else
-		snprintf(dir, sizeof dir, "%c:\\*.PDF", (char)('A' + Dgetdrv()));
-	if (!fsel_exinput(dir, name, &button, "Save the optimised PDF") || !button || !name[0])
+		dir[0] = 0;
+	/* (the dialog's last folders, 1.3 KB, only while it is open) */
+	if (!(recent = calloc(FP_RECENT, FP_PATH))) {
+		alert(1, "[1][Not enough memory for the dialog.][ OK ]");
 		return;
-	strcpy(full, dir);
-	s = strrchr(full, '\\');
-	if (!s)
+	}
+	r = filepick_save(&save_spec, dir, recent, name, (int)sizeof name, full, (int)sizeof full, NULL);
+	free(recent);
+	log_event("save-dialog", r ? "ok" : "cancel", filepick_system ? "system" : "family");
+	if (!r)
 		return;
-	strcpy(s + 1, name);
 	if (!strcasecmp(full, doc_path()))
 		return;			/* (itself) */
-	if (pf_size(full) >= 0 && alert(2, "[2][%.30s is there already.|Replace it?][Replace|Cancel]", name) != 1)
-		return;
 	if ((in = pf_open(doc_path(), PF_READ)) < 0) {
 		alert(1, "[1][EPDF can't read the optimised PDF.][ OK ]");
 		return;
@@ -1380,6 +1388,7 @@ static int settings_dialog(void)
 
 	snprintf(to, sizeof to, "%s", tr_to());
 	settings_log = (short)log_on;
+	settings_fsel = filepick_system;
 	if (!gate_dialog_tr(gate_host, (int)sizeof gate_host, &gate_port, to, (int)sizeof to, lang_name(to),
 			    pick_language, languages_dialog, &gwc))
 		return 0;
@@ -1400,6 +1409,10 @@ static int settings_dialog(void)
 	}
 	if (settings_log != log_on)
 		log_tick(settings_log);
+	if (settings_fsel != filepick_system) {	/* (a key once it is changed, 6.1) */
+		filepick_system = settings_fsel;
+		setting("SYSFSEL", filepick_system ? "1" : "0", "1: File > Save Optimised... through the system's file selector");
+	}
 	setting("GATE", gate_host, "the Gateway's address (Through the Gateway)");
 	snprintf(port, sizeof port, "%u", (unsigned)gate_port);
 	setting("GATEPORT", port, "the Gateway's port for PDFs (8380)");
@@ -1826,6 +1839,8 @@ int main(void)
 		snprintf(m, sizeof m, "%ld %ld %ld", (long)Malloc(-1L) / 1024, (heap_st + heap_tt) / 1024, heap_use / 1024);
 		log_event("free-kb", m, NULL);
 	}
+	static int about_due = 1;	/* (about_ready: once, at the first timer event) */
+
 	while (!quit_now) {
 		short which, flags = MU_MESAG | MU_KEYBD | MU_BUTTON;
 		unsigned long t;
@@ -1840,7 +1855,7 @@ int main(void)
 		   on while nothing else does */
 		strip_now = strip_turn_due() && !win_iconified();	/* the page strip's cells, a turn each */
 		if (win_sliders_due() || menus_due || pending || arrived >= 0 || arrived_pic >= 0 || rows_pic >= 0 ||
-		    win_progress_due() || win_ahead_due() || strip_now)
+		    win_progress_due() || win_ahead_due() || strip_now || about_due)
 			flags |= MU_TIMER;
 		/* no pace while the picture on the page in view is made: the
 		   user waits for it, as for its rows (a scan's row is 30 ms on
@@ -1893,6 +1908,9 @@ int main(void)
 				menu_states();
 			} else if (strip_now) {
 				strip_turn();
+			} else if (about_due) {
+				about_due = 0;
+				about_ready();
 			} else if (prjob_on()) {
 				/* File > Print...: a band (or some lines) a turn, the
 				   turn's whole; its end closes the printer's job */

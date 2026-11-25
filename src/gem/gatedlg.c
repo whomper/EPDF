@@ -74,6 +74,10 @@ static void langs_act(SETTINGS *s, void *user)
    log" in Options and in Settings; decided 22 Nov 2026): the program sets
    it before Settings and takes it after OK */
 short settings_log;
+/* "Use the system file selector" (guidelines 5.12, decided 25 Nov 2026; off
+   by default): File > Save Optimised... through the AES's selector, not the
+   family's save dialog; EPDF's General only (EConvert saves nothing) */
+short settings_fsel;
 
 static void page_general(SETTINGS *s, short x, short y, void *user)
 {
@@ -86,7 +90,10 @@ static void page_general(SETTINGS *s, short x, short y, void *user)
 	set_text(s, x, n, "The languages are the Gateway's. On it:");
 	set_text(s, x + 2, (short)(n + 1), "aera-gateway install translate");
 	set_text(s, x, (short)(n + 2), "Translations are kept in memory only.");
-	set_tick(s, x, set_y(s, 9), "Write a log", &settings_log);
+	/* (the ticks after a blank row, in the page: set_y(s, 9) put the log's
+	   under the dialog's foot, 2.44 and 2.45) */
+	set_tick(s, x, (short)(n + 4), "Write a log", &settings_log);
+	set_tick(s, x, (short)(n + 5), "Use the system file selector", &settings_fsel);
 }
 
 /* EConvert's General: Optimise for (Faster display the default: decided 17
@@ -107,7 +114,7 @@ static void page_conv(SETTINGS *s, short x, short y, void *user)
 	set_text(s, x, m, "Each page carries a small picture of");
 	set_text(s, x, (short)(m + 1), "itself, for EPDF's page strip. On a");
 	set_text(s, x, (short)(m + 2), "Falcon, 2 seconds more a page.");
-	set_tick(s, x, set_y(s, 8), "Write a log", &settings_log);
+	set_tick(s, x, (short)(m + 4), "Write a log", &settings_log);	/* (set_y(s, 8) lay on the buttons) */
 }
 
 /* EPDF's Gateway page: how Open on the Gateway has a PDF converted (decided
@@ -216,7 +223,7 @@ static int run(int with_tr, char *host, int hostcap, unsigned short *port)
 		d.title = "Settings";
 		d.pages = with_tr == 1 ? both : with_tr == 2 ? conv : secure;
 		d.npages = with_tr == 1 ? 3 : with_tr ? 2 : 1;
-		d.height = with_tr == 1 ? 17 : 16;
+		d.height = with_tr == 1 ? 20 : with_tr ? 17 : 16;	/* (General's ticks: 2.46) */
 		d.user = with_tr == 1 ? (void *)1 : NULL;
 		d.check = check;
 		port_obj = -1;
