@@ -14,7 +14,8 @@ window's places on a 640 x 480 screen with the system font's 16-pixel
 cells (Falcon:16, Falcon:256, TT high's lower half is not covered).
 On TOS 4.04 the selector's steps are its own (STEPS_TOS4, the hub's).
 ECONVERT_PRG another build: 1.2's prints no "files" lines, so with it only
-the shots' "Files to convert: N" say anything. Shots in WORK/<machine>/shots.
+the shots' "Files to convert: N" say anything. The band's colour icon must
+be whole after the list changes (step2 against start). Shots in WORK/<machine>/shots.
 """
 import os
 import shutil
@@ -53,6 +54,16 @@ STEPS_TOS4 = STEPS[:3] + [
 ]
 
 
+# where the band's icon is in the window's default place on a 640 x 480 screen
+ICON_BOX = (60, 86, 100, 122)
+
+
+def icon_differs(a, b):
+    from PIL import Image, ImageChops
+    d = ImageChops.difference(Image.open(a).convert("RGB").crop(ICON_BOX), Image.open(b).convert("RGB").crop(ICON_BOX))
+    return sum(1 for p in d.getdata() if p != (0, 0, 0))
+
+
 def run(work, machine):
     r = speed.Rig(os.path.join(work, machine.replace(":", "_")), machine, display=os.environ.get("XDISPLAY", ":91"))
     bad = []
@@ -72,6 +83,7 @@ def run(work, machine):
             time.sleep(1)
         time.sleep(3)
         r.still()
+        start = r.shot("start")
         steps = STEPS_TOS4 if "TOS 4" in r.describe() else STEPS
         for i, (what, x, y) in enumerate(steps):
             if what == "key":
@@ -89,6 +101,12 @@ def run(work, machine):
             time.sleep(2)
             r.still()
             r.shot("step%d" % (i + 1))
+        # the band's colour icon whole after the list changed (2.45 and before
+        # redrew the band's second line only, painted it navy over the icon's
+        # lower half and left the icon so)
+        icon = icon_differs(start, os.path.join(r.shots, "step2.png"))
+        if icon:
+            bad.append("the band's icon changed after a file was added: %d pixels" % icon)
         con = r.console()
         counts = [l.split()[2] for l in con.splitlines() if l.startswith("ECONVERT files ")]
         if "1" not in counts:

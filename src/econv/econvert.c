@@ -1337,12 +1337,21 @@ static void draw(const GRECT *clip, short start)
 			}
 			if (planes >= 4 && gl_hchar >= 16) {
 				/* the colour icon over the band (a raster copy keeps to no
-				   clip: drawn where its whole square is in this one) */
+				   clip): drawn whole where the window shows all of it (r)
+				   and this redraw touches it. Held to the redraw's piece (c)
+				   it was drawn by none when the pieces split it, the band
+				   painted over its half (after the file selector, 2.45 and
+				   before) */
 				short ix, iy;
+				GRECT ic;
 
 				objc_offset(tree, ICON, &ix, &iy);
 				iy = (short)(tree[BOX].ob_y + (2 * gl_hchar - ICON_H) / 2);
-				if (ix >= c.x && iy >= c.y && ix + ICON_W <= c.x + c.w && iy + ICON_H <= c.y + c.h)
+				ic.x = ix;
+				ic.y = iy;
+				ic.w = ICON_W;
+				ic.h = ICON_H;
+				if (holds(&r, &ic) && meets(&c, &ic))
 					about_icon16(icon16_px, ix, iy, 1, 1, 0);
 			}
 			p[0] = c.x;
