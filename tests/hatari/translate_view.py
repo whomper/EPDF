@@ -119,7 +119,8 @@ def settings_while_translating(r):
         return r.console().split("EPDF languages ")[-1].split()[0] if r.console().count("EPDF languages ") > n else "none"
 
     def cancel(x, y):
-        r.click(x + 33 * 8 + 40, y + 15 * rh + rh // 2)
+        # (the buttons' row is the dialog's height less two: 20 rows from 2.46, General's two ticks)
+        r.click(x + 33 * 8 + 40, y + 18 * rh + rh // 2)
         time.sleep(2)
 
     def languages(x, y):
