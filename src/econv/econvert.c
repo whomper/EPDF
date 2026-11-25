@@ -285,6 +285,8 @@ static void screen_sizes(int *page_w, int *pic_w)
 #define MAXF 200
 static struct {
 	char path[160];
+	short rel;			/* where its name under the folder added starts (Add
+					   folder...: its subfolders too, kept under Write to) */
 	long bytes;
 	int state;			/* 0 to do, 1 done, 2 failed, 3 stopped */
 	long out_bytes;			/* the converted PDF's size (done) */
@@ -314,7 +316,7 @@ static long file_size(const char *p)
 	return n;
 }
 
-static int add_file(const char *p)
+static int add_file_under(const char *p, int rel)
 {
 	int i;
 	long n;
@@ -326,6 +328,7 @@ static int add_file(const char *p)
 		return 0;
 	s_result[0] = '\0';	/* (the list changed: the last batch's line goes) */
 	strcpy(files[nfiles].path, p);
+	files[nfiles].rel = (short)rel;
 	files[nfiles].bytes = n;
 	files[nfiles].state = 0;
 	files[nfiles].out_bytes = 0;
@@ -334,22 +337,47 @@ static int add_file(const char *p)
 	return 1;
 }
 
-/* every PDF in the folder dir (no trailing \) */
-static int add_folder(const char *dir)
+/* a file on its own: written by its name into Write to's folder */
+static int add_file(const char *p)
+{
+	return add_file_under(p, (int)(base_of(p) - p));
+}
+
+/* every PDF in the folder dir (no trailing \) and in its subfolders, each
+   kept with its place under the folder first added (from rel), so that the
+   copies go into the same subfolders under Write to (decided 25 Nov 2026:
+   Add folder... takes the whole tree). 8 levels at most; a DTA a level */
+static int add_tree(const char *dir, int rel, int depth)
 {
 	char pat[180], p[200];
 	DTA *old = Fgetdta(), dta;
 	int n = 0;
 
+	if (depth > 8 || strlen(dir) + 14 >= sizeof files[0].path)
+		return 0;
 	Fsetdta(&dta);
 	snprintf(pat, sizeof pat, "%s\\*.PDF", dir);
 	if (Fsfirst(pat, 0) == 0)
 		do {
 			snprintf(p, sizeof p, "%s\\%s", dir, dta.d_fname);
-			n += add_file(p);
+			n += add_file_under(p, rel);
 		} while (Fsnext() == 0);
+	snprintf(pat, sizeof pat, "%s\\*.*", dir);
+	if (Fsfirst(pat, 0x10) == 0)
+		do {
+			if ((dta.d_attrib & 0x10) && dta.d_fname[0] != '.') {
+				snprintf(p, sizeof p, "%s\\%s", dir, dta.d_fname);
+				n += add_tree(p, rel, depth + 1);
+				Fsetdta(&dta);	/* (the level below set its own) */
+			}
+		} while (nfiles < MAXF && Fsnext() == 0);
 	Fsetdta(old);
 	return n;
+}
+
+static int add_folder(const char *dir)
+{
+	return add_tree(dir, (int)strlen(dir) + 1, 0);
 }
 
 /* ---------------------------------------------------------------- the window's tree */
@@ -655,10 +683,32 @@ static int progress_cb(void *u, long done, long total)
 	return turn(NULL);
 }
 
-/* the folder's own name for a file: the original's name, in out_dir */
-static void out_path(const char *in, char *out, long n)
+/* a file's name under the folder it was added from: its name, or for Add
+   folder... its subfolders and name ("2021\\JULY.PDF") */
+static const char *rel_of(int i)
 {
-	snprintf(out, (size_t)n, "%s\\%s", out_dir, base_of(in));
+	return files[i].path + files[i].rel;
+}
+
+/* the converted copy's name: out_dir, then the file's place under the
+   folder it was added from */
+static void out_path_of(int i, char *out, long n)
+{
+	snprintf(out, (size_t)n, "%s\\%s", out_dir, rel_of(i));
+}
+
+/* the subfolders of out (a file's path under out_dir) made where missing */
+static void out_folders(const char *out)
+{
+	char d[200];
+	char *s;
+
+	snprintf(d, sizeof d, "%s", out);
+	for (s = d + strlen(out_dir) + 1; (s = strchr(s, '\\')) != NULL; s++) {
+		*s = '\0';
+		Dcreate(d);	/* (one there already: refused, as it should be) */
+		*s = '\\';
+	}
 }
 
 /* ---- Gateway mode: the file sent, the Gateway's progress as the file's
@@ -788,7 +838,8 @@ static void worker(void)
 			cur_total = 1000;
 			t_file = tos_ms();
 			if (on_gateway) {
-				out_path(files[i].path, outp, sizeof outp);
+				out_path_of(i, outp, sizeof outp);
+				out_folders(outp);
 				memset(&st, 0, sizeof st);
 				r = on_the_gateway(files[i].path, outp, err, sizeof err);
 				goto done_one;
@@ -813,7 +864,8 @@ static void worker(void)
 			o.fontdir = font_dir;
 			o.progress = progress_cb;
 			o.turn = turn;
-			out_path(files[i].path, outp, sizeof outp);
+			out_path_of(i, outp, sizeof outp);
+			out_folders(outp);
 			r = cv_convert(files[i].path, outp, &o, &st, err, sizeof err);
 done_one:
 			files[i].state = r == 0 ? 1 : r == -2 ? 3 : 2;
@@ -950,7 +1002,16 @@ static void row_text(int k, int i)
 		else if (cur_total >= 1000 && !on_gateway)
 			snprintf(what, sizeof what, "page %ld of %ld", cur_done / 1000 + 1, cur_total / 1000);
 	}
-	snprintf(s_row[k], sizeof s_row[k], "   %-12.12s", base_of(files[i].path));
+	{
+		/* (a name under a subfolder: its last 12 letters, ".." first) */
+		const char *nm = rel_of(i);
+		size_t ln = strlen(nm);
+
+		if (ln > 12)
+			snprintf(s_row[k], sizeof s_row[k], "   ..%-10.10s", nm + ln - 10);
+		else
+			snprintf(s_row[k], sizeof s_row[k], "   %-12.12s", nm);
+	}
 	s_mark[k][0] = mark;
 	s_mark[k][1] = '\0';
 	snprintf(s_rest[k], sizeof s_rest[k], "%8s  %-*.*s", size, LTEXT - NAME_W - 10, LTEXT - NAME_W - 10, what);
@@ -1731,15 +1792,21 @@ static void begin(void)
 	for (i = 0; i < nfiles; i++) {
 		char d[160];
 
+		char o[200];
+
+		/* (a copy written over its own original: its folder and the copy's the same) */
 		strncpy(d, files[i].path, sizeof d - 1);
 		d[sizeof d - 1] = '\0';
 		if (strrchr(d, '\\'))
 			*strrchr(d, '\\') = '\0';
-		if (!strcmp(d, out_dir)) {
+		out_path_of(i, o, sizeof o);
+		if (strrchr(o, '\\'))
+			*strrchr(o, '\\') = '\0';
+		if (!strcmp(d, o)) {
 			alert(1, "[1][The converted PDFs need a folder|of their own, not the PDFs' own.|Choose another with Write to...][ OK ]");
 			return;
 		}
-		out_path(files[i].path, p, sizeof p);
+		out_path_of(i, p, sizeof p);
 		if (files[i].state != 1 && file_size(p) >= 0)
 			there++;
 	}

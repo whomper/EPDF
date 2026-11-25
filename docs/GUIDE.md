@@ -233,12 +233,14 @@ Atari, an ST too, it can have the Gateway convert them instead.
   keeps its settings in `ECONVERT.INF` beside itself.
 - **The batch:** the list shows each PDF, its size and how it went (✓ converted, with its size
   before and after; ► under way, with its page). **Add files...** (^O) adds a PDF; **Add
-  folder...** adds every PDF in the folder you pick a file in; **Remove** (Delete) takes out the
+  folder...** adds every PDF in the folder you pick a file in and in all its subfolders (the
+  list shows a subfolder's PDF with its place, such as `2021\B.PDF`); **Remove** (Delete) takes out the
   one you clicked; **Clear** empties the list. You can also drop PDFs on its window or on
   `ECONVERT.PRG`. The band at the top says how many PDFs there are, where they go and where they
   are converted.
 - **Write to...** chooses the folder the converted PDFs go to, with their own names: a folder of
-  their own, not the PDFs' own.
+  their own, not the PDFs' own. PDFs added with **Add folder...** keep their subfolders there:
+  `2021\B.PDF` is written to `2021\B.PDF` in that folder, the subfolders made as needed.
 - **Whole pages**, **Photos**, **Convert on** and **Translate** are buttons that open their choices
   over them.
 - **Whole pages:** None, Mono (black and white, for every Atari), Colour (16 colours, for a Falcon
