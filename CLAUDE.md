@@ -638,6 +638,16 @@ at first. This section is kept up to date: the build, the tests, what a release 
   doesn't bring the desktop back, as in 2.43: EPDF's 1 MB limit beside the bigger accessories, for after
   the 1.0s, with the free memory from the log. Next: the print fix from the log, soft picture colours
   (#132), about_prepare.
+  2.45 (25 Nov 2026; the hub's go on 5b5d9bc6b, fa30b261d's programs): the Gateway's progress by time
+  (decided 24 Nov 2026: the bar to follow the Gateway's quick work; src/pgshare.c in pigate.c, the time
+  gone over the time gone and to come, never back; tests/pgshare.c in make test); EConvert's Gateway
+  copies name their original (an incremental update after the copy: the catalog with /Source /Path, a
+  one-entry xref, /Prev; aerapdf and pdfgate unchanged; run.sh and gateway.py check it), so View > Pages
+  draws them sharp; the page strip's Hebrew words right to left (bidi_visual a wrapped line; strip.py).
+  The owner's data out of the current files (comments, docs, this file; tests/glyphwise.py's page made
+  from scratch), history kept. Pads refitted against v2.44 (all at its places but pigate.o). The pairs:
+  ST:mono View > The page's lines 225 -> 235, the same work on gemprof (181.7 / 181.8 ms). ST-1's big.py
+  manual-stinternals-text refuses a page or two in some runs, as 2.44 (0/0/2 against 0/1/0).
   Next, after 2.36 (decided 17 Nov 2026): the converter prepares pictures and whole pages in the screen's own colours, so EPDF
   only unpacks and copies (the rigs' logs: on Falcon-4:256 a photo 1.2 s decoding, 6.7 s fitting to
   the screen's colours). EConvert's Settings > General "Optimise for: Smaller files / Faster display",
