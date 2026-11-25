@@ -499,6 +499,7 @@ static void menu_states(void)
 	if (doc_pages_mode() != tick) {
 		tick = (signed char)doc_pages_mode();
 		menu_icheck(menu.tree, mbar_object(&menu, CMD_PAGES), tick);
+		log_event("pages-tick", tick ? "1" : "0", NULL);	/* (the rigs: prepared.py) */
 	}
 	if (z != ztick) {
 		ztick = z;
@@ -1168,8 +1169,10 @@ static void command(int c)
 		if (!doc_has_pages())
 			break;
 		doc_set_pages(!doc_pages_mode());
-		if (has_menu)
-			menu_icheck(menu.tree, mbar_object(&menu, CMD_PAGES), doc_pages_mode());
+		/* (the tick by menu_states alone, which knows what it shows: set
+		   here as well, it was left ticked when the next document opened
+		   in its text, 2.45 and before) */
+		menu_states();
 		log_event("pages", doc_pages_mode() ? "1" : "0", NULL);
 		win_layout();
 		win_draw_all();

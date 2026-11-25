@@ -12,9 +12,11 @@ dithered), and opened through LAUNCH.PRG. Checked: every page read
 from its prepared text ("page" events, no "failed"), the Optimised badge on
 the heads (the shot, text.png), View > Pages laid out and drawn (the
 "pages 1" event, pages.png, a picture's row: the screen changes) and back
-(text-again.png, the same as text.png).
+(text-again.png, the same as text.png); Pages ticked again, another
+document opened (^O): it opens in its text and the tick is taken off.
 """
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -61,6 +63,7 @@ def run(work, machine):
         else:
             subprocess.run([os.path.join(TOP, "build", "econvert"), "--pages", os.environ.get("PAGES", "colour"), src, os.path.join(r.hd, "CONV.PDF")],
                            check=True, stdout=subprocess.DEVNULL)
+        shutil.copy(os.path.join(r.hd, "CONV.PDF"), os.path.join(r.hd, "CONV2.PDF"))
         r.write("LAUNCH.TXT", "C:\\EPDF\\EPDF.PRG\nC:\\CONV.PDF\n")
         natfeats.on(r.hd)
         r.start("C:\\LAUNCH.PRG", ready="EPDF started")
@@ -92,6 +95,28 @@ def run(work, machine):
         again = r.shot("text-again")
         if differ(text, again) > 0:
             bad.append("back to the text: %d pixels differ from the first" % differ(text, again))
+        # View > Pages ticked, then another document opened (File > Open...,
+        # ^O, TOS's selector): it opens in its text, and the tick goes with it
+        # (2.45 and before left Pages ticked)
+        r.menu(184, 44)
+        time.sleep(3)
+        opened = r.console().count("EPDF opened")
+        r.key("ctrl+o")
+        time.sleep(4)
+        r.key("Escape")
+        r.type("CONV2.PDF")
+        r.key("Return")
+        end = time.time() + 60
+        while time.time() < end and r.console().count("EPDF opened") <= opened:
+            time.sleep(1)
+        time.sleep(3)
+        con = r.console()
+        after = con[con.rfind("EPDF opening CONV2.PDF"):]
+        ticks = re.findall(r"EPDF pages-tick (\d)", con)
+        if con.count("EPDF opened") <= opened:
+            bad.append("the second document didn't open")
+        elif "EPDF pages-tick 0" not in after or "EPDF pages-tick 1" not in con:
+            bad.append("another document opened in its text with View > Pages still ticked (%s)" % ticks)
         bad += quitcheck.quit(r, "EPDF")
         print("%s: %s  (%s)" % (r.describe(), "ok" if not bad else "; ".join(bad), r.shots))
     finally:
