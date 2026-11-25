@@ -12,6 +12,7 @@
 #include "plat.h"
 #include "ovl.h"
 #include "rdraw.h"
+int pics_soft_machine(void);	/* (pics.c) */
 
 char rdraw_path[200] = RDRAW_FILE;
 
@@ -64,6 +65,7 @@ int rdraw_load(int (*turn)(void), char *err, int errlen)
 	ovl_flush();			/* its code was written as data */
 	o = image;
 	host.size = sizeof host;
+	host.soft = pics_soft_machine();
 	host.malloc = malloc;
 	host.calloc = calloc;
 	host.realloc = realloc;

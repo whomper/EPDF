@@ -73,8 +73,8 @@ build/imgdump: tools/imgdump.c src/pdfio_host.c $(PDF_SRC) $(COMMON_SRC) $(BSSL_
 build/test_trpara: tests/test_trpara.c src/view/trpara.c src/view/trpara.h common/src/charset.c | build
 	$(CC) $(HCFLAGS) -Isrc/view -fsanitize=address,undefined -o $@ tests/test_trpara.c src/view/trpara.c common/src/charset.c
 
-build/test_pens: tests/test_pens.c src/rovl/pens.c src/rovl/pens.h | build
-	$(CC) $(HCFLAGS) -Isrc/rovl -fsanitize=address,undefined -o $@ tests/test_pens.c src/rovl/pens.c
+build/test_pens: tests/test_pens.c src/rovl/pens.c src/rovl/penssoft.c src/rovl/pens.h | build
+	$(CC) $(HCFLAGS) -Isrc/rovl -fsanitize=address,undefined -o $@ tests/test_pens.c src/rovl/pens.c src/rovl/penssoft.c
 
 # the Gateway's progress by time (src/pgshare.c, pigate.c's) on made-up exchanges
 build/test_pgshare: tests/pgshare.c src/pgshare.c src/pgshare.h | build
@@ -602,11 +602,11 @@ cf-test: build/textgold build/econvert
 # loaded by EPDF.PRG with common's ovl.c (an ST never loads it); its heap
 # is the program's (libc.c with LIBC_NO_HEAP)
 # (no GIF: a PDF holds none, and its decoder's 9 KB are a 4 MB Falcon's)
-ROVL_OBJ = build/m68030cv/src/rovl/head.o build/m68030/headpad.o build/m68030cv/src/rovl/pens.o build/m68030ovl/libc.o build/m68030/rvlcpad.o \
+ROVL_OBJ = build/m68030cv/src/rovl/head.o build/m68030/headpad.o build/m68030cv/src/rovl/pens.o build/m68030cv/src/rovl/penssoft.o build/m68030ovl/libc.o build/m68030/rvlcpad.o \
            $(patsubst build/m68030cv/common/src/pic.o,build/m68030ovl/pic.o,$(patsubst build/m68030/picpad.o,build/m68030/rvpicpad.o,\
              $(patsubst build/m68030cv/$(T)/nsgif/src/gif.o,build/m68030/rvgifpad.o,$(filter-out build/m68030cv/common/atari/libc.o \
              build/m68030/cspad.o build/m68030/ctcvpad.o build/m68030/ctifpad.o build/m68030cv/$(T)/nsgif/src/lzw.o,$(CV_ATARI_OBJ)))))
-build/m68030cv/src/rovl/head.o build/m68030cv/src/rovl/pens.o: XFLAGS += -Isrc/rovl -DROVL_VERSION=\"$(VERSION_STR)\"
+build/m68030cv/src/rovl/head.o build/m68030cv/src/rovl/pens.o build/m68030cv/src/rovl/penssoft.o: XFLAGS += -Isrc/rovl -DROVL_VERSION=\"$(VERSION_STR)\"
 build/m68030ovl/libc.o: common/atari/libc.c $(HDRS)
 	@mkdir -p $(dir $@)
 	$(XCC) $(XFLAGS) -DLIBC_NO_HEAP -c -o $@ $<

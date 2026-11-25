@@ -157,6 +157,7 @@ static void rv_close(void *doc)
 	pdf_close(&x->d);
 	free(x);
 	pens_free();
+	pens_free_soft();
 	cv_turn = NULL;
 }
 
@@ -171,7 +172,8 @@ static int rv_pens(void *doc, const unsigned char (*pal)[3], int n, int planes, 
 
 	if (y < 0 || rows <= 0 || y + rows > c->rows || !c->px || planes < 1 || planes > 8)
 		return -1;
-	return pens_planes(c->px + (long)y * c->w, c->w, rows, c->y0 + y, pal, n, planes, out);
+	pens_soft = H->size >= (long)sizeof(ROVL_HOST) && H->soft ? (n <= 16 ? 12 : 8) : 16;
+	return pens_planes_share(c->px + (long)y * c->w, c->w, rows, c->y0 + y, pal, n, planes, out);
 }
 
 static void use_dsp(int on)

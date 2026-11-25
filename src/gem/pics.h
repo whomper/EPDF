@@ -43,6 +43,7 @@ void pics_unwant_outside(long p0, long p1);	/* the view moved: the shown ones as
    bitmap) or NULL (why) */
 void pics_done(PICE *e, unsigned char *std, long bytes, int why);
 PIC_PAL *pics_palette(void);		/* NULL on a 16-bit screen */
+int pics_soft_machine(void);	/* (a FireBee, a 68040 or more: the soft dither) */
 unsigned char *pics_standard(PIC *p, int nplanes, PIC_PAL *pl, int flip, long *bytes);
 /* e's picture made a row at a time straight into e->bm, its rows shown
    as they come (e->ready): 1 made, 0 not (*why), -1 not this way

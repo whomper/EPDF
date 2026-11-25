@@ -114,6 +114,11 @@ static __attribute__((noinline)) void fs_run(const unsigned short *s, const shor
 			er = r - pal[k][0];
 			eg = g - pal[k][1];
 			eb = b - pal[k][2];
+#ifdef PENS_SHARE
+			er = er * pens_soft / 16;	/* (penssoft.c's: a share of it) */
+			eg = eg * pens_soft / 16;
+			eb = eb * pens_soft / 16;
+#endif
 		}
 		/* 7/16 right, 3/16 down-left, 5/16 down, 1/16 down-right */
 		t.cr = er * 7;

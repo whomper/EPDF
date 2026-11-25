@@ -75,6 +75,43 @@ int main(void)
 		printf("FAIL the navy area has %d blue pixels\n", blue);
 		fails++;
 	}
+	/* penssoft.c: at 16 sixteenths the same pens as pens_planes; at 12 and
+	   8 other pens (a share of each error), white still white; the pens'
+	   changes along the rows printed for a look */
+	{
+		static unsigned char a[W * H], b[W * H];
+		long ch16 = 0, ch;
+		int sh;
+
+		pens_rows(px, W, H, 0, tos16, 16, a);
+		pens_soft = 16;
+		pens_planes_share(px, W, H, 0, tos16, 16, 0, b);
+		if (memcmp(a, b, sizeof a)) {
+			printf("FAIL the share at 16 differs from pens_rows\n");
+			fails++;
+		}
+		for (i = 1; i < W * H; i++)
+			ch16 += i % W >= 100 && a[i] != a[i - 1];
+		for (sh = 12; sh >= 8; sh -= 4) {
+			pens_soft = sh;
+			pens_planes_share(px, W, H, 0, tos16, 16, 0, b);
+			for (ch = 0, i = 1; i < W * H; i++)
+				ch += i % W >= 100 && b[i] != b[i - 1];
+			for (i = 0; i < W * H; i++)
+				if (i % W < 40 && b[i] != 0) {
+					printf("FAIL share %d: white isn't white\n", sh);
+					fails++;
+					break;
+				}
+			if (!memcmp(a, b, sizeof a)) {
+				printf("FAIL share %d: the same pens as the whole error\n", sh);
+				fails++;
+			}
+			printf("  share %2d: %ld pen changes along the rows (whole: %ld)\n", sh, ch, ch16);
+		}
+		pens_soft = 16;
+		pens_free_soft();
+	}
 	pens_free();
 	printf("test_pens: %s\n", fails ? "FAILED" : "ok");
 	return fails ? 1 : 0;

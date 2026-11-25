@@ -35,6 +35,20 @@ static PIC_PAL *pal;			/* taken at the first picture (not resident) */
 static int pal_planes = -1;
 static unsigned long tick;
 
+/* softer picture colours (decided 22 Nov 2026, as EWeb's): the dither
+   passes on part of each pixel's error (common's pic_pal_soft: 12
+   sixteenths on 16 pens or fewer, 8 on more) on a FireBee or a 68040 or
+   more; a 68000 and a 68030 (the ST, TT and Falcon) keep the whole, the
+   soft rows costing a 68030 about twice the dither's time */
+int pics_soft_machine(void)
+{
+#ifdef __mcoldfire__
+	return 1;
+#endif
+	return get_cookie(0x5F43465FL) != 0	/* _CF_: a FireBee */
+	       || get_cookie(0x5F435055L) >= 40;	/* _CPU: a 68040, 68060, 68080 */
+}
+
 /* the registers' colours, for the dither */
 PIC_PAL *pics_palette(void)
 {
@@ -49,6 +63,8 @@ PIC_PAL *pics_palette(void)
 		return NULL;
 	n = scr_pens(vdi_h, planes, rgb);	/* (scrpens.c: by register, as the bitmaps hold them) */
 	pic_pal_init(pal, n, (const unsigned char (*)[3])rgb);
+	if (pics_soft_machine())
+		pic_pal_soft(pal, n <= 16 ? 12 : 8);
 	pal_planes = planes;
 	return pal;
 }
