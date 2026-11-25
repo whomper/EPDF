@@ -282,8 +282,10 @@ static void screen_sizes(int *page_w, int *pic_w)
 	*pic_w = sizes_pic;
 }
 
-#define MAXF 200
-static struct {
+/* the list: as long as memory allows (decided 25 Nov 2026: no fixed
+   number; the files are converted one at a time), on the heap, which TOS
+   gives from TT RAM where there is some; grown by room() */
+typedef struct {
 	char path[160];
 	short rel;			/* where its name under the folder added starts (Add
 					   folder...: its subfolders too, kept under Write to) */
@@ -291,8 +293,32 @@ static struct {
 	int state;			/* 0 to do, 1 done, 2 failed, 3 stopped */
 	long out_bytes;			/* the converted PDF's size (done) */
 	char why[120];
-} files[MAXF];
-static int nfiles;
+} FENT;
+static FENT *files;
+static int nfiles, nroom;
+
+/* room for n more in the list: 1, or 0 when memory refuses it */
+static int room(int n)
+{
+	FENT *f;
+	long want;
+
+	if (nfiles + n <= nroom)
+		return 1;
+	want = (long)nfiles + n;
+	if (want < 32)
+		want = 32;
+	if (want < 2L * nroom)
+		want = 2L * nroom;	/* (doubling: few reallocs as a tree comes in) */
+	if (!(f = realloc(files, (size_t)want * sizeof *f))) {
+		want = (long)nfiles + n;	/* (no room to double: just what is asked) */
+		if (!(f = realloc(files, (size_t)want * sizeof *f)))
+			return 0;
+	}
+	files = f;
+	nroom = (int)want;
+	return 1;
+}
 /* how the last batch went, under the bars until the list changes (decided
    10 Nov 2026: the result in the window, not an alert; the list keeps every
    file with its mark until Clear) */
@@ -324,7 +350,7 @@ static int add_file_under(const char *p, int rel)
 	for (i = 0; i < nfiles; i++)
 		if (!strcmp(files[i].path, p))
 			return 0;
-	if (nfiles >= MAXF || strlen(p) >= sizeof files[0].path || (n = file_size(p)) < 0)
+	if (strlen(p) >= sizeof files[0].path || (n = file_size(p)) < 0 || !room(1))
 		return 0;
 	s_result[0] = '\0';	/* (the list changed: the last batch's line goes) */
 	strcpy(files[nfiles].path, p);
@@ -347,6 +373,20 @@ static int add_file(const char *p)
    kept with its place under the folder first added (from rel), so that the
    copies go into the same subfolders under Write to (decided 25 Nov 2026:
    Add folder... takes the whole tree). 8 levels at most; a DTA a level */
+/* 1: add_tree counts the PDFs it would add, adding none */
+static int counting;
+
+/* already in the list */
+static int listed(const char *p)
+{
+	int i;
+
+	for (i = 0; i < nfiles; i++)
+		if (!strcmp(files[i].path, p))
+			return 1;
+	return 0;
+}
+
 static int add_tree(const char *dir, int rel, int depth)
 {
 	char pat[180], p[200];
@@ -360,7 +400,7 @@ static int add_tree(const char *dir, int rel, int depth)
 	if (Fsfirst(pat, 0) == 0)
 		do {
 			snprintf(p, sizeof p, "%s\\%s", dir, dta.d_fname);
-			n += add_file_under(p, rel);
+			n += counting ? strlen(p) < sizeof files[0].path && !listed(p) : add_file_under(p, rel);
 		} while (Fsnext() == 0);
 	snprintf(pat, sizeof pat, "%s\\*.*", dir);
 	if (Fsfirst(pat, 0x10) == 0)
@@ -370,13 +410,32 @@ static int add_tree(const char *dir, int rel, int depth)
 				n += add_tree(p, rel, depth + 1);
 				Fsetdta(&dta);	/* (the level below set its own) */
 			}
-		} while (nfiles < MAXF && Fsnext() == 0);
+		} while (Fsnext() == 0);
 	Fsetdta(old);
 	return n;
 }
 
+/* room for n more PDFs, or said that memory has none and nothing added
+   (decided 25 Nov 2026: all of them or none) */
+static int too_many(int n)
+{
+	if (n <= 0 || room(n))
+		return 0;
+	alert(1, "[1][Not enough memory for|these %d PDFs. None|were added.][ OK ]", n);
+	log_event("too-many", NULL, NULL);
+	return 1;
+}
+
+/* the folder's tree, all of it or none (-1: too many, said) */
 static int add_folder(const char *dir)
 {
+	int n;
+
+	counting = 1;
+	n = add_tree(dir, (int)strlen(dir) + 1, 0);
+	counting = 0;
+	if (too_many(n))
+		return -1;
 	return add_tree(dir, (int)strlen(dir) + 1, 0);
 }
 
@@ -1726,6 +1785,8 @@ static void cmd_add(void)
 		return;
 	setting("FOLDER", in_dir, "the folder the file selector shows first");
 	snprintf(p, sizeof p, "%s\\%s", in_dir, name);
+	if (!listed(p) && too_many(1))
+		return;
 	if (add_file(p)) {
 		texts();
 		redraw_list();
@@ -1739,7 +1800,7 @@ static void cmd_folder(void)
 	if (working || !pick("Add every PDF in a folder", in_dir, sizeof in_dir, name, sizeof name))
 		return;
 	setting("FOLDER", in_dir, "the folder the file selector shows first");
-	if (!add_folder(in_dir))
+	if (!add_folder(in_dir))	/* (-1: too many, said) */
 		alert(1, "[1][No PDF in that folder|could be added.][ OK ]");
 	texts();
 	redraw_list();
@@ -2050,7 +2111,9 @@ static void command(int c)
 		break;
 	case CMD_CLEAR:
 		if (!working) {
-			nfiles = 0;
+			nfiles = nroom = 0;
+			free(files);	/* (the list's memory given back) */
+			files = NULL;
 			lsel = -1;
 			s_result[0] = '\0';
 			texts();
@@ -2366,8 +2429,15 @@ static void key(short kstate, short k)
 static void add_args(const char *s)
 {
 	char f[256];
+	const char *a = s;
 	int n = 0;
 
+	/* (all of them or none: counted first) */
+	while ((a = av_arg(a, f, sizeof f)) != NULL)
+		n += !listed(f) && file_size(f) >= 0;
+	if (too_many(n))
+		return;
+	n = 0;
 	while ((s = av_arg(s, f, sizeof f)) != NULL)
 		n += add_file(f);
 	if (n && win >= 0) {
