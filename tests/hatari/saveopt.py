@@ -10,7 +10,7 @@ speed rig:
 A converted PDF (build/econvert) is opened from C:\\. Checked:
 - the family's dialog opens (its "EPDF geom" line), the name proposed is
   the PDF's; Esc empties the name, "KEPT" and Return save C:\\KEPT.PDF (the
-  extension added: Save clicked), byte for byte the open file
+  extension added: Return), byte for byte the open file
   ("save-optimised ok");
 - again with the same name: the dialog asks before replacing; Return takes
   its default, Cancel, and the dialog stays; Undo closes it ("save-dialog
@@ -20,7 +20,6 @@ A converted PDF (build/econvert) is opened from C:\\. Checked:
 - Settings' General page with its last row, the tick (settings.png).
 """
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -45,14 +44,6 @@ def wait(r, what, count=1, most=60):
     while time.time() < end and r.console().count(what) < count:
         time.sleep(0.5)
     return r.console().count(what) >= count
-
-
-def save_button(r):
-    """the dialog's Save (its "add" place on the console's last geom line)"""
-    m = re.findall(r"EPDF geom (.*)", r.console())
-    g = dict((n, tuple(int(i) for i in v.split(","))) for n, _, v in (p.partition("=") for p in m[-1].split()))
-    x, y, w, h = g["add"]
-    return x + w // 2, y + h // 2
 
 
 def run(work, machine, system):
@@ -84,7 +75,7 @@ def run(work, machine, system):
             r.shot("dialog")
             r.key("Escape")                     # (the name emptied)
             r.type("KEPT")
-            r.click(*save_button(r))            # (Return opens the list's folder at the keys' place)
+            r.key("Return")                     # (the name typed: Return saves)
             if not wait(r, "save-optimised", 1, 60):
                 bad.append("no save-optimised line")
             time.sleep(1)
@@ -102,7 +93,7 @@ def run(work, machine, system):
             time.sleep(2)
             r.key("Escape")
             r.type("KEPT")
-            r.click(*save_button(r))
+            r.key("Return")
             time.sleep(2)
             r.shot("replace")
             r.key("Return")                     # (the alert's default: Cancel)
