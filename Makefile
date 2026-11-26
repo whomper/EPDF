@@ -209,8 +209,11 @@ build/m68000/src/jbig2.o build/m68030/src/jbig2.o build/m68030cv/src/jbig2.o bui
 build/m68000/src/jpx.o build/m68030/src/jpx.o build/m68030cv/src/jpx.o build/m68000ec/src/jpx.o: XOPT = -Os
 # EPDF.PRG's cold parts for size on a 68000 (printing, the Gateway, translation,
 # the network, crash.log): 2.46's family save dialog took 21 KB of a 1 MB ST's
-# room and ST-1's big.py lost a document's pages (none of these in a speed row)
-EP_COLD = build/m68000/src/gem/prjob.o build/m68000/src/pigate.o build/m68000/common/src/translate.o build/m68000/common/src/conn.o build/m68000/common/atari/net_tos.o build/m68000/common/atari/sting.o build/m68000/src/gem/gwopen.o build/m68000/src/gem/gatedlg.o build/m68000/src/gem/trview.o build/m68000/common/atari/crash.o build/m68000/src/gem/epdf.o build/m68000/src/gem/fbalert.o build/m68000/src/gem/menu.o build/m68000/src/gem/rdraw.o build/m68000/common/src/ovl.o
+# room and ST-1's big.py lost a document's pages (none of these in a speed row);
+# then the hashes that open an encrypted file, the folder listing, the page strip
+# (off by default) and futil: 2.45 had 193 KB free on ST-1, 8f99dadf2 192 and
+# manual-stinternals-text lost 250-313 pages in each of three runs, now 195
+EP_COLD = build/m68000/src/gem/prjob.o build/m68000/src/pigate.o build/m68000/common/src/translate.o build/m68000/common/src/conn.o build/m68000/common/atari/net_tos.o build/m68000/common/atari/sting.o build/m68000/src/gem/gwopen.o build/m68000/src/gem/gatedlg.o build/m68000/src/gem/trview.o build/m68000/common/atari/crash.o build/m68000/src/gem/epdf.o build/m68000/src/gem/fbalert.o build/m68000/src/gem/menu.o build/m68000/src/gem/rdraw.o build/m68000/common/src/ovl.o build/m68000/common/third_party/bearssl/src/hash/sha2big.o build/m68000/common/third_party/bearssl/src/hash/sha2small.o build/m68000/common/third_party/bearssl/src/hash/md5.o build/m68000/common/src/dirlist.o build/m68000/src/view/trpara.o build/m68000/common/src/futil.o build/m68000/src/gem/strip.o
 $(EP_COLD): XOPT = -Os
 $(eval $(call ATARI_BUILD,m68000))
 $(eval $(call ATARI_BUILD,m68030))
@@ -807,10 +810,10 @@ build/m68000/eppad_z.o: FT_PAD = -DFT_PAD_NAME=ep_pad_z -DFT_PAD_TEXT=0 -DFT_PAD
 build/m68000/eppad_y.o: FT_PAD = -DFT_PAD_NAME=ep_pad_y -DFT_PAD_TEXT=0 -DFT_PAD_RO=$(EP_PAD_Y_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 build/m68000/eppad_x.o: FT_PAD = -DFT_PAD_NAME=ep_pad_x -DFT_PAD_TEXT=$(EP_PAD_X) -DFT_PAD_RO=$(EP_PAD_X_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EP_PAD_X_BSS)
 EP_PAD_A ?= 108
-EP_PAD_A_RO ?= 114
+EP_PAD_A_RO ?= 88
 EP_PAD_A_DATA ?= 188
 EP_PAD_B ?= 52
-EP_PAD_C ?= 240
+EP_PAD_C ?= 140
 EP_PAD_D ?= 382
 EP_PAD_E ?= 10
 EP_PAD_E_DATA ?= 234
@@ -829,7 +832,7 @@ EP_PAD_N ?= 0
 EP_PAD_O ?= 130
 EP_PAD_P ?= 72
 EP_PAD_Q ?= 84
-EP_PAD_R ?= 16
+EP_PAD_R ?= 102
 EP_PAD_R_RO ?= 236
 EP_PAD_S ?= 52
 EP_PAD_T ?= 200
