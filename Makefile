@@ -804,7 +804,7 @@ build/m68000/eppad_x.o: FT_PAD = -DFT_PAD_NAME=ep_pad_x -DFT_PAD_TEXT=$(EP_PAD_X
 EP_PAD_A ?= 108
 EP_PAD_A_RO ?= 246
 EP_PAD_A_DATA ?= 144
-EP_PAD_B ?= 100
+EP_PAD_B ?= 42
 EP_PAD_C ?= 170
 EP_PAD_D ?= 382
 EP_PAD_E ?= 10
@@ -834,7 +834,7 @@ EP_PAD_W_RO ?= 116
 EP_PAD_W_DATA ?= 0
 EP_PAD_X ?= 254
 EP_PAD_X_RO ?= 152
-EP_PAD_X_BSS ?= 152
+EP_PAD_X_BSS ?= 146
 EP_PAD_Y_RO ?= 184
 EP_PAD_B_RO ?= 214
 EP_PAD_Z_RO ?= 220
@@ -842,7 +842,7 @@ EP_PAD_U_RO ?= 98
 EP_PAD_U_DATA ?= 230
 EP_PAD_B_BSS ?= 124
 EP_PAD_J_BSS ?= 252
-EP_PAD_M_BSS ?= 236
+EP_PAD_M_BSS ?= 240
 EP_PAD_M_RO ?= 244
 build/m68000/eppad_a.o build/m68000/eppad_b.o build/m68000/eppad_c.o build/m68000/eppad_d.o \
 build/m68000/eppad_e.o build/m68000/eppad_f.o build/m68000/eppad_g.o build/m68000/eppad_h.o \

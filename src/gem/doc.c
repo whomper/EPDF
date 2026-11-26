@@ -621,15 +621,30 @@ static int pic_turn(void)
 	return !slice_up(NULL);
 }
 
+/* is obj the stored page shown for a page render.ovl is to draw sharp
+   (doc_stand_in's other way round)? */
+static int stands_in(long obj)
+{
+	long n;
+
+	for (n = 0; pdbl && obj > 0 && n < onpages; n++)
+		if (pdbl[n].stand == obj)
+			return 1;
+	return 0;
+}
+
 /* the text store's memory given back for a page or a picture refused it:
    1 when there is enough to try again, 2 when that was render.ovl's room
-   (the store's still to give, if it's refused again) */
-static int give_back(const char *what)
+   (the store's still to give, if it's refused again). A stored page that
+   only stands in for render.ovl's never takes render.ovl's room: with it
+   neither would be drawn (2.46 on a 4 MB Falcon under NVDI, drawn.py) */
+static int give_back(const char *what, long obj)
 {
-	long b, r = rdraw_reserved();
+	long b, r = stands_in(obj) ? 0 : rdraw_reserved();
 	char a[24];
 
-	rdraw_unreserve();	/* render.ovl's room first, when it isn't in it (rdraw.c) */
+	if (r)
+		rdraw_unreserve();	/* render.ovl's room first, when it isn't in it (rdraw.c) */
 	if (r && !rdraw_reserved()) {
 		snprintf(a, sizeof a, "%ld", r);
 		log_event("ovl-unreserve", what, a);
@@ -1103,7 +1118,7 @@ static int pz_begin(PICE *e)
 	   main heap as in 2.38 (a zone there would only cut the reading's room:
 	   scan-gfabasic on ST-1 read 19 pages with zones against 55) */
 	room = heap_room();
-	if (room < need && give_back("picture"))
+	if (room < need && give_back("picture", e->obj))
 		room = heap_room();
 	snprintf(a, sizeof a, "%ld %ld room %ld", e->obj, need, room);
 	if (room >= 2 * need) {
@@ -1232,7 +1247,7 @@ int doc_pic_slice(unsigned long ms, long *obj)
 	pics_band();			/* a band of colour rows to the screen's format */
 	if (!pdone)
 		return 0;
-	if ((rpic_rows ? !rpic_ok : !rpic_std) && rpic_why == PIC_MEMORY && retried_obj != rpic->obj && (g = give_back("picture"))) {
+	if ((rpic_rows ? !rpic_ok : !rpic_std) && rpic_why == PIC_MEMORY && retried_obj != rpic->obj && (g = give_back("picture", rpic->obj))) {
 		if (g == 1)
 			retried_obj = rpic->obj;
 		if (rpic_rows)
@@ -1744,7 +1759,7 @@ long doc_slice(unsigned long ms)
 	if (!rdone)
 		return -1;
 	n = rpage;
-	if (rt->failed && doc->st.oom != rpage_oom && retried_page != n && (g = give_back("page"))) {
+	if (rt->failed && doc->st.oom != rpage_oom && retried_page != n && (g = give_back("page", -1))) {
 		if (g == 1)
 			retried_page = n;
 		ptext_free(rt);

@@ -22,6 +22,13 @@ long pdf_ms(void);
 void (*pf_idle)(void);
 static long turns;
 
+/* pics.c's (rdraw.c asks it for render.ovl's soft colours): the whole
+   dither here, as on a 68030, so the pages are 2.45's */
+int pics_soft_machine(void)
+{
+	return 0;
+}
+
 static long gap_ms, last_turn;		/* the longest stretch between turns (the 50 ms of a turn) */
 /* where the longest began and ended: the turns' callers in render.ovl, as
    offsets from its ROVL table (render.elf's address 0: rovl.py names them);
