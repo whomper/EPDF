@@ -1842,7 +1842,12 @@ int main(void)
 		snprintf(m, sizeof m, "%ld %ld %ld", (long)Malloc(-1L) / 1024, (heap_st + heap_tt) / 1024, heap_use / 1024);
 		log_event("free-kb", m, NULL);
 	}
-	static int about_due = 1;	/* (about_ready: once, at the first timer event) */
+	/* about_ready: once, at the first timer event, and only where it has
+	   work (the 256-colour icon's pens): no turn of its own elsewhere */
+	static int about_due = 1;
+
+	if (planes < 8)
+		about_due = 0;
 
 	while (!quit_now) {
 		short which, flags = MU_MESAG | MU_KEYBD | MU_BUTTON;
