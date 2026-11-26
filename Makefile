@@ -888,6 +888,14 @@ binary/LAUNCH.PRG: build/m68000/atari/launch.o build/m68000/common/atari/gem.o b
 	  build/m68000/crt0.o build/m68000/nf.o build/m68000/atari/launch.o build/m68000/common/atari/gem.o build/m68000/common/atari/tos.o build/m68000/common/atari/libc.o -lgcc
 	python3 common/tools/elf2tos.py build/m68000/launch.elf $@
 
+# a stand-in desk accessory that holds memory as a bigger one does (atari/accroom.c, tests/hatari/accroom.py)
+binary/ACCROOM.ACC: XCPU = -m68000 -mstrict-align -fdisable-tree-bswap
+binary/ACCROOM.ACC: build/m68000/atari/accroom.o build/m68000/common/atari/gem.o build/m68000/common/atari/tos.o build/m68000/common/atari/libc.o build/m68000/crt0.o build/m68000/nf.o common/atari/link.ld | binary
+	$(XCC) -m68000 -nostdlib -static -no-pie -Wl,--emit-relocs -Wl,-T,common/atari/link.ld -Wl,--gc-sections \
+	  -Wl,--build-id=none -Wl,-z,noexecstack -Wl,--no-warn-rwx-segments -o build/m68000/accroom.elf \
+	  build/m68000/crt0.o build/m68000/nf.o build/m68000/atari/accroom.o build/m68000/common/atari/gem.o build/m68000/common/atari/tos.o build/m68000/common/atari/libc.o -lgcc
+	python3 common/tools/elf2tos.py build/m68000/accroom.elf $@
+
 # ---------------------------------------------------------------- the icons (guidelines 5.5)
 # drawn in AERA-Atari (common/icons/EPDF.txt, EPDFDOC.txt for the documents); made into
 # icons/ (committed), src/gem/icon*.h and docs/icon*.png by common/tools/appicon.py
