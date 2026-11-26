@@ -657,6 +657,17 @@ at first. This section is kept up to date: the build, the tests, what a release 
   from scratch), history kept. Pads refitted against v2.44 (all at its places but pigate.o). The pairs:
   ST:mono View > The page's lines 225 -> 235, the same work on gemprof (181.7 / 181.8 ms). ST-1's big.py
   manual-stinternals-text refuses a page or two in some runs, as 2.44 (0/0/2 against 0/1/0).
+  2.46 (26 Nov 2026; the hub's go on 3af8949): the family save dialog (Settings' "Use the system file
+  selector"), Write a log shown again, common's about_prepare (about_ready a timer turn once, only where
+  planes >= 8), soft colours on a FireBee and _CPU >= 40, the View > Pages tick (menu_states after
+  CMD_PAGES, "pages-tick"), EConvert's icon, Add folder takes the whole tree, EConvert's list as long as
+  memory holds, common bfc4656, render.ovl's room kept when a stored page is refused memory, a 1 MB ST's
+  room (EPDF.PRG's cold parts at -Os). Pads against v2.45: 0 of 552 objects off. The pairs: the start on
+  the reference configuration 345 -> 370 (the icon map out of the About box, 165 -> 135: accepted,
+  decided 26 Nov 2026); ST:mono's 675 -> 710 the rig's 20 ms threshold and 5 ms hand-off rule (the same
+  marks to the loop, 670 ms; the hub's PERF-REVISIT, e8cbde7). Known: ST-1 on TOS 1.04 with ECal,
+  EContact or EHypView, the Desk menu doesn't open and the desktop doesn't come back after quit (as
+  2.43-2.45), for the next body of work with the print fix and #132, from the log's KB free.
   Next, after 2.36 (decided 17 Nov 2026): the converter prepares pictures and whole pages in the screen's own colours, so EPDF
   only unpacks and copies (the rigs' logs: on Falcon-4:256 a photo 1.2 s decoding, 6.7 s fitting to
   the screen's colours). EConvert's Settings > General "Optimise for: Smaller files / Faster display",
