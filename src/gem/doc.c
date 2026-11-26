@@ -621,12 +621,14 @@ static int pic_turn(void)
 	return !slice_up(NULL);
 }
 
-/* is obj the stored page shown for a page render.ovl is to draw sharp
-   (doc_stand_in's other way round)? */
+/* is obj a page render.ovl draws, or the stored page shown for one till
+   it is drawn sharp (doc_stand_in's other way round)? */
 static int stands_in(long obj)
 {
 	long n;
 
+	if (obj >= PICS_PAGE)
+		return 1;
 	for (n = 0; pdbl && obj > 0 && n < onpages; n++)
 		if (pdbl[n].stand == obj)
 			return 1;
@@ -635,9 +637,9 @@ static int stands_in(long obj)
 
 /* the text store's memory given back for a page or a picture refused it:
    1 when there is enough to try again, 2 when that was render.ovl's room
-   (the store's still to give, if it's refused again). A stored page that
-   only stands in for render.ovl's never takes render.ovl's room: with it
-   neither would be drawn (2.46 on a 4 MB Falcon under NVDI, drawn.py) */
+   (the store's still to give, if it's refused again). A page render.ovl
+   draws, or the stored page standing in for it, never takes render.ovl's
+   room: with it neither would be drawn (2.46 on a 4 MB Falcon under NVDI, drawn.py) */
 static int give_back(const char *what, long obj)
 {
 	long b, r = stands_in(obj) ? 0 : rdraw_reserved();

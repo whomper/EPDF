@@ -450,7 +450,7 @@ static void save_optimised(void)
 	if (pf_wclose(out, full, ok) != 0)
 		ok = 0;
 	graf_mouse(ARROW, NULL);
-	log_event("save-optimised", ok ? "ok" : "failed", NULL);
+	log_event("save-optimised", ok ? "ok" : "failed", full);
 	if (!ok)
 		alert(1, "[1][%.30s couldn't be written: the disk may be full.][ OK ]", name);
 }

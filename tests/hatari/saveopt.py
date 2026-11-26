@@ -84,7 +84,7 @@ def run(work, machine, system):
                 bad.append("C:\\KEPT.PDF not written: %s" % sorted(os.listdir(r.hd)))
             elif open(kept, "rb").read() != want:
                 bad.append("C:\\KEPT.PDF isn't the open file byte for byte")
-            if "save-optimised ok" not in r.console():
+            if "save-optimised ok C:\\KEPT.PDF" not in r.console():
                 bad.append("the save didn't say ok")
             # the same name again: asked, Cancel the default, the dialog stays
             stamp = os.path.getmtime(kept) if os.path.exists(kept) else 0

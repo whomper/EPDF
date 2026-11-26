@@ -207,6 +207,11 @@ build/m68000/common/ui/%: XOPT = -Os
 # JBIG2 for size, its inner loops at -O2 (jbig2.c's HOT): 20.8 KB -> 12.2 KB on a 68000
 build/m68000/src/jbig2.o build/m68030/src/jbig2.o build/m68030cv/src/jbig2.o build/m68000ec/src/jbig2.o: XOPT = -Os
 build/m68000/src/jpx.o build/m68030/src/jpx.o build/m68030cv/src/jpx.o build/m68000ec/src/jpx.o: XOPT = -Os
+# EPDF.PRG's cold parts for size on a 68000 (printing, the Gateway, translation,
+# the network, crash.log): 2.46's family save dialog took 21 KB of a 1 MB ST's
+# room and ST-1's big.py lost a document's pages (none of these in a speed row)
+EP_COLD = build/m68000/src/gem/prjob.o build/m68000/src/pigate.o build/m68000/common/src/translate.o build/m68000/common/src/conn.o build/m68000/common/atari/net_tos.o build/m68000/common/atari/sting.o build/m68000/src/gem/gwopen.o build/m68000/src/gem/gatedlg.o build/m68000/src/gem/trview.o build/m68000/common/atari/crash.o build/m68000/src/gem/epdf.o build/m68000/src/gem/fbalert.o build/m68000/src/gem/menu.o build/m68000/src/gem/rdraw.o build/m68000/common/src/ovl.o
+$(EP_COLD): XOPT = -Os
 $(eval $(call ATARI_BUILD,m68000))
 $(eval $(call ATARI_BUILD,m68030))
 $(eval $(call ATARI_BUILD,m68030cv))
@@ -802,14 +807,14 @@ build/m68000/eppad_z.o: FT_PAD = -DFT_PAD_NAME=ep_pad_z -DFT_PAD_TEXT=0 -DFT_PAD
 build/m68000/eppad_y.o: FT_PAD = -DFT_PAD_NAME=ep_pad_y -DFT_PAD_TEXT=0 -DFT_PAD_RO=$(EP_PAD_Y_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 build/m68000/eppad_x.o: FT_PAD = -DFT_PAD_NAME=ep_pad_x -DFT_PAD_TEXT=$(EP_PAD_X) -DFT_PAD_RO=$(EP_PAD_X_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EP_PAD_X_BSS)
 EP_PAD_A ?= 108
-EP_PAD_A_RO ?= 246
-EP_PAD_A_DATA ?= 144
-EP_PAD_B ?= 42
-EP_PAD_C ?= 170
+EP_PAD_A_RO ?= 114
+EP_PAD_A_DATA ?= 188
+EP_PAD_B ?= 52
+EP_PAD_C ?= 240
 EP_PAD_D ?= 382
 EP_PAD_E ?= 10
-EP_PAD_E_DATA ?= 238
-EP_PAD_F ?= 244
+EP_PAD_E_DATA ?= 234
+EP_PAD_F ?= 26
 EP_PAD_G ?= 34
 EP_PAD_H ?= 116
 EP_PAD_H_RO ?= 238
@@ -824,7 +829,7 @@ EP_PAD_N ?= 0
 EP_PAD_O ?= 130
 EP_PAD_P ?= 72
 EP_PAD_Q ?= 84
-EP_PAD_R ?= 92
+EP_PAD_R ?= 16
 EP_PAD_R_RO ?= 236
 EP_PAD_S ?= 52
 EP_PAD_T ?= 200
@@ -832,7 +837,7 @@ EP_PAD_V ?= 152
 EP_PAD_W ?= 120
 EP_PAD_W_RO ?= 116
 EP_PAD_W_DATA ?= 0
-EP_PAD_X ?= 254
+EP_PAD_X ?= 184
 EP_PAD_X_RO ?= 152
 EP_PAD_X_BSS ?= 146
 EP_PAD_Y_RO ?= 184
