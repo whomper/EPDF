@@ -1103,7 +1103,11 @@ void win_progress(int kind, const char *what, long done, long total)
 	eta[0] = 0;
 	if (eta_s >= 0)
 		eta_words(eta_s, eta, sizeof eta);
-	if (p >= 0)
+	if (p >= 0 && kind == 9)
+		/* printing: "Printing page 1 of 4 \xFA 3 min left", the whole job's
+		   time, no percentage (decided 26 Nov 2026: a page takes minutes) */
+		snprintf(bar_job, sizeof bar_job, "%s%s%s", what, eta[0] ? " \xFA " : "", eta);
+	else if (p >= 0)
 		snprintf(bar_job, sizeof bar_job, "%s \xFA %ld%%%s%s", what, p / 10, eta[0] ? " \xFA " : "", eta);
 	else
 		snprintf(bar_job, sizeof bar_job, "%s", what);

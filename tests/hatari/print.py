@@ -207,6 +207,8 @@ def run(work, machine, stop, nowd=False):
         else:
             time.sleep(4)
             r.shot("printing")          # ("Printing page n of 3" and its bar)
+            time.sleep(16)
+            r.shot("printing-left")     # ("Printing page n of 3 \xfa 3 min left", decided 26 Nov 2026)
             # (a 4 MB Falcon at 16 MHz draws an A4 page at 300 dpi for minutes)
             end = time.time() + float(os.environ.get("PRINT_TIMEOUT", "5400"))
             while time.time() < end and not re.search(r"EPDF print-(done|failed|stopped)", r.console()):
