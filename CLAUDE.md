@@ -41,7 +41,15 @@ These come from AERA-Atari's repo template and are the same in every app's CLAUD
   `main`, nothing else: no test builds, no CI artifacts, no builds from a branch.
   Work lands on `main`; to try a fix on real hardware, release it. If a release doesn't work, fix
   forward: a new release with the next number, before any other work; never a rollback (decided 7 Nov 2026).
-- **Releases go out without asking the owner** (his decision, 23 Oct 2026; guidelines 1.2), through **the
+- **Fewer releases, each carrying more** (decided 26 Nov 2026; guidelines 1.2; AERA-Atari 9da7632): no
+  release for every single fix or feature. Changes gather on `main` and go out together when a body of
+  work is complete (the fixes known at the time and the phase's features), as one candidate through the
+  gate and the hub's family check. Only a fault that loses or damages data, a security fault, or a crash
+  or breakage that stops users working goes out on its own at once, with only that fix, its notes saying
+  why. A reported fault is fixed with its rig case and rides the next release otherwise; so do the hub's
+  shared fixes, unless the hub names one as the exception. Docs and rig changes need no release.
+- **Releases go out without asking the owner** (decided 23 Oct 2026; guidelines 1.2), when a body of work
+  on `main` is ready, through **the
   regression gate** (decided 17 Nov 2026; AERA-Atari a22574e, guidelines 1.2 and standards/TEST-MATRIX.md's gate table). Every code
   candidate, in this order:
   1. this repo's checks;
@@ -62,7 +70,8 @@ These come from AERA-Atari's repo template and are the same in every app's CLAUD
      hub the link.
 
   A fault a user reports becomes a case in the rigs, in the release that fixes it. A fault found after
-  a release is fixed forward by a new release that comes before any other work. Decisions that are his
+  a release that is one of the exceptions above is fixed forward by a new release that comes before any
+  other work; any other rides the next release. Decisions that are his
   still go to him first.
 - **Who decides what** (decided 31 Oct 2026; the guidelines' "Who decides what"). The owner's part, put
   to him before the work as a decision with a short context:
