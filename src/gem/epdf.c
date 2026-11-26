@@ -2022,6 +2022,16 @@ int main(void)
 	/* each step of the way out into the log at once (the hub, 10 Nov 2026:
 	   bombs as EFTP and EMail quit, no CRASH.LOG; the next ones show where) */
 	log_event("quit", NULL, NULL);
+	if (prjob_on()) {
+		/* a job still printing: stopped at its next band and the printer's
+		   workstation closed (v_clswk), which sends what the driver holds;
+		   left open, the driver kept EPDF's memory after it was given back
+		   (2.43-2.46: bombs after a quit while printing, the pages lost) */
+		prjob_stop();
+		while (prjob_on())
+			prjob_slice(50);
+		log_event("quit", "printing stopped", NULL);
+	}
 	window_place_save();
 	log_event("quit", "settings saved", NULL);
 	win_close();

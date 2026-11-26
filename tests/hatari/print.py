@@ -16,7 +16,12 @@ as common's tests/print). Twice:
   "Printing page n of 3" (a shot) and "Printed." at its end, File > Print...
   greyed while it prints (its menu state logged by the rig's shot);
 - every page, Esc after the first: "print-stopped", fewer IMGs than pages,
-  none left half open.
+  none left half open;
+- every page, ^Q after the first (a quit while printing, 26 Nov 2026: 2.43
+  to 2.46 left the printer's workstation open, its pages never sent, and
+  bombed after the quit): the job stopped and the printer closed before the
+  window ("quit printing stopped", "print-stopped"), each step of the way
+  out, no CRASH.LOG.
 Then without WDIALOG (the hub, 21 Nov 2026: common 726554d, TOS's AES alone
 gave "Illegal AES function call"): setup 2, no dialog and no alert, page 2
 to the GDOS's default printer, device 21 pointed at META.SYS in the run's
@@ -87,7 +92,7 @@ def wait(r, what, most):
 
 def run(work, machine, stop, nowd=False):
     st = machine.startswith("ST")
-    name = machine.replace(":", "_") + ("-stop" if stop else "") + ("-nowd" if nowd else "")
+    name = machine.replace(":", "_") + ("-" + stop if stop else "") + ("-nowd" if nowd else "")
     r = speed.Rig(os.path.join(work, name), machine, nvdi=True, display=os.environ.get("XDISPLAY", ":96"))
     bad = []
     wd = os.path.join(os.environ.get("AERA_NVDI", os.path.expanduser("~/.aera/nvdi/x")), "auto", "wdialog.prg")
@@ -167,6 +172,25 @@ def run(work, machine, stop, nowd=False):
             end = time.time() + 900
             while time.time() < end and not re.search(r"EPDF printed-page|EPDF print-failed", r.console()):
                 time.sleep(1)
+            if stop == "quit":
+                r.key("ctrl+q")
+                end = time.time() + 300
+                while time.time() < end and "EPDF quit out of the AES" not in r.console():
+                    time.sleep(1)
+                time.sleep(5)
+                c = r.console()
+                for l in c.splitlines():
+                    if l.startswith("EPDF quit") or l.startswith("EPDF print-"):
+                        print("  " + l.strip())
+                if "EPDF quit printing stopped" not in c or "EPDF print-stopped" not in c:
+                    bad.append("^Q didn't stop the printing first")
+                if "EPDF quit out of the AES" not in c:
+                    bad.append("^Q: not out of the AES")
+                for root, _, files in os.walk(r.hd):
+                    if any(f.lower() == "crash.log" for f in files):
+                        bad.append("a CRASH.LOG in %s" % os.path.relpath(root, r.hd))
+                r.shot("quit")
+                raise RuntimeError
             r.key("Escape")
             end = time.time() + 120
             while time.time() < end and not re.search(r"EPDF print-(done|failed|stopped)", r.console()):
@@ -219,7 +243,7 @@ def run(work, machine, stop, nowd=False):
     except RuntimeError:
         pass
     finally:
-        print("%s%s: %s  (%s)" % (r.describe(), ", no WDIALOG" if nowd else ", Esc" if stop else ", pages %d-%d" % (first, last),
+        print("%s%s: %s  (%s)" % (r.describe(), ", no WDIALOG" if nowd else ", " + ("Esc" if stop == "esc" else "^Q") if stop else ", pages %d-%d" % (first, last),
                                   "ok" if not bad else "; ".join(bad), r.shots))
         r.stop()
         p = os.path.join(r.hd, "AUTO", "WDIALOG.PRG")
@@ -239,7 +263,8 @@ def main(argv):
         if m.startswith("Falcon-4"):
             os.environ["PRINT_LEFT_OUT"] = "1"
         bad += run(argv[0], m, False)
-        bad += run(argv[0], m, True)
+        bad += run(argv[0], m, "esc")
+        bad += run(argv[0], m, "quit")
         bad += run(argv[0], m, False, nowd=True)
         if m == "Falcon-4:256":
             # page 3 alone on a 4 MB Falcon: its progressive JPEG has no room
