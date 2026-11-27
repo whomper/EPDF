@@ -548,6 +548,61 @@ static void job(void)
 		coro_switch(&pr_co, &pr_main);
 }
 
+/* the BIOS's and XBIOS's trap vectors and their XBRA chains (the names,
+   four letters each, up to 8), for the log: a printer's driver that left
+   a hook behind after its workstation closed (27 Nov 2026: a quit after a
+   page printed bombed in the XBIOS chain, at $920) */
+static char vec_now[2][48];
+
+static long read_vectors(void)
+{
+	static const long at[2] = { 0xB4, 0xB8 };	/* trap #13, trap #14 */
+	int t, n;
+
+	for (t = 0; t < 2; t++) {
+		const long *v = *(const long **)at[t];
+		char *o = vec_now[t];
+		int k = 0;
+
+		k += snprintf(o + k, sizeof vec_now[t] - (size_t)k, "%lx", (unsigned long)v);
+		for (n = 0; v && n < 8 && ((unsigned long)v & 1) == 0 && v[-3] == 0x58425241L; n++, v = (const long *)v[-1]) {
+			unsigned long id = (unsigned long)v[-2];
+			char name[5];
+			int i;
+
+			for (i = 0; i < 4; i++) {
+				char c = (char)(id >> (24 - 8 * i));
+
+				name[i] = c >= 32 && c < 127 ? c : '?';
+			}
+			name[4] = '\0';
+			if (k < (int)sizeof vec_now[t] - 6)
+				k += snprintf(o + k, sizeof vec_now[t] - (size_t)k, " %s", name);
+		}
+	}
+	return 0;
+}
+
+/* the vectors noted (what "before" or "after" the printer's workstation) */
+static void note_vectors(const char *what)
+{
+	static char before[2][48];
+
+	Supexec(read_vectors);
+	if (!strcmp(what, "before")) {
+		memcpy(before, vec_now, sizeof before);
+		log_event("print-vectors", "before", vec_now[1]);
+		return;
+	}
+	if (memcmp(before, vec_now, sizeof before)) {
+		log_event("print-vectors", "after: bios", vec_now[0]);
+		log_event("print-vectors", "after: xbios", vec_now[1]);
+		log_event("print-vectors", "was: bios", before[0]);
+		log_event("print-vectors", "was: xbios", before[1]);
+	} else
+		log_event("print-vectors", "after: as before", NULL);
+}
+
 int prjob_on(void)
 {
 	return on;
@@ -596,6 +651,7 @@ int prjob_begin(void)
 		doc_pics_pause(1);	/* (render.ovl is the job's while it prints) */
 		doc_print_room();
 	}
+	note_vectors("before");
 	if (!print_open(&pj)) {
 		char a[40];
 
@@ -665,6 +721,7 @@ void prjob_slice(unsigned long ms)
 	if (!finished)
 		return;
 	print_end(&pj);
+	note_vectors("after");
 	if (rdoc) {
 		rdraw_ovl()->close(rdoc);
 		rdoc = NULL;
