@@ -919,7 +919,24 @@ static int page_rows(long n, int w, int h, void (*row)(void *u, long y, const un
 	do {
 		unsigned long t0 = tos_ms();
 
-		rc = o->page(rdoc, n, w, y0, &pg);
+		if (o->size >= (short)sizeof(ROVL) && o->band) {
+			/* each band as tall as the memory free now allows: the
+			   canvas comes from EPDF's heap, whose room counts too (on a
+			   4 MB Falcon in 256 colours TOS's largest block was 4.8 KB
+			   as the heap had 241 KB: a canvas of 8 rows fixed when the
+			   document opened, each band reading the page again, the
+			   first page 24-28 s after the click, 27 Nov 2026); a
+			   quarter of the heap's room, the rest the page's pictures' */
+			long hr = heap_room() / 4, gr = (long)Malloc(-1L) * 2 / 3, br = (hr > gr ? hr : gr) / ((long)w * 2);
+
+			br &= ~7L;
+			if (br < 8)
+				br = 8;
+			if (br > h)
+				br = h;
+			rc = o->band(rdoc, n, w, y0, (int)br, &pg);
+		} else
+			rc = o->page(rdoc, n, w, y0, &pg);
 		if (rc) {
 			free(pn);
 			draw_page = -1;
