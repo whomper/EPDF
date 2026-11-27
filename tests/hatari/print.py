@@ -112,9 +112,15 @@ def run(work, machine, stop, nowd=False):
         r.put(os.path.join(TOP, "binary", "LAUNCH.PRG"))
         if os.path.exists(wd) and not nowd:
             r.put(wd, "AUTO")               # (the WDIALOG copy: removed below, never left in a kept hd)
+        dialog = stop == "dialog"
+        if dialog and not os.path.exists(wd):
+            print("%s, WDIALOG's dialog: SKIPPED (no wdialog.prg with NVDI here)" % r.describe())
+            raise RuntimeError
         first, last = (1, pages) if stop else tuple(int(x) for x in os.environ.get("PRINT_RANGE", "2 4").split())
-        if nowd:
+        if nowd or dialog:
             # TOS's AES alone (the hub, 21 Nov 2026: common 726554d): no dialog,
+            # (or, "dialog", WDIALOG's print dialog answered with Return, as a
+            # user prints: page 2 to the default printer, then ^Q)
             # the GDOS's default printer, device 21, pointed at NVDI's metafile
             # driver in this run's ASSIGN.SYS only, its C:\GEMFILE.GEM read back
             first = last = 2
@@ -140,12 +146,42 @@ def run(work, machine, stop, nowd=False):
         wait(r, "EPDF page %d " % pages, 300)   # (its text read: an ST prints what the text view has)
         time.sleep(3)
         r.key("ctrl+p")
+        if dialog:
+            # WDIALOG's print dialog, answered as a user does: Return prints
+            time.sleep(10)
+            r.shot("dialog")
+            r.key("Return")
         if not wait(r, "EPDF print-open ", 60):
             r.shot("no-printer")
             bad.append("^P opened no printer: %s" % [l for l in r.console().splitlines() if "print" in l])
             raise RuntimeError
         opened = [l for l in r.console().splitlines() if l.startswith("EPDF print-open ")][-1]
         print("  " + opened)
+        if dialog:
+            # printed through the dialog to the end, then ^Q: each step of the
+            # way out, no CRASH.LOG (27 Nov 2026: 2 bombs after a quit that
+            # followed a page printed through WDIALOG's dialog)
+            end = time.time() + float(os.environ.get("PRINT_TIMEOUT", "5400"))
+            while time.time() < end and not re.search(r"EPDF print-(done|failed|stopped)", r.console()):
+                time.sleep(2)
+            if "EPDF print-done" not in r.console():
+                bad.append("not done: %s" % [l for l in r.console().splitlines() if "print" in l][-3:])
+            time.sleep(5)
+            r.key("ctrl+q")
+            end = time.time() + 120
+            while time.time() < end and "EPDF quit out of the AES" not in r.console():
+                time.sleep(1)
+            time.sleep(10)
+            for l in r.console().splitlines():
+                if l.startswith("EPDF quit") or l.startswith("EPDF print-"):
+                    print("  " + l.strip())
+            if "EPDF quit out of the AES" not in r.console():
+                bad.append("^Q after printing: not out of the AES")
+            for root, _, files in os.walk(r.hd):
+                if any(f.lower() == "crash.log" for f in files):
+                    bad.append("a CRASH.LOG in %s" % os.path.relpath(root, r.hd))
+            r.shot("quit")
+            raise RuntimeError
         if nowd:
             setup = [l for l in r.console().splitlines() if l.startswith("EPDF print-setup")]
             if setup != ["EPDF print-setup default "] and setup != ["EPDF print-setup default"]:
@@ -245,7 +281,7 @@ def run(work, machine, stop, nowd=False):
     except RuntimeError:
         pass
     finally:
-        print("%s%s: %s  (%s)" % (r.describe(), ", no WDIALOG" if nowd else ", " + ("Esc" if stop == "esc" else "^Q") if stop else ", pages %d-%d" % (first, last),
+        print("%s%s: %s  (%s)" % (r.describe(), ", no WDIALOG" if nowd else ", " + {"esc": "Esc", "quit": "^Q", "dialog": "WDIALOG's dialog, then ^Q"}[stop] if stop else ", pages %d-%d" % (first, last),
                                   "ok" if not bad else "; ".join(bad), r.shots))
         r.stop()
         p = os.path.join(r.hd, "AUTO", "WDIALOG.PRG")
@@ -267,6 +303,7 @@ def main(argv):
         bad += run(argv[0], m, False)
         bad += run(argv[0], m, "esc")
         bad += run(argv[0], m, "quit")
+        bad += run(argv[0], m, "dialog")
         bad += run(argv[0], m, False, nowd=True)
         if m == "Falcon-4:256":
             # page 3 alone on a 4 MB Falcon: its progressive JPEG has no room
