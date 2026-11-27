@@ -35,6 +35,8 @@ typedef struct {
 	RFONTS *fonts;
 	const char *fontdir;		/* the standard fonts' files (Liberation*.ttf), or NULL */
 	long glyphs, glyphs_missed, images, images_missed;
+	long images_memory;		/* of those missed, the ones refused memory */
+	long images_need;		/* the biggest of those, its pixels' bytes */
 	int mono_glyphs;		/* 1: glyphs a bit a pixel (the mono page's: grey edges
 					   dithered broke 10-pixel text into dots, decided 4 Nov 2026);
 					   2: those under 20 pixels, a screen's of 16 colours or fewer

@@ -127,6 +127,21 @@ static int rv_page(void *doc, long n, int width, int y0, ROVL_PAGE *out)
 		x->r.canvas_max = was / 2;
 		rc = render_page_from(&x->r, n, width, y0);
 	}
+	/* a picture refused memory beside the whole page's canvas: the page
+	   again in bands, the canvas given back for the picture
+	   (a 4 MB Falcon without the DSP lost a photo the whole page had no
+	   room left for, 27 Nov 2026; drawn so, as in 2.46) */
+	if (!rc && y0 == 0 && x->r.images_memory > 0 && x->r.c.rows >= x->r.c.h && x->r.c.h > 64 && !stopped &&
+	    !x->d.stopping) {
+		/* bands as tall as leave the picture its pixels and as much
+		   again for its decoder, 64 rows at least: each band reads the
+		   page again */
+		long whole = (long)width * 2 * x->r.c.h, room = whole - 2 * x->r.images_need - 65536L;
+
+		x->r.canvas_max = room > (long)width * 2 * 64 ? room : (long)width * 2 * 64;
+		rc_free(&x->r.c);	/* (the whole page's canvas given back first) */
+		rc = render_page_from(&x->r, n, width, y0);
+	}
 	x->r.canvas_max = keep;		/* (the next page tries whole again; this one's bands go on in its canvas) */
 	memset(out, 0, sizeof *out);
 	if (stopped || x->d.stopping)

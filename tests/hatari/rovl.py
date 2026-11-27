@@ -131,8 +131,10 @@ def fallback(spec, p):
     scales otherwise. That page is compared with the host's page drawn so
     (build/econvert without --jpeg-pic); in bands, with the memory, pic.c
     draws it, so the bands' page 3 is compared with the host's as the
-    other pages are, not with the whole one (14 Nov 2026)"""
-    return spec.startswith("Falcon-4") and p["page"] == 3
+    other pages are, not with the whole one (14 Nov 2026). Where render.ovl
+    found no room for it beside the whole page's canvas it draws the page
+    again in bands (27 Nov 2026): pic.c's then, as in bands"""
+    return spec.startswith("Falcon-4") and p["page"] == 3 and p.get("bands", 1) == 1
 
 
 def main(argv):

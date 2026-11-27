@@ -1269,6 +1269,11 @@ static void image_hook(void *u, long obj, const fx *ctm)
 	}
 	if (!p) {
 		r->images_missed++;
+		if (why == PIC_MEMORY) {
+			r->images_memory++;
+			if (w * h * 2 > r->images_need)
+				r->images_need = w * h * 2;
+		}
 		return;
 	}
 	if (!mask && !p->alpha) {
@@ -1510,7 +1515,9 @@ int render_page_from(RPAGE *r, long n, int width, int y0)
 	default:  r->base[0] = s;  r->base[1] = 0;  r->base[2] = 0;  r->base[3] = -s;
 		  r->base[4] = -fxmul(bx[0], s); r->base[5] = fxmul(bx[3], s); break;
 	}
-	if (r->c.w != width || r->c.h != h) {
+	if (r->c.w != width || r->c.h != h ||
+	    (y0 == 0 && r->c.rows < h && (r->canvas_max <= 0 || (long)width * h * 2 <= r->canvas_max))) {
+		/* (a page drawn in bands for its pictures' room: the next whole again) */
 		/* all of it, or the band canvas_max allows (8 rows at least, a
 		   multiple of 8: the dithers' patterns are 8 rows) */
 		long rows = h;
@@ -1527,7 +1534,7 @@ int render_page_from(RPAGE *r, long n, int width, int y0)
 	rc_band(&r->c, y0);
 	r->width = width;
 	r->narea = 0;
-	r->glyphs = r->glyphs_missed = r->images = r->images_missed = 0;
+	r->glyphs = r->glyphs_missed = r->images = r->images_missed = r->images_memory = r->images_need = 0;
 	r->image_ms = 0;
 	st = calloc(1, sizeof *st);
 	if (!st)
