@@ -139,6 +139,7 @@ test: build/pdftext_oom build/test_pgshare build/test_xe build/test_ccitt build/
 	python3 tests/onebit.py build/onebit
 	python3 tests/glyphwise.py
 	python3 tests/rtlorder.py
+	python3 tests/cidgid.py
 	python3 tests/missedpic.py build/missedpic
 	python3 tests/filtmem.py build/filtmem
 	python3 tests/crypt.py

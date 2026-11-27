@@ -17,7 +17,7 @@ jobs:
       - name: Gateway dependencies
         run: if [ -f gateway/requirements.txt ]; then pip install -r gateway/requirements.txt; fi
       - name: Pillow (tests/ccitt.py checks the CCITT decoder against libtiff through it)
-        run: pip install pillow
+        run: pip install pillow fonttools
       - name: make test
         run: make test
 

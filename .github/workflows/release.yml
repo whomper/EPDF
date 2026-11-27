@@ -59,7 +59,7 @@ jobs:
             poppler-utils libopenjp2-tools qpdf
           # (make test's oracles: pdfimages and pdftoppm for tests/jbig2.py and tests/onebit.py,
           # opj_decompress for tests/jpx.py, qpdf for tests/crypt.py; nothing of them is linked)
-          pip install pillow    # tests/ccitt.py checks the CCITT decoder against libtiff through it
+          pip install pillow fonttools    # tests/ccitt.py checks the CCITT decoder against libtiff through it; tests/cidgid.py makes its font
       - name: hcp, for the help file
         run: common/tools/build-hcp.sh "$RUNNER_TEMP/hcp"
       - name: Test

@@ -44,6 +44,10 @@ typedef struct {
 	char base[40];		/* BaseFont */
 	long mem;
 	long serial;			/* this font's number, never reused (show_simple's table) */
+#ifdef PDF_DRAW
+	uint8_t *c2g;			/* composite: its CIDToGIDMap stream (2 bytes a CID), NULL: Identity */
+	long nc2g;			/* its CIDs */
+#endif
 } PFONT;
 
 #define FC_MAX 24
@@ -62,6 +66,10 @@ static void font_free(PDOC *d, PFONT *f)
 	pdf_free(d, f->tu, f->captu * (long)sizeof(TUR));
 	pdf_free(d, f->pool, f->cappool * 2);
 	pdf_free(d, f->wr, f->nwr * (long)sizeof(WR));
+#ifdef PDF_DRAW
+	if (f->c2g)
+		pdf_free(d, f->c2g, f->nc2g * 2);
+#endif
 	pdf_free(d, f, (long)sizeof *f);
 }
 
@@ -1108,6 +1116,31 @@ static PFONT *font_load_in(PDOC *d, POBJ *fd, long objnum, PTEXT *t)
 		f->dw = df ? (int)pd_int(d, df, "DW", 1000) : 1000;
 		f->dwfx = w2fx(f->dw);
 		desc = df ? pd_get(d, df, "FontDescriptor") : NULL;
+#ifdef PDF_DRAW
+		{
+			/* a CIDFontType2's CIDs to its program's glyphs: a stream
+			   of 2 bytes a CID where it isn't /Identity (a web page
+			   generator's PDFs: its CIDs the Unicode values, its subset's
+			   glyphs numbered anew; drawn by the CID, Hebrew came out as
+			   Latin letters, 27 Nov 2026) */
+			POBJ *cg = df ? pd_get(d, df, "CIDToGIDMap") : NULL;
+
+			if (cg && cg->t == PO_DICT && cg->flag) {
+				POBJ *raw = pd_getraw(df, "CIDToGIDMap");
+				long onum = raw && raw->t == PO_REF ? raw->a : -1;
+				SBUF b;
+				int whole;
+
+				if (pdf_stream_head(d, cg, onum, 1L << 18, &b, &whole) == 0) {
+					if (b.len >= 2 && (f->c2g = pdf_malloc(d, b.len & ~1L)) != NULL) {
+						memcpy(f->c2g, b.s, (size_t)(b.len & ~1L));
+						f->nc2g = b.len / 2;
+					}
+					sb_free(&b);
+				}
+			}
+		}
+#endif
 		w = df ? pd_get(d, df, "W") : NULL;
 		for (i = 0; w && w->t == PO_ARR && i < w->a;) {
 			long c1 = w_of(d, &w->u.v[i]);
@@ -1628,8 +1661,12 @@ static fx show_run(IX *x, const unsigned char *s, long n, long *glyphs)
 			gmx[3] = x->gm[3];
 			gmx[4] = x->rm[0] + fxmul(x->run0 + adv, x->rm[2]);
 			gmx[5] = x->rm[1] + fxmul(x->run0 + adv, x->rm[3]);
+			uint32_t gc = code;
+
+			if (f && f->composite && f->c2g)	/* (a CID past the map has no glyph: 0) */
+				gc = code < (uint32_t)f->nc2g ? (uint32_t)f->c2g[2 * code] << 8 | f->c2g[2 * code + 1] : 0;
 			x->t->draw->glyph(x->t->draw->u, f ? f->prog : -1, f ? f->pkind : 4, f ? f->base : NULL,
-					  f ? f->composite : 0, code, m ? u[0] : 0, gmx, g->mode);
+					  f ? f->composite : 0, gc, m ? u[0] : 0, gmx, g->mode);
 		}
 #endif
 		if (x->t->rec && m && f) {
