@@ -3148,6 +3148,160 @@ static int is_rtl_text(const char *s, int len)
 	return rtl > ltr;
 }
 
+/* in a right-to-left piece: a character of a left-to-right run (a digit,
+   a Latin letter), one that joins two of them, a bracket's mirror */
+static int ltr_ch(char c)
+{
+	return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+}
+
+static int ltr_mid(char c)
+{
+	return c == '.' || c == ',' || c == ':' || c == '/' || c == '-' || c == '@' || c == '_' || c == '+' || c == '%';
+}
+
+static char mirror_ch(char c)
+{
+	switch (c) {
+	case '(': return ')';
+	case ')': return '(';
+	case '[': return ']';
+	case ']': return '[';
+	case '{': return '}';
+	case '}': return '{';
+	case '<': return '>';
+	case '>': return '<';
+	}
+	return 0;
+}
+
+/* Hebrew or Arabic letters and Latin ones in a UTF-8 text, added to *r, *l */
+static void rtl_count(const char *s, int len, long *r, long *l)
+{
+	int i;
+
+	for (i = 0; i < len;) {
+		unsigned c = (unsigned char)s[i];
+		unsigned u;
+		int n;
+
+		if (c < 0x80) { u = c; n = 1; }
+		else if ((c & 0xE0) == 0xC0 && i + 1 < len) { u = (c & 31) << 6 | (s[i + 1] & 63); n = 2; }
+		else if ((c & 0xF0) == 0xE0 && i + 2 < len) { u = (c & 15) << 12 | (s[i + 1] & 63) << 6 | (s[i + 2] & 63); n = 3; }
+		else { u = 0xFFFD; n = 1; }
+		i += n;
+		if ((u >= 0x590 && u <= 0x8FF) || (u >= 0xFB1D && u <= 0xFDFF) || (u >= 0xFE70 && u <= 0xFEFF))
+			(*r)++;
+		else if ((u >= 'A' && u <= 'Z') || (u >= 'a' && u <= 'z') || (u >= 0xC0 && u < 0x590))
+			(*l)++;
+	}
+}
+
+/* in a right-to-left line, a piece read from its right: one with any
+   Hebrew or Arabic letter (its Latin and digits are runs inside it:
+   "name@example.com :Email"), or with no letter or digit at all (a
+   bracket, a full stop: turned and placed as the line reads) */
+static int rtl_side(const char *s, int len)
+{
+	long r = 0, l = 0;
+	int i;
+
+	rtl_count(s, len, &r, &l);
+	if (r > 0)
+		return 1;
+	for (i = 0; i < len; i++)
+		if (ltr_ch(s[i]) || (unsigned char)s[i] >= 0x80)
+			return 0;
+	return 1;
+}
+
+/* a right-to-left piece in logical order: its characters last to first,
+   but a run of digits or Latin letters (with the . , : / - @ _ + %
+   between them) kept as it reads, and a bracket turned (27 Nov 2026:
+   "12345" came out "54321" and "01/02/03" as "30/20/10") */
+static void rtl_piece(SBUF *o, const char *s, int len)
+{
+	int j;
+
+	for (j = len; j > 0;) {
+		int st = j - 1;
+
+		while (st > 0 && ((unsigned char)s[st] & 0xC0) == 0x80)
+			st--;
+		if (ltr_ch(s[st])) {
+			int r0 = st;	/* the run's start */
+
+			while (r0 > 0 && (ltr_ch(s[r0 - 1]) || (ltr_mid(s[r0 - 1]) && r0 > 1 && ltr_ch(s[r0 - 2]))))
+				r0--;
+			sb_add(o, s + r0, j - r0);
+			j = r0;
+			continue;
+		}
+		if (j - st == 1 && mirror_ch(s[st]))
+			sb_addc(o, mirror_ch(s[st]));
+		else
+			sb_add(o, s + st, j - st);
+		j = st;
+	}
+}
+
+/* left-to-right pieces [a, b) as they stand, a space where there is a gap */
+static void ltr_pieces(IX *x, CH *c, long a, long b, fx gapmin, SBUF *o)
+{
+	long i;
+
+	for (i = a; i < b; i++) {
+		/* the same piece again where it stood (printed twice, a bold
+		   made by a small offset: a Calamus SL PDF's running title) once */
+		if (i > a && c[i].len == c[i - 1].len && fxabs(c[i].x - c[i - 1].x) < (c[i].fs >> 3) &&
+		    fxabs(c[i].y - c[i - 1].y) < (c[i].fs >> 3) &&
+		    !memcmp(x->txt.s + c[i].off, x->txt.s + c[i - 1].off, (size_t)c[i].len))
+			continue;
+		if (i > a) {
+			fx gap = c[i].x - (c[i - 1].x + c[i - 1].dx);
+			fx fs = c[i].fs > c[i - 1].fs ? c[i].fs : c[i - 1].fs;
+
+			if (gap > fxmul(fs, gapmin) && o->len && o->s[o->len - 1] != ' ' && !c[i].sp)
+				sb_addc(o, ' ');
+		}
+		sb_add(o, x->txt.s + c[i].off, c[i].len);
+	}
+}
+
+/* the line's rightmost letter is Hebrew or Arabic (a right-to-left
+   line ends there, as "name@example.com :Email" does) */
+static int rtl_last(IX *x, CH *c, long a, long b)
+{
+	long i;
+
+	for (i = b - 1; i >= a; i--) {
+		const char *s = x->txt.s + c[i].off;
+		int j = c[i].len;
+
+		while (j > 0) {
+			int st = j - 1;
+			unsigned char u;
+
+			while (st > 0 && ((unsigned char)s[st] & 0xC0) == 0x80)
+				st--;
+			u = (unsigned char)s[st];
+			if (ltr_ch(s[st]))
+				return 0;
+			if (u >= 0x80) {
+				long r = 0, l = 0;
+
+				rtl_count(s + st, j - st, &r, &l);
+				if (r)
+					return 1;
+				if (l)
+					return 0;
+			}
+			j = st;
+		}
+	}
+	return 0;
+}
+
 /* emit chunks [a, b) of one line, in visual order left to right */
 static void emit_line(IX *x, CH *c, long a, long b, PTEXT *t)
 {
@@ -3172,28 +3326,71 @@ static void emit_line(IX *x, CH *c, long a, long b, PTEXT *t)
 	   page's tell) */
 	if ((spaces || x->glyphwise) && chars < 3 * (b - a))
 		gapmin = 52429;
+	/* a line mostly right to left (more Hebrew or Arabic letters than
+	   Latin ones) reads from its right end: its pieces right to left, a
+	   run of left-to-right pieces (a number, an address) kept as it reads
+	   (a line "Email: name@example.com" came out with the address
+	   first, 27 Nov 2026); else left to right, a run of right-to-left
+	   pieces from its right */
+	{
+		long r = 0, l = 0;
+
+		for (i = a; i < b; i++)
+			rtl_count(x->txt.s + c[i].off, c[i].len, &r, &l);
+		if (r > l || (r > 0 && rtl_last(x, c, a, b))) {
+			long from = o->len;
+
+			for (i = b - 1; i >= a;) {
+				long j = i;
+
+				if (rtl_side(x->txt.s + c[i].off, c[i].len)) {
+					if (o->len > from && o->s[o->len - 1] != ' ' && !c[i].sp)
+						sb_addc(o, ' ');
+					rtl_piece(o, x->txt.s + c[i].off, c[i].len);
+					i--;
+					continue;
+				}
+				while (j > a && !rtl_side(x->txt.s + c[j - 1].off, c[j - 1].len))
+					j--;
+				if (o->len > from && o->s[o->len - 1] != ' ' && !c[j].sp)
+					sb_addc(o, ' ');
+				ltr_pieces(x, c, j, i + 1, gapmin, o);
+				i = j - 1;
+			}
+			/* (its spaces at the ends: a piece of spaces came first or last) */
+			while (o->len > from && o->s[o->len - 1] == ' ')
+				o->len--;
+			{
+				long k = from;
+
+				while (k < o->len && o->s[k] == ' ')
+					k++;
+				if (k > from) {
+					memmove(o->s + from, o->s + k, (size_t)(o->len - k));
+					o->len -= k - from;
+				}
+			}
+			return;
+		}
+	}
 	for (i = a; i < b;) {
 		int rtl = is_rtl_text(x->txt.s + c[i].off, c[i].len);
 
 		if (!rtl) {
-			/* the same piece again where it stood (printed twice, a bold
-			   made by a small offset: a Calamus SL PDF's running title) once */
-			if (i > a && c[i].len == c[i - 1].len && fxabs(c[i].x - c[i - 1].x) < (c[i].fs >> 3) &&
-			    fxabs(c[i].y - c[i - 1].y) < (c[i].fs >> 3) &&
-			    !memcmp(x->txt.s + c[i].off, x->txt.s + c[i - 1].off, (size_t)c[i].len)) {
-				i++;
-				continue;
-			}
-			/* a space between pieces when there is a gap */
+			long j = i;
+
+			while (j < b && !is_rtl_text(x->txt.s + c[j].off, c[j].len))
+				j++;
 			if (i > a) {
+				/* a space between pieces when there is a gap */
 				fx gap = c[i].x - (c[i - 1].x + c[i - 1].dx);
 				fx fs = c[i].fs > c[i - 1].fs ? c[i].fs : c[i - 1].fs;
 
 				if (gap > fxmul(fs, gapmin) && o->len && o->s[o->len - 1] != ' ' && !c[i].sp)
 					sb_addc(o, ' ');
 			}
-			sb_add(o, x->txt.s + c[i].off, c[i].len);
-			i++;
+			ltr_pieces(x, c, i, j, gapmin, o);
+			i = j;
 			continue;
 		}
 		/* a run of RTL pieces: in logical order they come from the right */
@@ -3205,27 +3402,12 @@ static void emit_line(IX *x, CH *c, long a, long b, PTEXT *t)
 			int first = 1;
 
 			for (k = i - 1; k >= runstart; k--) {
-				SBUF tmp;
-				const char *s = x->txt.s + c[k].off;
-				int len = c[k].len, j;
-
 				if (!first || runstart > a) {
 					if (o->len && o->s[o->len - 1] != ' ' && !c[k].sp)
 						sb_addc(o, ' ');
 				}
 				first = 0;
-				/* characters of the piece, last to first (by code point) */
-				sb_init(&tmp);
-				for (j = len; j > 0;) {
-					int st = j - 1;
-
-					while (st > 0 && ((unsigned char)s[st] & 0xC0) == 0x80)
-						st--;
-					sb_add(&tmp, s + st, j - st);
-					j = st;
-				}
-				sb_add(o, tmp.s, tmp.len);
-				sb_free(&tmp);
+				rtl_piece(o, x->txt.s + c[k].off, c[k].len);
 			}
 		}
 	}
