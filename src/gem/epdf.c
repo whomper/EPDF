@@ -1771,6 +1771,7 @@ int main(void)
 		log_set(1, start_dir);
 		log_begin();
 	}
+	doc_view_rows = win_pic_view;	/* (a page's part in the window drawn first) */
 	font_init(inf_get(&inf, "FONT"), start_dir);
 	if ((v = inf_get(&inf, "WINDOW")) != NULL) {
 		short *f[4];

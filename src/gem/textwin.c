@@ -543,6 +543,8 @@ static void draw_pic(const GRECT *c, short y, const DVPIC *pr)
 	   from the top down */
 	long made = e && e->bm.fd_addr ? (e->state == PICS_READY ? pr->h : e->ready) : 0, m1 = made < y1 ? made : y1;
 
+	if (e && e->bm.fd_addr && e->vb1 > e->vb0 && y0 >= e->vb0 && y1 <= e->vb1)
+		m1 = y1;		/* (the window's part, made first: sharp) */
 	if (e)
 		e->page = pr->page;
 	blank(c, tx, x, y, ch);
@@ -1334,12 +1336,16 @@ static void draw_zoom(const GRECT *c)
 		zoom_pre_free();	/* (the sharp one is here) */
 		log_event("zoom-sharp", NULL, NULL);
 	}
-	if (zoom.pre.fd_addr && (!e || e->state != PICS_READY)) {
+	long y1 = zoom.top + work.h < zoom.p.h ? zoom.top + work.h : zoom.p.h;
+
+	if (e && e->bm.fd_addr && e->state != PICS_READY && e->vb1 > e->vb0 && e->vb0 <= zoom.top && e->vb1 >= y1) {
+		from = &e->bm;		/* the window's part, made first (decided 27 Nov 2026) */
+		made = y1;
+	} else if (zoom.pre.fd_addr && (!e || e->state != PICS_READY)) {
 		from = &zoom.pre;	/* the enlarged one till the sharp one is made */
 		made = zoom.p.h;
 	} else
 		from = e ? &e->bm : NULL;
-	long y1 = zoom.top + work.h < zoom.p.h ? zoom.top + work.h : zoom.p.h;
 	short vw = (short)(zoom.p.w - zoom.left < work.w ? zoom.p.w - zoom.left : work.w);	/* its columns in view */
 	long m1 = made < y1 ? made : y1;
 
@@ -2159,6 +2165,37 @@ void win_pic_ready(long obj)
 	if (first >= 0)
 		win_draw_rows(first, last + 1);
 	ahead_again();			/* (room for the next one ahead) */
+}
+
+/* the rows of picture obj (w x h) in the window, y0 .. y1: a page's part
+   in view drawn first (decided 27 Nov 2026); 0 when none shows */
+int win_pic_view(long obj, int w, int h, long *y0, long *y1)
+{
+	DOCVIEW *v = doc_view();
+	long r, n, page, off, a = -1, b = -1;
+	int kind;
+	const char *s;
+
+	if (!v || win < 0 || iconified)
+		return 0;
+	if (zoom.on) {
+		if (obj != zoom.p.obj || w != zoom.p.w || h != zoom.p.h)
+			return 0;
+		*y0 = zoom.top;
+		*y1 = zoom.top + work.h < h ? zoom.top + work.h : h;
+		return *y1 > *y0;
+	}
+	for (r = 0; r <= rows && dv_row(v, r, &kind, &s, &n, &page, &off); r++)
+		if (kind == DV_PIC && v->pic.obj == obj && v->pic.w == w && v->pic.h == h) {
+			if (a < 0)
+				a = v->pic.row * ch;
+			b = (v->pic.row + 1) * ch;
+		}
+	if (a < 0)
+		return 0;
+	*y0 = a;
+	*y1 = b < h ? b : h;
+	return *y1 > *y0;
 }
 
 /* pixel rows from, to of picture obj made (it is made from the top

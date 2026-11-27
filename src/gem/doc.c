@@ -571,6 +571,11 @@ static int rpic_why;
 static int rpic_rows;			/* made a row at a time into rpic->bm (pics_rows): rpic_ok */
 static int rpic_ok;
 static long rpic_shown;			/* its rows the window has been told of */
+static long rpic_vshown;		/* and of those made out of order (the window's first) */
+static long rpic_v0, rpic_v1;		/* a page's rows in the window as it started (none: equal) */
+/* the window's rows of picture obj (w x h): 1 and y0 .. y1 when it shows
+   some (textwin.c's win_pic_view, set by epdf.c) */
+int (*doc_view_rows)(long obj, int w, int h, long *y0, long *y1);
 /* memory refused (0.3): the store gives its pool back and the page or the
    picture is tried again, once */
 static long retried_page = -1;
@@ -797,6 +802,46 @@ static int draw_turn(void)
 	return slice_up(NULL);
 }
 
+/* pg's rows from y on to row() / planes_row() (y < h), the pens dithered
+   by render.ovl eight rows at a time where pal says; the next y, or -1
+   stopped. On the decoder's stack */
+static long put_page_rows(const ROVL *o, const ROVL_PAGE *pg, long y, int w, int h,
+			  void (*row)(void *u, long y, const unsigned short *px),
+			  void (*planes_row)(void *u, long y, const unsigned char *planes), const PIC_PAL *pal, int planes,
+			  void *u, unsigned char **pnp, unsigned long *pens_ms)
+{
+	int i;
+
+	if (pal && pal->n >= 2 && pal->n <= 256 && planes >= 1 && planes <= 8 && o->size >= (short)sizeof(ROVL) && !*pnp)
+		*pnp = malloc((size_t)((w + 15) / 16 * 2) * planes * 8);
+	for (i = 0; i < pg->rows && y < h; i++, y++) {
+		/* 2 to 256 colours: eight rows at a time dithered by
+		   render.ovl into the screen's planes (common's dither as
+		   68000 code took 35 s of a page's 39 on Falcon-4, and dotted
+		   the white: 248; the pens put into planes a pixel at a
+		   time were seconds more) */
+		if (*pnp) {
+			int k = i % 8;
+			unsigned long q = tos_ms();
+
+			if (k == 0 && o->pens(rdoc, (const unsigned char (*)[3])pal->rgb, pal->n, planes, i,
+					      pg->rows - i < 8 ? pg->rows - i : 8, *pnp)) {
+				free(*pnp);
+				*pnp = NULL;
+			}
+			*pens_ms += tos_ms() - q;
+			if (*pnp)
+				planes_row(u, y, *pnp + (long)k * ((w + 15) / 16 * 2) * planes);
+			else
+				row(u, y, pg->px + (long)i * pg->w);
+		} else
+			row(u, y, pg->px + (long)i * pg->w);
+		if ((y & 7) == 7 && slice_up(NULL))
+			return -1;
+	}
+	return y;
+}
+
 /* pics_page_rows: page n drawn by render.ovl w wide, its rows to row(),
    on the decoder's stack */
 static int page_rows(long n, int w, int h, void (*row)(void *u, long y, const unsigned short *px),
@@ -809,7 +854,7 @@ static int page_rows(long n, int w, int h, void (*row)(void *u, long y, const un
 	ROVL_PAGE pg;
 	char err[160];
 	long y = 0;
-	int rc, y0 = 0, i;
+	int rc, y0 = 0;
 
 	*why = PIC_DAMAGED;
 	rdraw_crisp(planes <= 4);
@@ -838,6 +883,39 @@ static int page_rows(long n, int w, int h, void (*row)(void *u, long y, const un
 	}
 	draw_page = n;
 	draw_rows = 0;
+	if (rpic_v0 >= 8 && rpic_v1 > rpic_v0 && rpic_v1 - rpic_v0 < h && o->size >= (short)sizeof(ROVL) && o->band) {
+		/* the window's part first (decided 27 Nov 2026: what is looked at
+		   sharp at once, the page read again for the rest): its rows
+		   shown as they come, then the page from the top. Where the
+		   window starts at the page's top the page itself comes so (its
+		   rows shown from the top down as they are made): no band */
+		unsigned long t0 = tos_ms();
+		long vy;
+
+		rc = o->band(rdoc, n, w, (int)rpic_v0, (int)(rpic_v1 - rpic_v0), &pg);
+		if (rc == -2) {
+			draw_page = -1;
+			*why = PIC_STOPPED;
+			return 0;
+		}
+		if (rc == 0 && pg.rows > 0) {
+			pics_rows_jump(u, pg.y0, 1);
+			vy = put_page_rows(o, &pg, pg.y0, w, h, row, planes_row, pal, planes, u, &pn, &pens_ms);
+			pics_rows_jump(u, 0, 0);
+			if (vy < 0) {
+				free(pn);
+				draw_page = -1;
+				*why = PIC_STOPPED;
+				return 0;
+			}
+			{
+				char a[64];
+
+				snprintf(a, sizeof a, "%d-%d in %lu ms", pg.y0, pg.y0 + pg.rows, tos_ms() - t0);
+				log_event("page-view-first", a, NULL);
+			}
+		}
+	}
 	do {
 		unsigned long t0 = tos_ms();
 
@@ -865,37 +943,12 @@ static int page_rows(long n, int w, int h, void (*row)(void *u, long y, const un
 		}
 		draw_rows = 1;
 		rows_t0 = tos_ms();
-		if (pal && pal->n >= 2 && pal->n <= 256 && planes >= 1 && planes <= 8 && o->size >= (short)sizeof(ROVL) && !pn)
-			pn = malloc((size_t)((w + 15) / 16 * 2) * planes * 8);
-		for (i = 0; i < pg.rows && y < h; i++, y++) {
-			/* 2 to 256 colours: eight rows at a time dithered by
-			   render.ovl into the screen's planes (common's dither as
-			   68000 code took 35 s of a page's 39 on Falcon-4, and dotted
-			   the white: 248; the pens put into planes a pixel at a
-			   time were seconds more) */
-			if (pn) {
-				int k = i % 8;
-
-				unsigned long q = tos_ms();
-
-				if (k == 0 && o->pens(rdoc, (const unsigned char (*)[3])pal->rgb, pal->n, planes, i,
-						      pg.rows - i < 8 ? pg.rows - i : 8, pn)) {
-					free(pn);
-					pn = NULL;
-				}
-				pens_ms += tos_ms() - q;
-				if (pn)
-					planes_row(u, y, pn + (long)k * ((w + 15) / 16 * 2) * planes);
-				else
-					row(u, y, pg.px + (long)i * pg.w);
-			} else
-				row(u, y, pg.px + (long)i * pg.w);
-			if ((y & 7) == 7 && slice_up(NULL)) {
-				free(pn);
-				draw_page = -1;
-				*why = PIC_STOPPED;
-				return 0;
-			}
+		y = put_page_rows(o, &pg, y, w, h, row, planes_row, pal, planes, u, &pn, &pens_ms);
+		if (y < 0) {
+			free(pn);
+			draw_page = -1;
+			*why = PIC_STOPPED;
+			return 0;
 		}
 		{
 			char a[64];
@@ -1194,6 +1247,10 @@ int doc_pic_start(void)
 	EPAD(EPAD_DS);
 	rpic_planes = planes;
 	rpic_shown = 0;
+	rpic_vshown = 0;
+	rpic_v0 = rpic_v1 = 0;
+	if (e->obj >= PICS_PAGE && doc_view_rows && !doc_view_rows(e->obj, e->w, e->h, &rpic_v0, &rpic_v1))
+		rpic_v0 = rpic_v1 = 0;
 	rpic_rows = 0;
 	pdone = 0;
 	pic_poll = pic_turn;
@@ -1256,6 +1313,7 @@ int doc_pic_slice(unsigned long ms, long *obj)
 			pics_made(rpic, 0, PIC_STOPPED);	/* its rows so far let go */
 		rpic->state = PICS_DECODING;
 		rpic_shown = 0;
+		rpic_vshown = 0;
 		pdone = 0;		/* the decoder starts it again in the next slice */
 		if (pzone) {
 			/* its zone was too small: a new one, half as big again, or
@@ -1292,6 +1350,14 @@ done:
    *from to *to (its object *obj); 0 none */
 int doc_pic_rows(long *obj, long *from, long *to)
 {
+	if (rpic && rpic->vb1 > rpic->vb0 && rpic->vb1 > rpic_vshown) {
+		/* (the window's part, made first) */
+		*obj = rpic->obj;
+		*from = rpic_vshown > rpic->vb0 ? rpic_vshown : rpic->vb0;
+		*to = rpic->vb1;
+		rpic_vshown = rpic->vb1;
+		return 1;
+	}
 	if (!rpic || rpic->ready <= rpic_shown)
 		return 0;
 	*obj = rpic->obj;

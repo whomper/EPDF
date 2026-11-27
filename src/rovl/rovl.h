@@ -87,6 +87,11 @@ typedef struct {
 	   as `planes` rows of (w + 15) / 16 words, pen bit p in plane p (the
 	   VDI's standard format). 0 ok */
 	int (*pens)(void *doc, const unsigned char (*pal)[3], int n, int planes, int y, int rows, unsigned char *out);
+	/* rows y0 (a multiple of 8) .. y0 + rows - 1 of page n alone, in a
+	   canvas of their own (the window's part first, decided 27 Nov 2026);
+	   the next page() from 0 draws whole again. As page(). An older
+	   overlay's ROVL ends before it (size) */
+	int (*band)(void *doc, long n, int width, int y0, int rows, ROVL_PAGE *out);
 } ROVL;
 
 #endif

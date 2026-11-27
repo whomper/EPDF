@@ -22,6 +22,8 @@ typedef struct {
 	int ahead;			/* wanted ahead of the view, not yet shown (decided 4 Nov 2026:
 					   pictures made quietly before they come into view) */
 	long sw, sh;			/* the picture's own pixels, once it is being made (0: not known) */
+	long vb0, vb1;			/* a page's rows made out of order, the window's first
+					   (decided 27 Nov 2026): shown sharp too; vb1 == vb0 none */
 } PICE;
 
 long pics_st_free(void);		/* the largest block of ST RAM free (the bitmaps'), Malloc(-1)'s where there is only ST RAM */
@@ -55,6 +57,10 @@ int pics_rows(struct pdoc *d, PICE *e, int nplanes, PIC_PAL *pl, int *why);
    main stack, turns it (vr_trnfm): 1 when there was one */
 extern void (*pics_wait)(void);
 int pics_band(void);
+/* a page's rows from here on made out of order (the window's, first: into
+   e->vb0 .. vb1, not e->ready), or in order again (0): its band so far
+   turned and the next one starting at row y. On the decoder's stack */
+void pics_rows_jump(void *u, long y, int oob);
 /* pics_rows' picture ended: made, or not (its bitmap let go; logged
    unless it was stopped) */
 void pics_made(PICE *e, int ok, int why);

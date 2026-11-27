@@ -165,6 +165,18 @@ def run(work, machine, converted):
             end = time.time() + 300
             while time.time() < end and "EPDF picture ready" not in r.console().split("EPDF zoom 200")[-1]:
                 time.sleep(1)
+            # the window's part first, sharp (decided 27 Nov 2026): before the
+            # page whole, and sooner than it
+            after = r.console().split("EPDF zoom 200")[-1]
+            vf = re.findall(r"EPDF page-view-first (\d+)-(\d+) in (\d+) ms", after)
+            whole = re.findall(r"EPDF picture-ms rows (\d+)", after)
+            if not vf:
+                bad.append("200 %: the window's part not drawn first")
+            else:
+                print("  zoom: the window's rows %s-%s sharp in %s ms, the page whole in %s ms" % (
+                    vf[0][0], vf[0][1], vf[0][2], whole[0] if whole else "?"))
+                if whole and int(vf[0][2]) >= int(whole[0]):
+                    bad.append("200 %%: the window's part (%s ms) no sooner than the page (%s ms)" % (vf[0][2], whole[0]))
             time.sleep(2)
             park(r)
             r.still()

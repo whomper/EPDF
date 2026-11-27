@@ -60,6 +60,9 @@ long doc_slice(unsigned long ms);	/* the reading on for ms: the page it finished
 int doc_pic_start(void);		/* a picture the window wants: its decoding begun */
 int doc_pic_slice(unsigned long ms, long *obj);	/* 1 when it is done: *obj */
 int doc_pic_rows(long *obj, long *from, long *to);	/* rows made since asked: from, to */
+/* the window's rows of picture obj (w x h): its part drawn first (doc.c) */
+extern int (*doc_view_rows)(long obj, int w, int h, long *y0, long *y1);
+int win_pic_view(long obj, int w, int h, long *y0, long *y1);
 int doc_pic_busy(void);
 int doc_pic_ahead_only(void);
 int win_ahead_due(void);		/* pictures ahead of the view to look for */

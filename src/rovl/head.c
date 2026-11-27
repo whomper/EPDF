@@ -162,6 +162,22 @@ static int rv_page(void *doc, long n, int width, int y0, ROVL_PAGE *out)
 	return 0;
 }
 
+static int rv_band(void *doc, long n, int width, int y0, int rows, ROVL_PAGE *out)
+{
+	RDOC *x = doc;
+	long keep = x->r.canvas_max;
+	int rc;
+
+	rows = (rows + 7) & ~7;
+	if (rows < 8)
+		rows = 8;
+	x->r.canvas_max = (long)width * 2 * rows;
+	rc_free(&x->r.c);		/* (a canvas of these rows: the page's whole one given back) */
+	rc = rv_page(doc, n, width, y0 & ~7, out);
+	x->r.canvas_max = keep;
+	return rc;
+}
+
 static void rv_close(void *doc)
 {
 	RDOC *x = doc;
@@ -199,5 +215,5 @@ static void use_dsp(int on)
 __attribute__((section(".tlsovl"), used))
 const ROVL rovl = {
 	ROVL_MAGIC, ROVL_MAJOR, sizeof(ROVL), ROVL_VERSION,
-	init, rv_open, rv_pages, rv_page, rv_close, use_dsp, pic_dsp_state, rv_progress, rv_pens
+	init, rv_open, rv_pages, rv_page, rv_close, use_dsp, pic_dsp_state, rv_progress, rv_pens, rv_band
 };

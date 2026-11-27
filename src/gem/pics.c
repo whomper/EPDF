@@ -190,6 +190,20 @@ static void *bm_alloc(long bytes, int *heap);
 static void put_pens(SINK *k, long y);
 static void spread(SINK *k, long y);
 static void band_row(SINK *k, long y);
+static int rows_oob;			/* rows made out of order (pics_rows_jump) */
+
+/* a row y made (rows made out of order: the window's, e->vb1) */
+static void rows_made(PICE *e, long y)
+{
+	if (rows_oob) {
+		if (y + 1 > e->vb1)
+			e->vb1 = y + 1;
+		return;
+	}
+	e->made = y + 1;
+	if (!(e->flip & DV_FLIPV))
+		e->ready = y + 1;
+}
 
 /* the bitmap at the first row (a JPEG made whole gives none); 0 none */
 static int bm_first(SINK *k)
@@ -334,9 +348,7 @@ static void sink_row(void *u, long y, const unsigned short *px)
 	}
 	if (k->nplanes == 16) {
 		memcpy((unsigned char *)e->bm.fd_addr + y * k->row, px, (size_t)k->w * 2);
-		e->made = y + 1;
-		if (!(e->flip & DV_FLIPV))
-			e->ready = y + 1;
+		rows_made(e, y);
 		return;
 	}
 	if (k->direct) {
@@ -380,8 +392,7 @@ static void sink_planes(void *u, long y, const unsigned char *pl)
 		return;
 	if (k->nplanes == 1) {
 		memcpy((unsigned char *)e->bm.fd_addr + y * k->row, pl, (size_t)rb);
-		e->made = y + 1;
-		e->ready = y + 1;
+		rows_made(e, y);
 		return;
 	}
 	for (p = 0; p < k->nplanes; p++)
@@ -399,12 +410,12 @@ static void put_pens(SINK *k, long y)
 	if (k->nplanes == 1) {
 		unsigned char *o = (unsigned char *)e->bm.fd_addr + y * k->row;
 
+		if (e->vb1 > e->vb0)
+			memset(o, 0, (size_t)k->row);	/* (a page's row made twice: the window's first) */
 		for (x = 0; x < k->w; x++)
 			if (k->pens[x] & 1)
 				o[x >> 3] |= (unsigned char)(0x80 >> (x & 7));
-		e->made = y + 1;
-		if (!(e->flip & DV_FLIPV))
-			e->ready = y + 1;
+		rows_made(e, y);
 		return;
 	}
 	{
@@ -540,11 +551,29 @@ int pics_band(void)
 	dst.fd_addr = (unsigned char *)k->e->bm.fd_addr + k->b0 * k->row;
 	dst.fd_stand = 0;
 	vr_trnfm(vdi_h, &src, &dst);
-	k->e->made = k->b0 + k->bn;
-	if (!(k->e->flip & DV_FLIPV))
-		k->e->ready = k->b0 + k->bn;	/* (upside down: shown when it is whole, turned) */
+	rows_made(k->e, k->b0 + k->bn - 1);	/* (upside down: shown when it is whole, turned) */
 	k->full = 0;
 	return 1;
+}
+
+void pics_rows_jump(void *u, long y, int oob)
+{
+	SINK *k = u;
+
+	if (k && k->band && k->bn > 0) {
+		/* the band so far to the screen's format (band_row's) */
+		k->full = 1;
+		while (k->full && pics_wait)
+			pics_wait();
+		memset(k->band, 0, (size_t)(k->wd * 2 * BAND * k->nplanes));
+	}
+	if (k) {
+		k->b0 = y;
+		k->bn = 0;
+	}
+	if (oob && k)
+		k->e->vb0 = k->e->vb1 = y;
+	rows_oob = oob;
 }
 
 /* the tables a mono page shown narrower is made with (sink_raw): the
@@ -626,6 +655,7 @@ int pics_rows(PDOC *d, PICE *e, int nplanes, PIC_PAL *pl, int *why)
 	k.wd = (e->w + 15) / 16;
 	k.row = k.wd * 2 * nplanes;
 	e->ready = 0;
+	e->vb0 = e->vb1 = 0;
 	e->made = 0;
 	if (nplanes != 16) {
 		k.pens = malloc((size_t)e->w);
@@ -716,6 +746,7 @@ int pics_rows(PDOC *d, PICE *e, int nplanes, PIC_PAL *pl, int *why)
 			pic_dither_sharp(k.dt);	/* (common's: the dither's nearest pens) */
 	}
 	sink = &k;
+	rows_oob = 0;
 	if (e->obj >= PICS_PAGE) {
 		/* a page drawn as printed: its rows dithered as a photo's. Its
 		   bitmap taken first: render.ovl sizes its canvas from what is
@@ -790,6 +821,7 @@ static void free_bm(PICE *e)
 	}
 	e->bm.fd_addr = NULL;
 	e->ready = 0;
+	e->vb0 = e->vb1 = 0;
 }
 
 static void let_go(PICE *e)
