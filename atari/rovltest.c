@@ -79,7 +79,7 @@ static int __attribute__((noinline)) turn(void)
 
 int main(void)
 {
-	char cfg[128] = "", err[160], b[256];
+	char cfg[128] = "", err[160], b[320];
 	const ROVL *o;
 	const char *bk;
 	void *doc;
@@ -116,7 +116,7 @@ int main(void)
 	for (pg = 0; pg < o->pages(doc); pg++) {
 		ROVL_PAGE p;
 		int rc = 0, y0 = 0, bands = 0;
-		long pens_ms = 0;
+		long pens_ms = 0, missed = 0;	/* (pictures left out, every band's) */
 		long fh = -1;
 		char name[24];
 
@@ -138,6 +138,7 @@ int main(void)
 			if (rc)
 				break;
 			bands++;
+			missed += p.images_missed;
 			if (fh >= 0)
 				Fwrite((short)fh, (long)p.w * p.rows * 2, (void *)p.px);
 			if (strstr(cfg, "pens")) {
@@ -160,9 +161,9 @@ int main(void)
 		if (fh >= 0)
 			Fclose((short)fh);
 		snprintf(b, sizeof b, "{\"page\":%ld,\"ms\":%ld,\"rc\":%d,\"w\":%d,\"h\":%d,\"bands\":%d,\"image_ms\":%ld,"
-			 "\"glyphs\":%ld,\"images\":%ld,\"turns\":%ld,\"gap_ms\":%ld,\"dsp\":\"%s\",\"free_kb\":%ld,\"pens_ms\":%ld,\"gap_from\":%ld,\"gap_at\":%ld}\n",
+			 "\"glyphs\":%ld,\"images\":%ld,\"turns\":%ld,\"gap_ms\":%ld,\"dsp\":\"%s\",\"free_kb\":%ld,\"pens_ms\":%ld,\"gap_from\":%ld,\"gap_at\":%ld,\"missed\":%ld}\n",
 			 pg + 1, pdf_ms() - t, rc, p.w, p.h, bands, p.image_ms,
-			 p.glyphs, p.images, turns, gap_ms, o->dsp_state(), (long)Malloc(-1L) / 1024, pens_ms, gap_from, gap_at);
+			 p.glyphs, p.images, turns, gap_ms, o->dsp_state(), (long)Malloc(-1L) / 1024, pens_ms, gap_from, gap_at, missed);
 		nf_debug(b);
 	}
 	o->close(doc);

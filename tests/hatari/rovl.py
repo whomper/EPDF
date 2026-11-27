@@ -18,7 +18,9 @@ progressive and CMYK, a PNG with alpha, a scan) drawn 600 wide:
   by pic.c for memory and drawn by render.c's cv_jpeg: that page against
   the host's drawn so (no --jpeg-pic), and in bands (where pic.c draws
   it) against the host's as the others, not against the whole page;
-- with the DSP, each page's time (the stage's first goal: seconds);
+- with the DSP, each page's time (the stage's first goal: seconds), and
+  each page against the host's as without it (27 Nov 2026);
+- in every run, no page with a picture left out (ROVLTEST's "missed");
 - on an ST, and on a FireBee (FireBee:16, the hub's stand-in: FireTOS's _CF_),
   not loaded and said why; nothing else.
 """
@@ -42,7 +44,7 @@ SHORT = ("sans", "sansb", "serif", "serifb", "mono", "monob")       # (Liberatio
 
 
 def run(work, spec, pdf, cfg):
-    hd = os.path.join(work, spec.replace(":", "_") + "-" + (cfg.replace(" ", "_") or "dsp"))
+    hd = os.path.join(work, spec.replace(":", "_") + "-" + ({"dump": "dsp"}.get(cfg) or cfg.replace(" ", "_") or "dsp"))
     shutil.rmtree(hd, ignore_errors=True)
     os.makedirs(os.path.join(hd, "FONTS"))
     for k in SHORT:
@@ -91,6 +93,16 @@ def close_to(raw, w, h, ppm):
             n += 1
             most = max(most, max(abs(got[i + k] - want[i + k]) for k in range(3)))
     return n, most
+
+
+def far_off(raw, w, h, ppm):
+    """the Atari's page against the host's: the pixels more than 48 levels off"""
+    got = ppm_of_565(raw, w, h).split(b"\n", 3)[3]
+    want = ppm.split(b"\n", 3)[3]
+    if len(got) != len(want):
+        return w * h
+    return sum(1 for i in range(0, len(got), 3)
+               if max(abs(got[i] - want[i]), abs(got[i + 1] - want[i + 1]), abs(got[i + 2] - want[i + 2])) > 48)
 
 
 _syms = None
@@ -155,7 +167,9 @@ def main(argv):
             print("%s: %s" % (desc, "not loaded, said why" if ok else "FAIL %s" % lines))
             bad += not ok
             continue
-        for cfg in ("nodsp dump", "nodsp dump band 64", ""):
+        # (the DSP's run dumps its pages too: a page whose picture was left out
+        # passed on its time alone, 3,660 ms against 9,395, 27 Nov 2026)
+        for cfg in ("nodsp dump", "nodsp dump band 64", "dump"):
             desc, lines, hd = run(work, spec, pdf, cfg)
             pages = [l for l in lines if "page" in l]
             why = []
@@ -163,6 +177,9 @@ def main(argv):
                 why.append("not loaded: %s" % (lines[:1],))
             if len(pages) != 9 or any(p["rc"] for p in pages):
                 why.append("pages %s" % [(p["page"], p["rc"]) for p in pages])
+            for p in pages:
+                if p.get("missed"):
+                    why.append("page %d: %d picture(s) left out" % (p["page"], p["missed"]))
             if "dump" in cfg:
                 for p in pages:
                     raw = open(os.path.join(hd, "PAGE%d.565" % p["page"]), "rb").read()
@@ -188,6 +205,15 @@ def main(argv):
                     if fallback(spec, p):
                         print("  page %d: against the host's page drawn %s" % (
                             p["page"], "by pic.c (in bands)" if "band" in cfg else "by cv_jpeg (pic.c refused it the memory)"))
+                    if "nodsp" not in cfg:
+                        # the DSP's JPEGs decode a little otherwise than the host's
+                        # libjpeg: only a picture missing or wrong shows, its pixels
+                        # far off (a few hundred of a page differ by over 48 levels
+                        # with the DSP; a photo left out 59,384, 27 Nov 2026)
+                        far = far_off(raw, p["w"], p["h"], open(want, "rb").read())
+                        if far * 200 > p["w"] * p["h"]:
+                            why.append("page %d: %d pixels far from the host's" % (p["page"], far))
+                        continue
                     n, most = close_to(raw, p["w"], p["h"], open(want, "rb").read())
                     if n * 1000 > p["w"] * p["h"] or most > 16:
                         why.append("page %d: %d pixels differ from the host's, by up to %d" % (p["page"], n, most))
@@ -195,7 +221,7 @@ def main(argv):
                 gone = lines[0]["free_kb"] + lines[0]["kb"] - lines[-1]["free_kb"]
             else:
                 gone = None
-            print("%s, %s: %s" % (desc, cfg or "dsp", "ok" if not why else "FAIL " + "; ".join(why)))
+            print("%s, %s: %s" % (desc, {"dump": "dsp"}.get(cfg) or cfg or "dsp", "ok" if not why else "FAIL " + "; ".join(why)))
             if lines and "loaded" in lines[0]:
                 print("  render.ovl %s KB, loaded in %d ms, %d KB free after" % (lines[0]["kb"], lines[0]["ms"],
                                                                                  lines[0]["free_kb"]))
