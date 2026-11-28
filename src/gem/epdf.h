@@ -98,13 +98,37 @@ void doc_pic_stop_page_unless(long obj, int w, int h);	/* a zoom: another page's
    zeros it skips four bytes at a time, and an odd count of words left it
    reading doc_view_moved from the middle of an instruction) */
 #ifndef EPAD_DS
-#define EPAD_DS 104
+#define EPAD_DS 190
 #endif
 #ifndef EPAD_TM
 #define EPAD_TM 246
 #endif
 #ifndef EPAD_DV
 #define EPAD_DV 74
+#endif
+#ifndef EPAD_PR
+#define EPAD_PR 116		/* doc.c's put_page_rows (2.47: the band in view first) */
+#endif
+#ifndef EPAD_PG
+#define EPAD_PG 198		/* doc.c's page_rows */
+#endif
+#ifndef EPAD_RW
+#define EPAD_RW 184		/* doc.c's doc_pic_rows (2.47: the window's rows first) */
+#endif
+#ifndef EPAD_CL
+#define EPAD_CL 244		/* doc.c's doc_close (2.47: render.ovl's turn let go) */
+#endif
+#ifndef EPAD_ZD
+#define EPAD_ZD 180		/* textwin.c's draw_zoom (2.47: the window's rows first) */
+#endif
+#ifndef EPAD_DR
+#define EPAD_DR 118		/* textwin.c's draw_rows (2.47: draw_pic's rows made first) */
+#endif
+#ifndef EPAD_WP
+#define EPAD_WP 64		/* textwin.c's win_progress (2.47: printing's time left) */
+#endif
+#ifndef EPAD_PV
+#define EPAD_PV 92		/* textwin.c's win_pic_view (2.47) */
 #endif
 #ifndef EPAD_PU
 #define EPAD_PU 66

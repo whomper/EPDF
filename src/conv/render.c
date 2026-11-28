@@ -1156,9 +1156,9 @@ static void glyph_hook(void *u, long prog, int kind, const char *base, int comp,
    pages on Falcon-4:256 2-4 % slower from the shift alone); see
    tools/rpad.py */
 #ifndef RPAD_A
-#define RPAD_A 102
+#define RPAD_A 68
 #define RPAD_B 14
-#define RPAD_C 178
+#define RPAD_C 68
 #define RPAD_D 42
 #define RPAD_E 204
 #endif

@@ -812,6 +812,7 @@ static long put_page_rows(const ROVL *o, const ROVL_PAGE *pg, long y, int w, int
 {
 	int i;
 
+	EPAD(EPAD_PR);		/* (the code after it at 2.46's places in a 68030's cache) */
 	if (pal && pal->n >= 2 && pal->n <= 256 && planes >= 1 && planes <= 8 && o->size >= (short)sizeof(ROVL) && !*pnp)
 		*pnp = malloc((size_t)((w + 15) / 16 * 2) * planes * 8);
 	for (i = 0; i < pg->rows && y < h; i++, y++) {
@@ -857,6 +858,7 @@ static int page_rows(long n, int w, int h, void (*row)(void *u, long y, const un
 	int rc, y0 = 0;
 
 	*why = PIC_DAMAGED;
+	EPAD(EPAD_PG);		/* (as EPAD_PR) */
 	rdraw_crisp(planes <= 4);
 	if (!rdraw_load(draw_turn, err, sizeof err)) {
 		log_event("render-ovl", err, NULL);
@@ -1367,6 +1369,7 @@ done:
    *from to *to (its object *obj); 0 none */
 int doc_pic_rows(long *obj, long *from, long *to)
 {
+	EPAD(EPAD_RW);		/* (as EPAD_PR) */
 	if (rpic && rpic->vb1 > rpic->vb0 && rpic->vb1 > rpic_vshown) {
 		/* (the window's part, made first) */
 		*obj = rpic->obj;
@@ -1656,6 +1659,7 @@ int doc_opening(void)
 
 void doc_close(void)
 {
+	EPAD(EPAD_CL);		/* (as EPAD_PR) */
 	stop_opening();
 	strip_forget();			/* (the next document's strip from its first page) */
 	if (!doc)

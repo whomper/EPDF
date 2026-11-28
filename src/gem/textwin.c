@@ -851,6 +851,7 @@ static void draw_rows(const GRECT *c, long r0, long r1)
 		blank(c, tx, right, y, (short)(c->y + c->h - y));
 	T_MARK("rows");
 	text_noclip(vdi_h);
+	EPAD(EPAD_DR);		/* (as EPAD_ZD) */
 }
 
 static int overlap(const GRECT *a, const GRECT *b, GRECT *o)
@@ -1115,6 +1116,7 @@ void win_progress(int kind, const char *what, long done, long total)
 		snprintf(bar_job, sizeof bar_job, "%s", what);
 	bar_p = p;
 	bar_compose();
+	EPAD(EPAD_WP);		/* (as EPAD_ZD) */
 }
 
 int win_progress_due(void)
@@ -1398,6 +1400,7 @@ static void draw_zoom(const GRECT *c)
 		sharper_band(c, x, work.y, vw, zoom.p.obj);	/* (the sharp page on its way) */
 	vswr_mode(vdi_h, MD_REPLACE);
 	vst_color(vdi_h, 1);
+	EPAD(EPAD_ZD);		/* (the code after it at 2.46's places in a 68030's cache) */
 }
 
 /* w x h at the screen's depth fits in memory, with room to spare */
@@ -2193,6 +2196,7 @@ int win_pic_view(long obj, int w, int h, long *y0, long *y1)
 		}
 	if (a < 0)
 		return 0;
+	EPAD(EPAD_PV);		/* (as EPAD_ZD) */
 	*y0 = a;
 	*y1 = b < h ? b : h;
 	return *y1 > *y0;

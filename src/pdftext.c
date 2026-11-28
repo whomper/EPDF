@@ -20,6 +20,17 @@ static void pause_point(PDOC *d);
 static void pd_sort(PDOC *d, void *base, long n, long size, int (*cmp)(const void *, const void *));
 
 /* ------------------------------------------------------------------ fonts */
+/* padding in a branch a page never takes (the Makefile's PT_PAD_A..E, for
+   EPDF.PRG and the 68030's reader): what follows code that grew back at its 2.46 places
+   in a 68030's cache (addresses mod 256), n bytes with the branch over them */
+#define PT_S2(n) #n
+#define PT_S(n) PT_S2(n)
+#if defined(PT_PAD_A) && (defined(__m68k__) || defined(__mc68000__))
+#define PTPAD(n) __asm__ volatile("bra.w 1f\n\t.fill (" PT_S(n) "-4)/2,2,0x4e71\n1:")
+#else
+#define PTPAD(n) ((void)0)
+#endif
+
 typedef struct { uint32_t lo, hi, dst; } TUR;	/* dst: index into the pool (a length, then UTF-16 units) */
 typedef struct { uint32_t lo, hi; int16_t w; } WR;
 
@@ -69,6 +80,10 @@ static void font_free(PDOC *d, PFONT *f)
 #ifdef PDF_DRAW
 	if (f->c2g)
 		pdf_free(d, f->c2g, f->nc2g * 2);
+#ifdef PT_PAD_E
+	else if (f->nc2g < 0)
+		PTPAD(PT_PAD_E);	/* (as PT_PAD_A, for the 68030's reader) */
+#endif
 #endif
 	pdf_free(d, f, (long)sizeof *f);
 }
@@ -135,10 +150,17 @@ static int hexn(const char *s, int n)
 
 static int glyph_unicode(const char *n)
 {
-	int u = agl_find(n);
+	int u;
 	const char *dot;
 	char base[64];
 
+#ifdef PT_PAD_F
+	if (!n) {
+		PTPAD(PT_PAD_F);	/* (as PT_PAD_A, for the 68030's reader) */
+		return 0;
+	}
+#endif
+	u = agl_find(n);
 	if (u)
 		return u;
 	if (n[0] == 'u' && n[1] == 'n' && n[2] == 'i' && strlen(n) >= 7) {
@@ -1282,6 +1304,12 @@ static PFONT *font_get(PDOC *d, POBJ *fref, PTEXT *t)
 	long obj = fref && fref->t == PO_REF ? fref->a : -1, i, victim = 0;
 	PFONT *f;
 
+#ifdef PT_PAD_G
+	if (!t && !fref) {
+		PTPAD(PT_PAD_G);	/* (as PT_PAD_F) */
+		return NULL;
+	}
+#endif
 	if (!fc) {
 		fc = d->fc = pdf_malloc(d, (long)sizeof *fc);
 		if (!fc)
@@ -1747,8 +1775,12 @@ static void show_text(IX *x, int from, int to)
 		from = 0;
 	if (to > x->nops)
 		to = (int)x->nops;
-	if (!ch_room(x))
+	if (!ch_room(x)) {
+#ifdef PT_PAD_I
+		PTPAD(PT_PAD_I);	/* (as PT_PAD_F) */
+#endif
 		return;
+	}
 	mat_mul(x->tm, g->ctm, m);
 	org_x = m[4] + fxmul(g->rise, m[2]);
 	org_y = m[5] + fxmul(g->rise, m[3]);
@@ -2518,6 +2550,12 @@ static int run_content_in(IX *x, const unsigned char *s0, long n0, const unsigne
 	int more = x->src && !x->src_end;	/* a window to top up (x->src_end changes only in refill) */
 	unsigned tick = 0;
 
+#ifdef PT_PAD_H
+	if (n0 < 0) {
+		PTPAD(PT_PAD_H);	/* (as PT_PAD_F) */
+		return 0;
+	}
+#endif
 	(void)s0;
 	(void)n0;
 	if (!ccls[' '])
@@ -3246,6 +3284,12 @@ static int rtl_side(const char *s, int len)
 	rtl_count(s, len, &r, &l);
 	if (r > 0)
 		return 1;
+	if (len < 0) {
+#ifdef PT_PAD_A
+		PTPAD(PT_PAD_A);
+#endif
+		return 0;
+	}
 	for (i = 0; i < len; i++)
 		if (ltr_ch(s[i]) || (unsigned char)s[i] >= 0x80)
 			return 0;
@@ -3256,9 +3300,16 @@ static int rtl_side(const char *s, int len)
    but a run of digits or Latin letters (with the . , : / - @ _ + %
    between them) kept as it reads, and a bracket turned (27 Nov 2026:
    "12345" came out "54321" and "01/02/03" as "30/20/10") */
-static void rtl_piece(SBUF *o, const char *s, int len)
+static __attribute__((noinline, noclone)) void rtl_piece(SBUF *o, const char *s, int len)
 {
 	int j;
+
+	if (len < 0) {
+#ifdef PT_PAD_B
+		PTPAD(PT_PAD_B);	/* (as PT_PAD_A: what follows at its 2.46 places) */
+#endif
+		return;
+	}
 
 	for (j = len; j > 0;) {
 		int st = j - 1;
@@ -3283,9 +3334,16 @@ static void rtl_piece(SBUF *o, const char *s, int len)
 }
 
 /* left-to-right pieces [a, b) as they stand, a space where there is a gap */
-static void ltr_pieces(IX *x, CH *c, long a, long b, fx gapmin, SBUF *o)
+static __attribute__((noinline, noclone)) void ltr_pieces(IX *x, CH *c, long a, long b, fx gapmin, SBUF *o)
 {
 	long i;
+
+	if (b < a) {
+#ifdef PT_PAD_C
+		PTPAD(PT_PAD_C);	/* (as PT_PAD_A) */
+#endif
+		return;
+	}
 
 	for (i = a; i < b; i++) {
 		/* the same piece again where it stood (printed twice, a bold
@@ -4092,6 +4150,12 @@ int pdf_page_text(PDOC *d, long n, PTEXT *t)
 	POBJ *pg, *res, *box, *cont;
 	long rot;
 
+#ifdef PT_PAD_D
+	if (n < 0) {
+		PTPAD(PT_PAD_D);	/* (as PT_PAD_A: emit_line's growth, inlined here) */
+		return -1;
+	}
+#endif
 	memset(&x, 0, sizeof x);
 #ifdef PDF_DRAW
 	x.all_ops = t->draw != NULL;

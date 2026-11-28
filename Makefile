@@ -294,21 +294,21 @@ PIC_PAD_RO ?= 64
 build/m68030/djpad.o: FT_PAD = -DFT_PAD_NAME=dj_cv_pad -DFT_PAD_TEXT=$(DJ_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 DJ_PAD ?= 224
 build/m68030/ecabpad.o: FT_PAD = -DFT_PAD_NAME=ec_ab_pad -DFT_PAD_TEXT=$(EC_AB_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=$(EC_AB_PAD_DATA)
-EC_AB_PAD ?= 100
+EC_AB_PAD ?= 234
 EC_AB_PAD_DATA ?= 248
 build/m68030/ecodpad.o: FT_PAD = -DFT_PAD_NAME=ec_od_pad -DFT_PAD_TEXT=$(EC_OD_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=$(EC_OD_PAD_DATA)
-EC_OD_PAD ?= 152
+EC_OD_PAD ?= 142
 EC_OD_PAD_DATA ?= 254
 # and after its crash.o and progbar.o (AERA-Atari 1c01cfd, 16 Nov 2026)
 build/m68030/eccrpad.o: FT_PAD = -DFT_PAD_NAME=ec_cr_pad -DFT_PAD_TEXT=$(EC_CR_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EC_CR_PAD_BSS)
-EC_CR_PAD ?= 216
+EC_CR_PAD ?= 212
 EC_CR_PAD_BSS ?= 0
 build/m68030/ecpbpad.o: FT_PAD = -DFT_PAD_NAME=ec_pb_pad -DFT_PAD_TEXT=$(EC_PB_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
-EC_PB_PAD ?= 44
+EC_PB_PAD ?= 100
 # and after its dialog.o and settings.o (AERA-Atari 2fa3aa7, 18 Nov 2026:
 # Settings in turns), against 2.38
 build/m68030/ecdlpad.o: FT_PAD = -DFT_PAD_NAME=ec_dl_pad -DFT_PAD_TEXT=$(EC_DL_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
-EC_DL_PAD ?= 0
+EC_DL_PAD ?= 226
 build/m68030/ecstpad.o: FT_PAD = -DFT_PAD_NAME=ec_st_pad -DFT_PAD_TEXT=$(EC_ST_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 EC_ST_PAD ?= 136
 # and after its text.o (AERA-Atari f553f93, 19 Nov 2026: no Line-A on a
@@ -328,10 +328,10 @@ EC_CV_PAD_BSS ?= 0
 build/m68030/ececpad.o: FT_PAD = -DFT_PAD_NAME=ec_ec_pad -DFT_PAD_TEXT=$(EC_EC_PAD) -DFT_PAD_RO=$(EC_EC_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=$(EC_EC_PAD_DATA) -DFT_PAD_BSS=$(EC_EC_PAD_BSS)
 build/m68030/eclcpad.o: FT_PAD = -DFT_PAD_NAME=ec_lc_pad -DFT_PAD_TEXT=$(EC_LC_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EC_LC_PAD_BSS)
 EC_EC_PAD ?= 40
-EC_EC_PAD_RO ?= 26
+EC_EC_PAD_RO ?= 24
 EC_EC_PAD_DATA ?= 248
 EC_EC_PAD_BSS ?= 184
-EC_LC_PAD ?= 214
+EC_LC_PAD ?= 186
 EC_LC_PAD_BSS ?= 0
 build/m68030/ecpgpad.o: FT_PAD = -DFT_PAD_NAME=ec_pg_pad -DFT_PAD_TEXT=$(EC_PG_PAD) -DFT_PAD_RO=$(EC_PG_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EC_PG_PAD_BSS)
 EC_PG_PAD ?= 28
@@ -355,7 +355,7 @@ RV_LC_PAD ?= 110
 build/m68030/rvgifpad.o: FT_PAD = -DFT_PAD_NAME=rv_gif_pad -DFT_PAD_TEXT=$(RV_GIF_PAD) -DFT_PAD_RO=$(RV_GIF_PAD_RO) -DFT_PAD_STR=$(RV_GIF_PAD_STR) -DFT_PAD_DATA=0
 RV_GIF_PAD ?= 166
 RV_GIF_PAD_RO ?= 64
-RV_GIF_PAD_STR ?= 258
+RV_GIF_PAD_STR ?= 246
 build/m68030/cspad.o: FT_PAD = -DFT_PAD_NAME=cs_cv_pad -DFT_PAD_TEXT=$(CS_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 CS_PAD ?= 178
 build/m68030/ecpad.o: FT_PAD = -DFT_PAD_NAME=ec_cv_pad -DFT_PAD_TEXT=$(EC_PAD) -DFT_PAD_RO=$(EC_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EC_PAD_BSS)
@@ -368,16 +368,16 @@ CT_PAD ?= 106
 # CONVTEST's own after its conv.o (2.41's Faster display: +1,402 bytes)
 build/m68030/ctcvpad.o: FT_PAD = -DFT_PAD_NAME=ct_cvo_pad -DFT_PAD_TEXT=$(CT_CV_PAD) -DFT_PAD_RO=$(CT_CV_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(CT_CV_PAD_BSS)
 CT_CV_PAD ?= 134
-CT_CV_PAD_RO ?= 206
+CT_CV_PAD_RO ?= 194
 CT_CV_PAD_BSS ?= 248
 # and before its inflate_fast.o (its libc.o lost the heap zones)
 build/m68030/ctifpad.o: FT_PAD = -DFT_PAD_NAME=ct_if_pad -DFT_PAD_TEXT=$(CT_IF_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
-CT_IF_PAD ?= 240
+CT_IF_PAD ?= 96
 # after util.o (2.46: common bfc4656's sb_printf)
 build/m68030/ctutpad.o: FT_PAD = -DFT_PAD_NAME=ct_ut_pad -DFT_PAD_TEXT=$(CT_UT_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 CT_UT_PAD ?= 208
 build/m68030/headpad.o: FT_PAD = -DFT_PAD_NAME=head_cv_pad -DFT_PAD_TEXT=$(HEAD_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
-HEAD_PAD ?= 40
+HEAD_PAD ?= 72
 build/m68030/ctpad.o build/m68030/headpad.o build/m68030/ecpad.o build/m68030/cspad.o build/m68030/picpad.o build/m68030/ljpad.o build/m68030/ft/ftpad_af.o build/m68030/ft/ftpad_init.o \
 build/m68030/djpad.o build/m68030/ecabpad.o build/m68030/ecodpad.o build/m68030/eccrpad.o build/m68030/ecpbpad.o build/m68030/ecpicpad.o build/m68030/ecifpad.o build/m68030/ecdlpad.o build/m68030/ecstpad.o build/m68030/ectxpad.o build/m68030/eccvpad.o build/m68030/ececpad.o build/m68030/eclcpad.o build/m68030/ecpgpad.o build/m68030/ctcvpad.o build/m68030/ctifpad.o \
 build/m68030/rvpicpad.o build/m68030/rvgifpad.o build/m68030/rvlcpad.o build/m68030/eclastpad.o build/m68030/ecavpad.o build/m68030/ecutpad.o build/m68030/ctutpad.o: src/conv/ftpad.S Makefile | build/m68030
@@ -692,7 +692,7 @@ EC_LAST = build/m68000ec/common/atari/cpucheck.o build/m68000ec/src/econv/fbaler
 build/m68030/ecutpad.o: FT_PAD = -DFT_PAD_NAME=ec_ut_pad -DFT_PAD_TEXT=$(EC_UT_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 EC_UT_PAD ?= 208
 build/m68030/ecavpad.o: FT_PAD = -DFT_PAD_NAME=ec_av_pad -DFT_PAD_TEXT=$(EC_AV_PAD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
-EC_AV_PAD ?= 192
+EC_AV_PAD ?= 232
 build/m68030/eclastpad.o: FT_PAD = -DFT_PAD_NAME=ec_last_pad -DFT_PAD_TEXT=$(EC_LAST_PAD) -DFT_PAD_RO=$(EC_LAST_PAD_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=$(EC_LAST_PAD_DATA)
 EC_LAST_PAD ?= 60
 EC_LAST_PAD_RO ?= 144
@@ -732,6 +732,23 @@ $(patsubst %.c,build/m68000/%.o,$(GEM_SRC)): XFLAGS += -DDLG_CLICK -Isrc/gem -Is
 build/m68000/common/src/pic.o: XFLAGS += -DPIC_TJPGD_DSP -DPIC_NO_GIF -DPIC_NO_PNG
 # (EPDF's log line naming each picture's decoder and reduction: its build only)
 build/m68000/src/pdfimg.o: XFLAGS += -DPDFIMG_WHAT
+# (pdftext.c's pad after its right-to-left helpers: what follows at 2.46's places)
+EP_PT_PAD_A ?= 50
+EP_PT_PAD_B ?= 14
+EP_PT_PAD_C ?= 18
+EP_PT_PAD_D ?= 108
+build/m68000/src/pdftext.o: XFLAGS += -DPT_PAD_A=$(EP_PT_PAD_A) -DPT_PAD_B=$(EP_PT_PAD_B) -DPT_PAD_C=$(EP_PT_PAD_C) -DPT_PAD_D=$(EP_PT_PAD_D)
+# (the same for the 68030's reader: render.ovl, ECONVERT.PRG and CONVTEST.PRG share it)
+CV_PT_PAD_A ?= 56
+CV_PT_PAD_B ?= 16
+CV_PT_PAD_C ?= 24
+CV_PT_PAD_D ?= 124
+CV_PT_PAD_E ?= 206
+CV_PT_PAD_F ?= 42
+CV_PT_PAD_G ?= 28
+CV_PT_PAD_H ?= 196
+CV_PT_PAD_I ?= 246
+build/m68030cv/src/pdftext.o: XFLAGS += -DPT_PAD_I=$(CV_PT_PAD_I) -DPT_PAD_A=$(CV_PT_PAD_A) -DPT_PAD_B=$(CV_PT_PAD_B) -DPT_PAD_C=$(CV_PT_PAD_C) -DPT_PAD_D=$(CV_PT_PAD_D) -DPT_PAD_E=$(CV_PT_PAD_E) -DPT_PAD_F=$(CV_PT_PAD_F) -DPT_PAD_G=$(CV_PT_PAD_G) -DPT_PAD_H=$(CV_PT_PAD_H)
 # dialogs drawn partly by the CPU on a 68000 (EPDF.PRG runs on an ST; the
 # profiled build links the same object)
 build/m68000/common/ui/dialog.o: XFLAGS += -DDLG_CPU
@@ -800,24 +817,25 @@ build/m68000/eppad_u.o: FT_PAD = -DFT_PAD_NAME=ep_pad_u -DFT_PAD_TEXT=0 -DFT_PAD
 build/m68000/eppad_av.o: FT_PAD = -DFT_PAD_NAME=ep_pad_av -DFT_PAD_TEXT=$(EP_PAD_AV) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 # after about.o (2.46: about_ready's 108 bytes had moved textview.o, the text's layout, off 2.45's places)
 # after rdraw.o's variables (2.46: ROVL_HOST's soft, 4 bytes, had moved the text window's)
-build/m68000/eppad_rd.o: FT_PAD = -DFT_PAD_NAME=ep_pad_rd -DFT_PAD_TEXT=0 -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EP_PAD_RD_BSS)
+build/m68000/eppad_rd.o: FT_PAD = -DFT_PAD_NAME=ep_pad_rd -DFT_PAD_TEXT=$(EP_PAD_RD) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EP_PAD_RD_BSS)
 # after util.o (2.46: common bfc4656's sb_printf, 48 bytes more, had moved the rest)
 build/m68000/eppad_ut.o: FT_PAD = -DFT_PAD_NAME=ep_pad_ut -DFT_PAD_TEXT=$(EP_PAD_UT) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 build/m68000/eppad_ab.o: FT_PAD = -DFT_PAD_NAME=ep_pad_ab -DFT_PAD_TEXT=$(EP_PAD_AB) -DFT_PAD_RO=0 -DFT_PAD_STR=0 -DFT_PAD_DATA=0
-EP_PAD_AV ?= 246
+EP_PAD_AV ?= 252
 EP_PAD_AB ?= 148
+EP_PAD_RD ?= 246
 EP_PAD_RD_BSS ?= 252
 EP_PAD_UT ?= 208
 build/m68000/eppad_z.o: FT_PAD = -DFT_PAD_NAME=ep_pad_z -DFT_PAD_TEXT=0 -DFT_PAD_RO=$(EP_PAD_Z_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 build/m68000/eppad_y.o: FT_PAD = -DFT_PAD_NAME=ep_pad_y -DFT_PAD_TEXT=0 -DFT_PAD_RO=$(EP_PAD_Y_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0
 build/m68000/eppad_x.o: FT_PAD = -DFT_PAD_NAME=ep_pad_x -DFT_PAD_TEXT=$(EP_PAD_X) -DFT_PAD_RO=$(EP_PAD_X_RO) -DFT_PAD_STR=0 -DFT_PAD_DATA=0 -DFT_PAD_BSS=$(EP_PAD_X_BSS)
 EP_PAD_A ?= 108
-EP_PAD_A_RO ?= 88
+EP_PAD_A_RO ?= 134
 EP_PAD_A_DATA ?= 188
-EP_PAD_B ?= 36
+EP_PAD_B ?= 158
 EP_PAD_C ?= 140
 EP_PAD_D ?= 382
-EP_PAD_E ?= 10
+EP_PAD_E ?= 222
 EP_PAD_E_DATA ?= 234
 EP_PAD_F ?= 26
 EP_PAD_G ?= 34
@@ -826,29 +844,29 @@ EP_PAD_H_RO ?= 238
 EP_PAD_I ?= 198
 EP_PAD_I_RO ?= 248
 EP_PAD_J ?= 202
-EP_PAD_K ?= 176
-EP_PAD_L ?= 220
+EP_PAD_K ?= 172
+EP_PAD_L ?= 112
 EP_PAD_L_DATA ?= 148
-EP_PAD_M ?= 252
+EP_PAD_M ?= 168
 EP_PAD_N ?= 0
 EP_PAD_O ?= 130
 EP_PAD_P ?= 72
-EP_PAD_Q ?= 84
+EP_PAD_Q ?= 36
 EP_PAD_R ?= 102
 EP_PAD_R_RO ?= 236
 EP_PAD_S ?= 52
-EP_PAD_T ?= 200
-EP_PAD_V ?= 152
+EP_PAD_T ?= 84
+EP_PAD_V ?= 98
 EP_PAD_W ?= 120
 EP_PAD_W_RO ?= 116
 EP_PAD_W_DATA ?= 0
 EP_PAD_X ?= 184
 EP_PAD_X_RO ?= 152
 EP_PAD_X_BSS ?= 146
-EP_PAD_Y_RO ?= 184
+EP_PAD_Y_RO ?= 64
 EP_PAD_B_RO ?= 214
 EP_PAD_Z_RO ?= 220
-EP_PAD_U_RO ?= 98
+EP_PAD_U_RO ?= 86
 EP_PAD_U_DATA ?= 230
 EP_PAD_B_BSS ?= 124
 EP_PAD_J_BSS ?= 252
@@ -862,7 +880,7 @@ build/m68000/eppad_p.o build/m68000/eppad_q.o build/m68000/eppad_r.o build/m6800
 build/m68000/eppad_t.o build/m68000/eppad_v.o build/m68000/eppad_w.o build/m68000/eppad_x.o build/m68000/eppad_y.o build/m68000/eppad_z.o build/m68000/eppad_u.o build/m68000/eppad_av.o build/m68000/eppad_ab.o build/m68000/eppad_rd.o build/m68000/eppad_ut.o: src/conv/ftpad.S Makefile | build/m68000
 	@mkdir -p $(dir $@)
 	$(XCC) -m68000 $(FT_PAD) -c -o $@ $<
-EP_KEEP = -Wl,-u,ep_pad_a -Wl,-u,ep_pad_a_data -Wl,-u,ep_pad_a_ro -Wl,-u,ep_pad_b -Wl,-u,ep_pad_c -Wl,-u,ep_pad_d -Wl,-u,ep_pad_e -Wl,-u,ep_pad_f -Wl,-u,ep_pad_g -Wl,-u,ep_pad_h -Wl,-u,ep_pad_h_ro -Wl,-u,ep_pad_i -Wl,-u,ep_pad_i_ro -Wl,-u,ep_pad_j -Wl,-u,ep_pad_k -Wl,-u,ep_pad_l -Wl,-u,ep_pad_l_data -Wl,-u,ep_pad_m -Wl,-u,ep_pad_n -Wl,-u,ep_pad_o -Wl,-u,ep_pad_p -Wl,-u,ep_pad_q -Wl,-u,ep_pad_r -Wl,-u,ep_pad_s -Wl,-u,ep_pad_t -Wl,-u,ep_pad_v -Wl,-u,ep_pad_w -Wl,-u,ep_pad_w_ro -Wl,-u,ep_pad_w_data -Wl,-u,ep_pad_e_data -Wl,-u,ep_pad_x -Wl,-u,ep_pad_x_ro -Wl,-u,ep_pad_r_ro -Wl,-u,ep_pad_y_ro -Wl,-u,ep_pad_m_bss -Wl,-u,ep_pad_m_ro -Wl,-u,ep_pad_x_bss -Wl,-u,ep_pad_b_ro -Wl,-u,ep_pad_z_ro -Wl,-u,ep_pad_u_ro -Wl,-u,ep_pad_u_data -Wl,-u,ep_pad_b_bss -Wl,-u,ep_pad_j_bss -Wl,-u,ep_pad_av -Wl,-u,ep_pad_ab -Wl,-u,ep_pad_rd_bss -Wl,-u,ep_pad_ut
+EP_KEEP = -Wl,-u,ep_pad_a -Wl,-u,ep_pad_a_data -Wl,-u,ep_pad_a_ro -Wl,-u,ep_pad_b -Wl,-u,ep_pad_c -Wl,-u,ep_pad_d -Wl,-u,ep_pad_e -Wl,-u,ep_pad_f -Wl,-u,ep_pad_g -Wl,-u,ep_pad_h -Wl,-u,ep_pad_h_ro -Wl,-u,ep_pad_i -Wl,-u,ep_pad_i_ro -Wl,-u,ep_pad_j -Wl,-u,ep_pad_k -Wl,-u,ep_pad_l -Wl,-u,ep_pad_l_data -Wl,-u,ep_pad_m -Wl,-u,ep_pad_n -Wl,-u,ep_pad_o -Wl,-u,ep_pad_p -Wl,-u,ep_pad_q -Wl,-u,ep_pad_r -Wl,-u,ep_pad_s -Wl,-u,ep_pad_t -Wl,-u,ep_pad_v -Wl,-u,ep_pad_w -Wl,-u,ep_pad_w_ro -Wl,-u,ep_pad_w_data -Wl,-u,ep_pad_e_data -Wl,-u,ep_pad_x -Wl,-u,ep_pad_x_ro -Wl,-u,ep_pad_r_ro -Wl,-u,ep_pad_y_ro -Wl,-u,ep_pad_m_bss -Wl,-u,ep_pad_m_ro -Wl,-u,ep_pad_x_bss -Wl,-u,ep_pad_b_ro -Wl,-u,ep_pad_z_ro -Wl,-u,ep_pad_u_ro -Wl,-u,ep_pad_u_data -Wl,-u,ep_pad_b_bss -Wl,-u,ep_pad_j_bss -Wl,-u,ep_pad_av -Wl,-u,ep_pad_ab -Wl,-u,ep_pad_rd_bss -Wl,-u,ep_pad_rd -Wl,-u,ep_pad_ut
 # what came after 2.42 (printing: 2.43) linked last, so nothing that was
 # there moves off its cache places (text, its tables, its variables)
 EPDF_LAST = build/m68000/src/gem/prjob.o build/m68000/common/ui/print.o \
