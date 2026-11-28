@@ -23,6 +23,10 @@ int rdraw_machine(void);
    program's memory and turn; 1, or 0 and why */
 void rdraw_crisp(int on);
 int rdraw_load(int (*turn)(void), char *err, int errlen);
+/* the turns render.ovl asks for from now on (NULL: none). Set before a
+   document of it is closed outside its drawing: closing gives its fonts
+   back with a turn between each */
+void rdraw_turn(int (*turn)(void));
 const ROVL *rdraw_ovl(void);		/* NULL until loaded */
 long rdraw_taken(void);			/* its bytes in memory */
 void rdraw_unload(void);

@@ -17,6 +17,9 @@ as common's tests/print). Twice:
   greyed while it prints (its menu state logged by the rig's shot);
 - every page, Esc after the first: "print-stopped", fewer IMGs than pages,
   none left half open;
+- View > Pages on, page 2 printed, then ^Q (a Falcon: 27 Nov 2026, the
+  View > Pages document's close at the quit turned through the ended job:
+  2 bombs, 2.43 to 2.46);
 - every page, ^Q after the first (a quit while printing, 26 Nov 2026: 2.43
   to 2.46 left the printer's workstation open, its pages never sent, and
   bombed after the quit): the job stopped and the printer closed before the
@@ -116,7 +119,8 @@ def run(work, machine, stop, nowd=False):
         if dialog and not os.path.exists(wd):
             print("%s, WDIALOG's dialog: SKIPPED (no wdialog.prg with NVDI here)" % r.describe())
             raise RuntimeError
-        first, last = (1, pages) if stop else tuple(int(x) for x in os.environ.get("PRINT_RANGE", "2 4").split())
+        first, last = (1, pages) if stop in ("esc", "quit") else (2, 2) if stop == "pagesquit" else \
+            tuple(int(x) for x in os.environ.get("PRINT_RANGE", "2 4").split())
         if nowd or dialog:
             # TOS's AES alone (the hub, 21 Nov 2026: common 726554d): no dialog,
             # (or, "dialog", WDIALOG's print dialog answered with Return, as a
@@ -145,6 +149,16 @@ def run(work, machine, stop, nowd=False):
         wait(r, "EPDF opened", 120)
         wait(r, "EPDF page %d " % pages, 300)   # (its text read: an ST prints what the text view has)
         time.sleep(3)
+        if stop == "pagesquit":
+            # View > Pages on first: render.ovl's own document open beside
+            # the print job's (27 Nov 2026: its close at the quit, after a page
+            # printed, turned through the ended job's pr_turn: 2 bombs)
+            r.click(184, 8)
+            time.sleep(1.5)
+            r.click(204, 44)
+            if not wait(r, "EPDF pages 1", 60) or not wait(r, "EPDF page-drawn", 300):
+                bad.append("View > Pages didn't draw a page")
+            time.sleep(5)
         r.key("ctrl+p")
         if dialog:
             # WDIALOG's print dialog, answered as a user does: Return prints
@@ -157,7 +171,7 @@ def run(work, machine, stop, nowd=False):
             raise RuntimeError
         opened = [l for l in r.console().splitlines() if l.startswith("EPDF print-open ")][-1]
         print("  " + opened)
-        if dialog:
+        if dialog or stop == "pagesquit":
             # printed through the dialog to the end, then ^Q: each step of the
             # way out, no CRASH.LOG (27 Nov 2026: 2 bombs after a quit that
             # followed a page printed through WDIALOG's dialog)
@@ -281,7 +295,8 @@ def run(work, machine, stop, nowd=False):
     except RuntimeError:
         pass
     finally:
-        print("%s%s: %s  (%s)" % (r.describe(), ", no WDIALOG" if nowd else ", " + {"esc": "Esc", "quit": "^Q", "dialog": "WDIALOG's dialog, then ^Q"}[stop] if stop else ", pages %d-%d" % (first, last),
+        print("%s%s: %s  (%s)" % (r.describe(), ", no WDIALOG" if nowd else ", " + {"esc": "Esc", "quit": "^Q", "dialog": "WDIALOG's dialog, then ^Q",
+                                                                  "pagesquit": "View > Pages, a page, then ^Q"}[stop] if stop else ", pages %d-%d" % (first, last),
                                   "ok" if not bad else "; ".join(bad), r.shots))
         r.stop()
         p = os.path.join(r.hd, "AUTO", "WDIALOG.PRG")
@@ -304,6 +319,10 @@ def main(argv):
         bad += run(argv[0], m, "esc")
         bad += run(argv[0], m, "quit")
         bad += run(argv[0], m, "dialog")
+        if not m.startswith("ST"):
+            # (on a Falcon with 14 MB: a 4 MB one with NVDI and WDIALOG has no
+            # room for View > Pages' page, 2.46 too)
+            bad += run(argv[0], "Falcon:256" if m.startswith("Falcon-4") else m, "pagesquit")
         bad += run(argv[0], m, False, nowd=True)
         if m == "Falcon-4:256":
             # page 3 alone on a 4 MB Falcon: its progressive JPEG has no room

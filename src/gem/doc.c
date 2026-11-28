@@ -1670,8 +1670,10 @@ void doc_close(void)
 	if (pstore_open)
 		ts_close(&pstore);
 	pstore_open = pages_mode = pages_have = 0;
-	if (rdoc)
+	if (rdoc) {
+		rdraw_turn(NULL);	/* (no turns here: the last set may be a job's that has ended) */
 		rdraw_ovl()->close(rdoc);
+	}
 	rdoc = NULL;
 	rdraw_unload();			/* (its 676 KB back for the next document's text) */
 	rdraw_unreserve();

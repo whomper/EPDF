@@ -85,6 +85,11 @@ int rdraw_load(int (*turn)(void), char *err, int errlen)
 	return 1;
 }
 
+void rdraw_turn(int (*turn)(void))
+{
+	host.turn = turn;
+}
+
 const ROVL *rdraw_ovl(void)
 {
 	return ov;

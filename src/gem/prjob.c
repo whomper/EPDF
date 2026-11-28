@@ -61,6 +61,8 @@ static long k_bands, k_ink;
 
 static int pr_turn(void)
 {
+	if (!on || finished)
+		return 0;	/* (asked after the job ended: its context is gone, no switch) */
 	if (tos_ms() >= slice_end)
 		coro_switch(&pr_co, &pr_main);
 	return stop_req;
@@ -722,6 +724,12 @@ void prjob_slice(unsigned long ms)
 		return;
 	print_end(&pj);
 	note_vectors("after");
+	/* the job's turn let go before its stack: render.ovl kept pr_turn,
+	   and closing a document of it (this one, or View > Pages' at the
+	   quit) turns between its fonts: pr_turn switched to the job's
+	   ended context, 2 bombs at the quit after a page printed (2.43 to
+	   2.46, 27 Nov 2026) */
+	rdraw_turn(NULL);
 	if (rdoc) {
 		rdraw_ovl()->close(rdoc);
 		rdoc = NULL;
