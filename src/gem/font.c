@@ -47,6 +47,19 @@ void font_text(short id, short w, short h)
 	text_font(vdi_h, id, w, h);
 }
 
+/* the font told to the VDI again, as it is: a family dialog (the About
+   box: common 0ca061e) leaves the VDI at the system font's height, and
+   font_text tells it only a change */
+void font_touch(void)
+{
+	short id = tf_id, w = tf_w, h = tf_h;
+
+	if (id < 0)
+		return;
+	tf_id = -1;
+	font_text(id, w, h);
+}
+
 static void set(short id, short pt)
 {
 	short w, h;

@@ -196,6 +196,7 @@ void font_exit(void);
 void font_small(short *w, short *h);
 void font_back(void);
 int font_gdos(void);
+void font_touch(void);			/* the font told to the VDI again, after a family dialog */
 void font_text(short id, short w, short h);	/* text_font, when the font or cell changed */			/* the view's font is a GDOS one */
 
 /* find.c */

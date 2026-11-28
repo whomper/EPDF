@@ -1055,6 +1055,7 @@ static void command(int c)
 	switch (c) {
 	case CMD_ABOUT:
 		about_box();
+		font_touch();
 		break;
 	case CMD_OPEN:
 		open_dialog();
@@ -1113,6 +1114,7 @@ static void command(int c)
 		break;
 	case CMD_SETTINGS:
 		settings_dialog();
+		font_touch();
 		break;
 	case CMD_CLOSE:
 	case CMD_QUIT:
@@ -1120,10 +1122,12 @@ static void command(int c)
 		break;
 	case CMD_KEYS:
 		keys_dialog();
+		font_touch();
 		break;
 	case CMD_GUIDE:
 		if (help_key(start_dir, "epdf.hyp", NULL, "About"))
 			about_box();
+		font_touch();
 		break;
 	case CMD_PREV:
 		page_step(-1);
@@ -1147,6 +1151,7 @@ static void command(int c)
 	case CMD_FIND:
 		if (doc_view() && find_dialog(find_text))
 			find_start(1);
+		font_touch();
 		menu_states();
 		break;
 	case CMD_FINDNEXT:
