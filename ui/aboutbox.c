@@ -875,6 +875,11 @@ static void about_draw(int framed)
 		short n = (short)strlen(s);
 		v_gtext_n(vdi_h, on_byte(dx + (dw - n * fcw) / 2), y, s, n);
 	}
+	/* the normal size again, as said above: the program's own text, drawn
+	   while the box is up or under it as it closes, takes the VDI's height
+	   as it is (the program's rows came out in the fine print's size: a
+	   report of 28 Nov 2026) */
+	vst_height(vdi_h, ch >= 16 ? 13 : 6, &fcw, &fch);
 	(void)ab_fcw;
 }
 
@@ -1011,7 +1016,7 @@ static void buf_free(void *p)
 	if (_is_acc)
 		free(p);
 	else
-		Mfree(p);
+		acc_free(p);
 }
 
 /* the box's rows' edge words in planes g (2 to 8), from the screen's
@@ -1061,9 +1066,9 @@ static int draw_off(void (*draw)(int framed))
 			buf = 0;
 		}
 	} else {
-		buf = Mxalloc(size + 2 * GUARD, 0);	/* ST RAM, where the blitter reaches */
+		buf = acc_core(size + 2 * GUARD, 0);	/* ST RAM, where the blitter reaches */
 		if ((long)buf == -32 || !buf)	/* no Mxalloc: Malloc's is ST RAM */
-			buf = Malloc(size + 2 * GUARD);
+			buf = acc_core(size + 2 * GUARD, -1);
 		if ((long)buf <= 0)
 			buf = 0;
 	}
