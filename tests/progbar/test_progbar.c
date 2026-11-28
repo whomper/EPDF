@@ -35,10 +35,17 @@ void vq_color(short h, short index, short *rgb)
 	(void) h;
 	memcpy(rgb, pal[index & 255], sizeof pal[0]);
 }
-void vsf_interior(short h, short s) { (void) h; (void) s; }
-void vsf_perimeter(short h, short s) { (void) h; (void) s; }
-void vswr_mode(short h, short s) { (void) h; (void) s; }
+static short cur_interior, cur_style, cur_mode, cur_perim;
+void vsf_interior(short h, short s) { (void) h; cur_interior = s; }
+void vsf_perimeter(short h, short s) { (void) h; cur_perim = s; }
+void vswr_mode(short h, short s) { (void) h; cur_mode = s; }
 void vsf_color(short h, short c) { (void) h; cur_color = c; }
+void vsf_style(short h, short s) { (void) h; cur_style = s; }
+void vqf_attributes(short h, short *a)
+{
+	(void) h;
+	a[0] = cur_interior; a[1] = cur_color; a[2] = cur_style; a[3] = cur_mode; a[4] = cur_perim;
+}
 void v_bar(short h, const short *pxy)
 {
 	short x;
@@ -298,6 +305,12 @@ int main(void)
 	progbar_pens(0, 0);
 	check(progbar_npens() == 1 && progbar_pen(0) == 1, "mono, both pens alike: pen 1");
 
+	/* the app's fill state is as it was after the bar (EFTP's header took
+	   the bar's last blue, 28 Nov 2026) */
+	cur_interior = 2; cur_color = 7; cur_style = 3; cur_mode = 2; cur_perim = 1;
+	progbar_fill(1, 0, 0, 100, 4, 0, PB_FULL);
+	check(cur_interior == 2 && cur_color == 7 && cur_style == 3 && cur_mode == 2 && cur_perim == 1,
+	      "the fill's interior, colour, style, mode and perimeter as the app left them");
 	printf("progbar: %d checks, %s\n", checks, fails ? "FAILED" : "all passed");
 	return fails != 0;
 }

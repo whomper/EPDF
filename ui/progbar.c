@@ -145,7 +145,7 @@ void progbar_pens(short h, short ground)
 
 void progbar_fill(short h, short x, short y, short w, short hh, short from, short to)
 {
-	short i, a, b, pxy[4];
+	short i, a, b, pxy[4], was[5];
 	if (from < 0)
 		from = 0;
 	if (to > PB_FULL)
@@ -156,6 +156,10 @@ void progbar_fill(short h, short x, short y, short w, short hh, short from, shor
 	b = (short) ((long) w * to / PB_FULL);
 	if (a >= b)
 		return;
+	/* the fill's state as the app left it, put back at the end: an app that
+	   keeps its last fill colour (EFTP's draw.c) drew its next box in the
+	   bar's last blue (a report of 28 Nov 2026) */
+	vqf_attributes(h, was);
 	vsf_interior(h, 1);	/* FIS_SOLID */
 	vsf_perimeter(h, 0);
 	vswr_mode(h, 1);	/* MD_REPLACE */
@@ -175,6 +179,11 @@ void progbar_fill(short h, short x, short y, short w, short hh, short from, shor
 		pxy[3] = y + hh - 1;
 		v_bar(h, pxy);
 	}
+	vsf_interior(h, was[0]);
+	vsf_color(h, was[1]);
+	vsf_style(h, was[2]);
+	vswr_mode(h, was[3]);
+	vsf_perimeter(h, was[4]);
 }
 
 short progbar_npens(void)

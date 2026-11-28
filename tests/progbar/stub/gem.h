@@ -7,4 +7,6 @@ void vsf_interior(short h, short style);
 void vsf_perimeter(short h, short on);
 void vswr_mode(short h, short mode);
 void vsf_color(short h, short color);
+void vsf_style(short h, short idx);
+void vqf_attributes(short h, short *a);
 void v_bar(short h, const short *pxy);
