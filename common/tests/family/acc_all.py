@@ -8,12 +8,13 @@ Not on a 4 MB machine, ST or Falcon-4 (decided 4 Nov 2026: the accessories are n
 4 MB machines stay targets for the programs, each on its own): the script says so and stops.
 
     common/tests/family/acc_all.py WORK [MACHINE] [--nvdi [--font]] [--display :N] [--use FILE]...
-                                   [--accs ECal,EContact] [--prg EMail] [--again]
+                                   [--accs ECal,EContact] [--prg EMail] [--again] [--help-key]
 
 MACHINE is Falcon (the DFB1: 14 MB + TT RAM, TOS 4.04, ECAL.ACC and ECONTACT.ACC),
-Falcon by default, or another machine with more than 4 MB (TT); ST-1 (1 MB, TOS 1.04) takes
-ECALST.ACC and ECONTST.ACC, the ST editions, while a release has them; there each accessory
-has a run of its own (WORK/NAME), as 1 MB holds a program and one accessory, not four. --nvdi boots
+Falcon by default, or another machine with more than 4 MB (TT); ST-2 (2 MB, TOS 1.04) is the ST:
+there each accessory has a run of its own (WORK/NAME). Not on ST-1: no family accessory runs on a
+1 MB ST (decided 26 Nov 2026; each shows common's acc_small_alert from its Desk entry and takes no
+memory, which the app's own rig checks there). --nvdi boots
 with the NVDI copy (machines.py, m.nvdi()); --font gives EHypView one of
 NVDI's Bitstream fonts (FONT=Courier 10 Pitch, 10 pt), loaded at its boot. --use FILE puts a
 candidate's accessory (ECAL.ACC, say) or --prg's program (EMAIL.PRG) in place of the release's
@@ -21,7 +22,8 @@ of that name, for the hub's run before the release; the report names it. --accs 
 --prg APP starts that program's latest release (EMAIL.PRG; APP:FILE[:MORE...] for another
 edition and the files it needs, as EWeb:EWEBST.PRG:EWEB.FNT on an ST) first, as on the reference configuration: the accessories
 are then opened from its own Desk menu, and at the end the program is quit (^Q) and must give
-the desktop back; the program's own accessory (EHYPVIEW.ACC with --prg EHypView) is left
+the desktop back (--help-key: before that, the Help key in the program, its guide in EHypView's
+accessory shot and checked, then closed); the program's own accessory (EHYPVIEW.ACC with --prg EHypView) is left
 out, since it hands over to the program. The Atari boots to the desktop,
 each accessory is opened from the Desk menu in turn, the three windows
 left open over each other, then each opened again; the Desk menu and every
@@ -52,6 +54,7 @@ hubonly.require("acc_all.py")
 args = [a for a in sys.argv[1:]]
 nvdi = "--nvdi" in args
 again = "--again" in args
+helpkey = "--help-key" in args
 font = "--font" in args
 display = ":90"
 if "--display" in args:
@@ -77,13 +80,16 @@ if not rest:
     sys.exit(__doc__)
 work = os.path.abspath(rest[0])
 machine = rest[1] if len(rest) > 1 else "Falcon"
+if machine.split(":")[0] == "ST-1":
+    sys.exit("acc_all: no family accessory runs on a 1 MB ST (decided 26 Nov 2026). "
+             "Run the ST's accessory checks on ST-2.")
 if machine.split(":")[0] in ("ST", "Falcon-4"):
     sys.exit("acc_all: the accessories are not run on a 4 MB machine (%s): decided 4 Nov 2026. "
              "Run it on Falcon (TT RAM)." % machine)
 st = machine.startswith("ST")
-if machine.split(":")[0] == "ST-1" and len(accs) > 1:
-    # 1 MB holds a program and one accessory, not four (Hatari: "Program too large", 17 Nov 2026): each
-    # accessory in a run of its own, in WORK/NAME, the same arguments otherwise
+if machine.split(":")[0] == "ST-2" and len(accs) > 1:
+    # an ST: each accessory in a run of its own (1 MB held a program and one accessory, not four:
+    # Hatari "Program too large", 17 Nov 2026), in WORK/NAME, the same arguments otherwise
     import subprocess
     bad = []
     for a in accs:
@@ -93,10 +99,10 @@ if machine.split(":")[0] == "ST-1" and len(accs) > 1:
             argv[argv.index("--accs") + 1] = a
         else:
             argv += ["--accs", a]
-        print("== ST-1: %s alone" % a, flush=True)
+        print("== ST-2: %s alone" % a, flush=True)
         if subprocess.call([sys.executable, os.path.abspath(__file__)] + argv):
             bad.append(a)
-    print("ST-1, one accessory a run: " + ("all passed" if not bad else "failed: " + ", ".join(bad)), flush=True)
+    print("ST-2, one accessory a run: " + ("all passed" if not bad else "failed: " + ", ".join(bad)), flush=True)
     sys.exit(1 if bad else 0)
 
 fails = 0
@@ -136,7 +142,8 @@ def get(app, names):
 # on an ST the ST edition, while a release has one: from TLS.OVL on (the
 # guidelines, 7.4) the one ACC runs on every Atari
 want = {"ECal": ("ECALST.ACC", "ECAL.ACC"), "EContact": ("ECONTST.ACC", "ECONTACT.ACC"),
-        "EHypView": ("EHYPVIEW.ACC", "EHYPVIEW.ACC"), "EMailCheck": ("EMAILCHK.ACC", "EMAILCHK.ACC")}
+        "EHypView": ("EHYPVIEW.ACC", "EHYPVIEW.ACC"), "EMailCheck": ("EMAILCHK.ACC", "EMAILCHK.ACC"),
+        "EWeb": ("EWEB.ACC", "EWEB.ACC")}
 # the release an accessory comes in, where it isn't its own app's name
 repo = {"EMailCheck": "EMail"}
 # accessories whose Desk entry shows an alert rather than a window: Esc
@@ -172,6 +179,18 @@ if "EMailCheck" in want and not again:
     os.makedirs(os.path.join(hd, "EMAIL"), exist_ok=True)
     with open(os.path.join(hd, "EMAILCHK.INF"), "w", newline="") as f:
         f.write("; EMail's folder, where EMAIL.PRG and EMAIL.INF are\r\nFOLDER=C:\\EMAIL\r\n\r\n")
+if "EWeb" in want and not again:
+    # EWEB.ACC (EWeb 1.28 on; TT RAM only): its files beside it in the root,
+    # from the folder the --use candidate or the release came from, and
+    # EWEB.INF there with FOLDER= (the guidelines 6.1), a blank page at its
+    # opening, so no network is asked for
+    src = os.path.dirname(use["EWEB.ACC"]) if "EWEB.ACC" in use else rel
+    for f in ("EWEB.FNT", "EWEBJS.OVL", "EWEBTW.OVL", "TLS.OVL"):
+        if os.path.exists(os.path.join(src, f)) or get("EWeb", [f]):
+            shutil.copy(os.path.join(src if os.path.exists(os.path.join(src, f)) else rel, f),
+                        os.path.join(hd, f.lower()))
+    with open(os.path.join(hd, "eweb.inf"), "w", newline="") as f:
+        f.write("HOME=about:blank\r\nFOLDER=C:\\\r\n")
 if font and not again:
     with open(os.path.join(hd, "EHYPVIEW.INF"), "w", newline="") as f:
         f.write("FOLDER=C:\\\r\nFONT=Courier 10 Pitch\r\nPOINT=10\r\n")
@@ -385,6 +404,19 @@ try:
             xdo("key", "ctrl+q")
             time.sleep(3)
         before = shot("8-accessories-closed")
+        if helpkey:
+            # the Help key in the program: its guide in EHypView's accessory
+            # (the help front page's pictures in the screen's colours: the
+            # owner's report of 27 Nov 2026), then that window closed
+            with open(fifo, "w") as f:               # Help: scancode 0x62, no X key for it
+                f.write("hatari-event keypress 0x62\n")
+            time.sleep(10)
+            helped = shot("8b-%s-help" % prg.lower())
+            check(differs(before, helped) > 5000, "the Help key shows %s's guide (see 8b-%s-help.png, %d pixels)"
+                  % (prg, prg.lower(), differs(before, helped)))
+            xdo("key", "ctrl+u")
+            time.sleep(3)
+            before = shot("8c-help-closed")
         xdo("key", "ctrl+q")
         time.sleep(10 if st else 6)
         after = shot("9-%s-quit" % prg.lower())
